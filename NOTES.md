@@ -26,14 +26,20 @@
   patches, 16 Python tools, 7 shell scripts); `git diff --check` passed.
   Synthetic packer tests accepted a valid RAM payload and rejected empty root,
   conflicting `rd=` selectors, a UFS ADT, overlong boot args, and an oversized
-  sparse RAM disk before opening it. No XNU build, CI, phone connection, boot,
-  or storage access was performed.
+  sparse RAM disk before opening it. No XNU build, CI, ADB/fastboot command,
+  phone boot, or handset storage access was performed.
 - Milestone committed as `b11ba39` (`Constrain Munch bring-up to RAM-only
   path`). Existing `shim/out` artifacts and external non-userdata backups were
   preserved. Next: establish a realistic
   RAM-root footprint/design and verify the XNU RAM-disk path offline; only then
   resume Munch memory/loader integration. Do not use the unverified 4-8 GiB
   range or create a phone payload yet.
+- Host-side preflight: no Munch UEFI image was found in the local home tree;
+  `/usr/bin/fastboot` exists. The external backup directory lists 116 `.img`
+  entries, including two `ALIGN_TO_128K_*` auxiliaries, and has no
+  `userdata.img` filename. Image contents were not opened; do not treat backup
+  completeness as re-verified for a device boot. Resolve its inventory and
+  obtain the exact temporary UEFI image before considering a runtime-map probe.
 
 ### >>> HANDOFF 2026-10-20: MUNCH MEMORY / TOUCH PORT RESEARCH <<<
 
