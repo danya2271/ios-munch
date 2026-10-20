@@ -1,5 +1,14 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-20: DTB IDENTITY GUARD <<<
+
+- The public EDK2 source has a Munch platform directory and `munch.dsc`, but its bundled `Platform/Xiaomi/sm8250/FdtBlob_compat/munch.dtb` is not a Munch-identifying tree: the examined blob reports model `Qualcomm Technologies, Inc. xiaomi alioth` and compatibles `qcom,kona-mtp; qcom,kona; qcom,mtp`. Do not take its board-level addresses as Munch facts.
+- The UEFI DSC sets GOP values to framebuffer `0x9c000000`, 1080x2400. This is a build configuration, not evidence of a successful POCO F4 UEFI boot or proof that a compatibility DTB matches the phone.
+- Latest release check on 2026-10-20: `v1.1.0` published 2026-08-20; no later release appeared in the GitHub releases API. Its flashable A/B installer is not a temporary-boot workflow: installer source patches the active `boot` slot and copies the original to `/sdcard/boot_backup<slot>.img`. Do not use it for initial bring-up.
+- `tools/inspect-munch-dtb.py` now makes `--expect-munch` fail with exit 2 on root identity mismatch, classifies device nodes using node names/compatibles rather than arbitrary full-path substrings, and limits noisy output. Candidate test: normal inspection exited 0; `--expect-munch` exited 2 and printed the `alioth` identity. DTB/DTS remained in `/tmp`, outside Git.
+- Added `docs/MUNCH_PORTING.md` with safe stock/live DTB collection and inspection steps, evidence requirements, and staged port/dual-boot boundaries. No XNU/ADT hardware constants were changed because the only public candidate is mismatched. No phone was connected, booted, flashed, or modified.
+- Next concrete step: obtain the exact POCO F4 variant/firmware's stock or live DTB and read-only partition facts. Continue using temporary `fastboot boot` only after that evidence is reviewed; do not flash UEFI, change GPT, or write `userdata` without explicit confirmation.
+
 ### >>> HANDOFF 2026-10-20: MUNCH REBRAND <<<
 
 - The repository is now named and branded for `munch` / POCO F4. This is a source-level rebrand and fork, not a completed SM8250 port.
