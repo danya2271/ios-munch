@@ -22,7 +22,7 @@
 - Added `tools/munch-fdt-pull.sh`: it accepts only a Munch ADB device, reads
   only `/sys/firmware/fdt` through `su`, validates the blob, and refuses
   repository paths. The validator now checks this helper's read-only boundary.
-- Milestone committed as `0b0b558` (`Add safe live Munch FDT capture`).
+- Milestone committed as `bd57b48` (`Add safe live Munch FDT capture`).
   `python3 tools/validate-repo.py`, `git diff --check`, `bash -n`/`sh -n` for
   the helper, and the real helper capture all passed. Host FDT checks accepted
   `[0x100000000,0x200000000)` and rejected the framebuffer and an out-of-RAM
