@@ -7,6 +7,7 @@
 - Latest release check on 2026-10-20: `v1.1.0` published 2026-08-20; no later release appeared in the GitHub releases API. Its flashable A/B installer is not a temporary-boot workflow: installer source patches the active `boot` slot and copies the original to `/sdcard/boot_backup<slot>.img`. Do not use it for initial bring-up.
 - `tools/inspect-munch-dtb.py` now makes `--expect-munch` fail with exit 2 on root identity mismatch, classifies device nodes using node names/compatibles rather than arbitrary full-path substrings, and limits noisy output. Candidate test: normal inspection exited 0; `--expect-munch` exited 2 and printed the `alioth` identity. DTB/DTS remained in `/tmp`, outside Git.
 - Added `docs/MUNCH_PORTING.md` with safe stock/live DTB collection and inspection steps, evidence requirements, and staged port/dual-boot boundaries. No XNU/ADT hardware constants were changed because the only public candidate is mismatched. No phone was connected, booted, flashed, or modified.
+- Validation on 2026-10-20: `python3 tools/validate-repo.py` passed (81 patches, 16 Python tools, 7 shell scripts); `git diff --check` passed. Implementation commit: `f613b8e` (`docs: add Munch DTB verification guard`). No kernel CI run was started.
 - Next concrete step: obtain the exact POCO F4 variant/firmware's stock or live DTB and read-only partition facts. Continue using temporary `fastboot boot` only after that evidence is reviewed; do not flash UEFI, change GPT, or write `userdata` without explicit confirmation.
 
 ### >>> HANDOFF 2026-10-20: MUNCH REBRAND <<<
