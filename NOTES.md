@@ -1,5 +1,23 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-21: MACH-O PAYLOAD PACKER GATE <<<
+
+- `tools/mkpayload.py` incorrectly assumed `m.segs[0]` was `__TEXT`. A valid
+  Mach-O from `tools/mkinit.py` starts with `__PAGEZERO`, so packing failed
+  before this fix. The packer now locates `__TEXT` by name for both the
+  segment-range check and chained-fixup image base.
+- Offline gate passed: Clang assembled `tools/munch-init.S` for arm64,
+  `tools/mkinit.py` produced `/tmp/munch-init.macho` (16,635 bytes), and
+  `tools/mkpayload.py` produced `/tmp/munch-init-payload.bin` (28,128 bytes)
+  from `/tmp/munch-munch.adt` (10,692 bytes, explicit candidate
+  `[0x100000000,0x200000000)`). Payload SHA-256 is
+  `4ee0765345b9d18be2e15c1dbb910d6f89580b746c0ec58d1aaec0c6819a1821`.
+- A synthetic shim boot image was packed and unpacked successfully; the
+  ramdisk matched byte-for-byte and the image was not sent to the phone.
+  `munch-init` is a userspace test executable, not an XNU kernel, so it must
+  never be used for `fastboot boot`. No device command or `userdata` access
+  occurred in this gate.
+
 ### >>> HANDOFF 2026-10-21: RAM-ONLY SHIM LOCAL BUILD <<<
 
 - Fixed `shim/build.sh`: it compiled `fdt_memory.c` but omitted

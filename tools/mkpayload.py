@@ -66,7 +66,10 @@ def apply_chained_fixups(buf, m):
     data_off, _ = m['fixups']
     _, starts_off, _, _, imports_count, _, _ = struct.unpack_from('<7I', buf, data_off)
     assert imports_count == 0, 'kernel has binds; only rebases are supported'
-    image_base = m['segs'][0]['vmaddr']		# __TEXT, holds the mach header
+    text = next((s for s in m['segs'] if s['name'] == '__TEXT'), None)
+    if text is None:
+        raise ValueError('Mach-O has no __TEXT segment')
+    image_base = text['vmaddr']
     seg_count, = struct.unpack_from('<I', buf, data_off + starts_off)
     nfix = 0
     for i in range(seg_count):
@@ -164,7 +167,9 @@ def build(kernel_path, adt_path, cmdline, ramdisk_path=None):
     m = parse_macho(buf)
     nfix = apply_chained_fixups(buf, m)
     segs = [s for s in m['segs'] if s['vmsize']]
-    text = m['segs'][0]
+    text = next((s for s in m['segs'] if s['name'] == '__TEXT'), None)
+    if text is None:
+        raise ValueError('Mach-O has no __TEXT segment')
     assert text['name'] == '__TEXT' and text['fileoff'] == 0
     # virt_base: 32MB (16K-granule L2 block) below the mach header, so start.s's
     # block mapping that starts at the header's block begins exactly at phys_base.
