@@ -68,14 +68,25 @@
   `MUNCH` machine config yet, so the inherited SWEET touch/keys code is not a
   Munch implementation.
 - Machine-config inventory confirms that a MUNCH build cannot be enabled by
-  selecting another workflow string alone. The current workflow defaults to
-  `SWEET`; patch `0004` defines only `SWEET.h`, and architecture hooks are
-  guarded by `SWEET` / `ARM64_BOARD_CONFIG_SWEET`. Separate shared architecture
-  work (plain arm64, 16K pages, GICv3 Group-1 IRQ handling, virtual-timer PPI,
-  PSCI and 8-core startup) from board paths that must stay disabled until
-  ported (SE7 I2C touch, SWEET GPIO/PMIC/SPMI, SWEET UFS/logging, and display
-  assumptions). Patch 0082 only adds a CPU personality; it does not create a
-  MUNCH machine config.
+  selecting another workflow string alone. Patch `0004` defines only
+  `SWEET.h` and `MASTER.arm64.sweet`; multiple later patches modify that same
+  master config. Never create MUNCH by aliasing `SWEET` or
+  `ARM64_BOARD_CONFIG_SWEET`: those guards activate donor platform, display,
+  I2C touch, PMIC/SPMI, UFS and logging paths. The Kona DTS statically confirms
+  eight `qcom,kryo` nodes, PSCI via SMC, GICv3, and vtimer PPI 11 / INTID 27;
+  it does not confirm ABL's runtime EL, actual MPIDR handoff, GIC security/group
+  state, or PSCI CPU_ON behavior. `SweetCPU` also assumes a homogeneous cluster
+  and its secondary entry changes EL2 state. Munch's DTS instead reports 4+3+1
+  capacity groups, so the inherited eight-core topology is not a validated
+  Munch SMP implementation. Keep the first isolated MUNCH profile at one CPU,
+  with board paths disabled, until those runtime contracts are checked. Details
+  and patch/config inventory are in `docs/MUNCH_PORTING.md`.
+- This milestone is an offline source audit only. No source patch, kernel build,
+  CI run, payload, device command, or `userdata` operation was performed. The
+  local XNU checkout/buildtree needed to construct and compile a separate MUNCH
+  machine-config patch is absent; `gh` is also not installed. Current branch
+  passed `python3 tools/validate-repo.py` after this documentation update:
+  82 patches, 16 Python tools, 7 shell scripts; `git diff --check` also passed.
 - Completed commits: `67ff9bf` touch safety audit, `489d55d` corrected report
   lengths, `f0dc497` audit handoff, and `8be542d` Munch timer INTID. Validation
   after the latest code change: `python3 tools/validate-repo.py` passed (82

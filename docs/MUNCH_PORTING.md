@@ -210,5 +210,47 @@ not implement heterogeneous scheduling. All eight CPU nodes use
 `qcom,kryo470`, so the driver would not bind to the generated Munch CPUs. Patch
 0082 adds the missing match without changing the SWEET DT compatibility entry.
 The driver still reports the cosmetic name `Kryo 470`, and topology/power
-management remains a shared bring-up implementation rather than a Munch-specific
-CPU driver.
+management is not a Munch-specific implementation.
+
+## XNU machine-config boundary
+
+The workflow accepts a `machine_config` input, but that does not make `MUNCH` a
+valid target: patch 0004 registers only `SWEET`, adds only
+`MASTER.arm64.sweet`, and defines only `SWEET.h`. Several later patches also edit
+that SWEET master config directly. A separate Munch target needs its own master
+config and board header, plus a patch-series review so the donor-only settings
+are not silently inherited.
+
+Do not implement Munch by defining `SWEET` or
+`ARM64_BOARD_CONFIG_SWEET` as aliases. Those guards enable donor platform
+matching and code paths for display/framebuffer, the existing I2C touch driver,
+keys and PMIC/SPMI access, UFS and persistent logging, among other features.
+The Munch ADT's compatibility list currently retains `xiaomi,sweet` for that
+donor matcher; it is scaffolding and must not be treated as proof that the
+Sweet platform expert or its nubs are safe on Munch.
+
+The following are static-source evidence, not runtime handoff guarantees:
+
+- Kona DTS declares eight `qcom,kryo` CPU nodes, `enable-method = "psci"`,
+  PSCI 1.0 through SMC, a GICv3, and the architected virtual timer at PPI 11
+  (INTID 27). The current ADT carries those IDs and timer binding.
+- The inherited CPU implementation embeds SWEET policy: one generic cluster,
+  boot CPU 0, Aff1-based core IDs, a hard limit of eight, a hard-coded
+  PSCI-SMC CPU_ON path, and a secondary entry that reconfigures EL2 under
+  assumptions about the absence of a resident hypervisor and `CNTVOFF_EL2`.
+  The `0..0x700` DTS IDs and SMC conduit are not enough to validate that entry
+  against Android ABL's actual MPIDR, exception level, cache state, or PSCI
+  behavior.
+- Munch's DTS capacity groups are 4+3+1, unlike SWEET's 6+2 donor description.
+  Treating every CPU as homogeneous may be acceptable for a first single-core
+  bring-up, but it is not a validated final scheduler/topology configuration.
+- GICv3 and timer wiring are known from DTS; the GIC security view, Group-1
+  delivery, timer acknowledgement behavior, and exclusive CPU-interface state
+  after ABL have not been measured on this Munch boot path. SWEET runtime GIC
+  observations must not be carried over as Munch facts.
+
+The first Munch kernel profile should therefore be isolated from SWEET hardware
+drivers, use the Munch ADT without a UFS node and `rd=md0`, and start with one
+CPU. Reuse the generic architecture pieces only after source-level guards are
+separated and runtime EL/GIC/PSCI assumptions are checked. No Munch XNU target or
+bootable Munch payload exists yet.
