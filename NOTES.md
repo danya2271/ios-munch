@@ -42,6 +42,8 @@ support.
   tools, 7 shell scripts); `git diff --check` and
   `tools/inspect-munch-dtb.py research/munch-live.dtb --expect-munch` passed.
   No XNU build/CI or phone boot was run; `gh` is not installed here.
+- Research/docs milestone recorded in commit `b339c7e`
+  (`docs: refine Munch memory and touch port research`).
 - Next: obtain a read-only runtime UEFI memory map through a separately
   controlled UEFI boot; reconcile it with live FDT, then implement a Munch ADT
   and XNU loader profile. In parallel, map QUPv3 SE4 registers/protocol from
