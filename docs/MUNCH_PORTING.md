@@ -147,7 +147,10 @@ must be checked against the exact running firmware and XNU's required handoff.
 
 1. Capture and validate the live/stock Munch DTB without reading `userdata`.
 2. Build a Munch-specific hardware profile from verified memory carve-outs,
-   GIC, timer, PSCI, framebuffer, touch, and power data. Keep the SWEET
+   GIC, timer, PSCI, framebuffer, touch, and power data. Kona's architected
+   timer lists the virtual timer as PPI 11, which is GIC INTID 27; the Munch
+   ADT generator now emits that value instead of SWEET's donor INTID 19. Keep
+   the SWEET
    profile intact as the known-good reference.
 3. Adapt the shim's boot handoff and XNU ADT generation to that profile; do not
    copy SWEET addresses such as its GIC, UFS, framebuffer, or RAM bounds.

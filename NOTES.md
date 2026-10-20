@@ -7,6 +7,12 @@
   4-6, and 7 are in frequency domains 0, 1, and 2, with capacities 448, 1023,
   and 1024. The generated Munch ADT already carries these eight nodes and the
   current XNU SMP patch accepts the `0x000..0x700` MPIDR range.
+- Corrected an ADT timer binding gap found during the machine-config audit:
+  Kona DTS declares the architected virtual timer as `GIC_PPI 11`, whose full
+  GIC INTID is `16 + 11 = 27`; the Munch ADT generator had incorrectly reused
+  SWEET's donor value `19`. `tools/mkadt.py` now emits Munch/QEMU `27` while
+  preserving SWEET's `19`. This is an offline generator fix; no device boot
+  was run.
 - Found and fixed an actual binding gap: `SweetCPU` previously matched only
   `qcom,kryo470`, while the Munch ADT and live kernel DTS use `qcom,kryo`.
   New patch `0082-munch-kryo-cpu-match.patch` adds a second IOKit personality;
