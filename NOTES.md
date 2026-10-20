@@ -23,11 +23,10 @@
   CRC-16/Kermit reads. Its automatic firmware-upgrade path writes controller
   nonvolatile firmware and is explicitly excluded from the XNU RAM bring-up;
   the first XNU touch implementation must be read-only probe/report handling.
-- `mkadt.py` documentation and porting notes now distinguish explicit offline
+- The prior `mkadt.py` / porting-notes milestone distinguishes explicit offline
   RAM candidates from the direct Android-ABL runtime gate. The shim's FDT
-  preflight, not the unverified public UEFI source map, is the safety check for
-  a future direct `fastboot boot` payload. No ADB, fastboot, phone boot, or
-  `userdata` access occurred.
+  preflight, not the unverified public UEFI source map, remains the required
+  memory safety check for a future direct `fastboot boot` payload.
 - Validation: `python3 tools/validate-repo.py` passed with 82 contiguous XNU
   patches; generated a 10,692-byte Munch ADT for offline inspection with
   `[0x100000000,0x200000000)` and confirmed all eight `qcom,kryo` nodes;
@@ -68,16 +67,29 @@
   established. Current XNU machine configuration remains `SWEET`; there is no
   `MUNCH` machine config yet, so the inherited SWEET touch/keys code is not a
   Munch implementation.
-- Next: continue offline with the Munch machine-config / RAM-handoff blockers;
-  do not create or boot a payload yet because runtime memory handoff and the
-  RAM-root image are unresolved. The diagnostic ADB read was non-destructive;
-  no `fastboot`, panel reset, UFS, or `userdata` operation occurred. This
-  handoff follows commits `67ff9bf` (touch safety audit) and `489d55d`
-  (report-length correction). After the correction, `python3
-  tools/validate-repo.py` passed (82 patches, 16 Python tools, 7 shell
-  scripts) and `git diff --check` passed. Next concrete offline task: inventory
-  `SWEET.h` and every `SWEET`-gated hardware path to scope a distinct MUNCH
-  machine configuration; do not alias MUNCH to SWEET or enable its touch path.
+- Machine-config inventory confirms that a MUNCH build cannot be enabled by
+  selecting another workflow string alone. The current workflow defaults to
+  `SWEET`; patch `0004` defines only `SWEET.h`, and architecture hooks are
+  guarded by `SWEET` / `ARM64_BOARD_CONFIG_SWEET`. Separate shared architecture
+  work (plain arm64, 16K pages, GICv3 Group-1 IRQ handling, virtual-timer PPI,
+  PSCI and 8-core startup) from board paths that must stay disabled until
+  ported (SE7 I2C touch, SWEET GPIO/PMIC/SPMI, SWEET UFS/logging, and display
+  assumptions). Patch 0082 only adds a CPU personality; it does not create a
+  MUNCH machine config.
+- Completed commits: `67ff9bf` touch safety audit, `489d55d` corrected report
+  lengths, `f0dc497` audit handoff, and `8be542d` Munch timer INTID. Validation
+  after the latest code change: `python3 tools/validate-repo.py` passed (82
+  patches, 16 Python tools, 7 shell scripts); `git diff --check` passed.
+  Generated a 10,692-byte explicit-candidate Munch ADT and parsed
+  `virtual-timer-intid=27`; generator warned that the optional local D22AP
+  product ADT is absent, so `/product` was omitted. No XNU CI, payload build,
+  fastboot, phone boot, panel reset, UFS, or `userdata` operation occurred.
+  Android ADB observations above were metadata-only and read-only.
+- Next: design a distinct MUNCH machine-config series by extracting the exact
+  architecture assumptions from patches `0004`, `0017`, `0018`, `0065`, `0078`,
+  and `0082`; preserve SWEET behavior and keep board-specific drivers behind
+  SWEET-only guards. Do not build or boot a Munch payload until memory handoff
+  and RAM-root blockers are cleared.
 
 ### >>> HANDOFF 2026-10-20: ABL-FDT MEMORY PREFLIGHT <<<
 
