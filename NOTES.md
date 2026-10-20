@@ -8,7 +8,7 @@
 - No device, partition, or UEFI was changed during the rebrand. No POCO F4 boot has been verified.
 - Historical path references below are updated to renamed host tools where they refer to files in this repository; external artifact names remain unchanged.
 - Rebrand validation on 2026-10-20: `python3 tools/validate-repo.py` passed (81 patches, 15 Python tools, 7 shell scripts); `git apply --stat` parsed all 81 XNU patches; `git diff --check` passed. The ARM64 shim cross-compiled and linked with zero absolute relocations, the host console smoke test passed, and the QEMU helper recognized both inherited SWEET and renamed MUNCH early-panic markers. No XNU kernel build or device boot was run; no hardware was attached or modified.
-- Rebrand implementation commit: see commit recorded in the following handoff commit. No CI run was started because this is a source rebrand, not an SM8250 port.
+- Rebrand implementation commit: `555fd62` (`rebrand sweet fork as munch`). No CI run was started because this is a source rebrand, not an SM8250 port.
 - Remaining blocker: XNU patches, machine config, staging scripts and device hardware identifiers are still SWEET/SM7150. MUNCH branding and payload format do not imply Poco F4 support. Porting and hardware validation remain unfinished.
 
 ### >>> UPDATE 2026-10-20: POCO F4 / UEFI feasibility research <<<
