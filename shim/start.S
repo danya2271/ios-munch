@@ -1,5 +1,5 @@
 /*
- * sweet boot shim entry: arm64 Linux Image header so Qualcomm ABL treats
+ * munch boot shim entry: arm64 Linux Image header so Qualcomm ABL treats
  * us like a kernel. ABL enters at EL1, MMU/D-cache off, x0 = DTB pointer.
  */
 	.section .text.head, "ax"

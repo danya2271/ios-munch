@@ -1,5 +1,5 @@
 /*
- * First userspace program for SWEET bring-up: mockfs serves the RAM disk
+ * First userspace program for MUNCH bring-up: mockfs serves the RAM disk
  * itself as /sbin/launchd, so this static binary is PID 1. It proves that
  * exec, the user/kernel boundary, devfs and the console all work, then
  * stays alive (init exiting panics the kernel).
@@ -91,9 +91,9 @@ five_sec:
 path:
 	.asciz	"/dev/console"
 hello:
-	.ascii	"\n*** SWEET userspace: init running as PID "
+	.ascii	"\n*** MUNCH userspace: init running as PID "
 hello_tail:
 	.ascii	" ***\n"
 alive:
-	.ascii	"SWEET init: still alive\n"
+	.ascii	"MUNCH init: still alive\n"
 alive_end:
