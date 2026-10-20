@@ -7,10 +7,10 @@
   `qcom,board-id = <0x32 0x00>`. The change is pushed to the user fork as
   `a8b755c` (`fix(munch): match live device identity in embedded DTB`). The
   fork still has only the expected dirty `tools/Installer` submodule.
-- Identity-fixed local build artifact: `/tmp/edk2-munch-identity-build/boot-munch.img`,
-  1,536,000 bytes, SHA-256
-  `b7153bc6de91227d25ac051452288a8763d093c753fd20ad5f501f3a5c2f417f`.
-  Embedded DTB SHA-256 is
+- Canonical rebuild from `a8b755c` completed locally with GCC 14 host tools:
+  `/tmp/edk2-munch-a8b755c-build/boot-munch.img`, 1,536,000 bytes, SHA-256
+  `6e0c8ade40a00cb5bf268169cd015b383b753494d1c8678f48fa8378dfeabece`.
+  The generated `PcdFirmwareVersionString` is `a8b755c`. Embedded DTB SHA-256 is
   `66f1d179b219585dc4a2bfcf53a858cd8f141b4002d4dfb1599a1a8fdaa80981`.
 - Two tests used only temporary `fastboot boot`; no `fastboot flash`, erase,
   partition read/write, `userdata` access, or `dtbo` modification occurred.

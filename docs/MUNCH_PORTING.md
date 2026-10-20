@@ -81,15 +81,17 @@ SHA-256
 artifact is only statically validated; it has not been sent to the phone.
 
 The follow-up identity fix is pushed as `a8b755c`: the embedded Munch DTB now
-matches the live Android FDT model and board ID (`0x32`). The resulting local
-artifact `/tmp/edk2-munch-identity-build/boot-munch.img` has SHA-256
-`b7153bc6de91227d25ac051452288a8763d093c753fd20ad5f501f3a5c2f417f`. It was
-tested twice with temporary `fastboot boot` only; both runs returned to Android
-without modifying `userdata`, `dtbo`, or any persistent partition. The phone
-reported `munch`, `androidboot.dtbo_idx=0`, and `androidboot.dtb_idx=0` after
-the tests. The framebuffer text visible in the supplied photographs is an
-early UEFI banner/debug line; the photographs are too blurred to transcribe
-reliably and do not establish an XNU panic.
+matches the live Android FDT model and board ID (`0x32`). A canonical local
+rebuild from that commit produced `/tmp/edk2-munch-a8b755c-build/boot-munch.img`
+with SHA-256
+`6e0c8ade40a00cb5bf268169cd015b383b753494d1c8678f48fa8378dfeabece`; its
+`PcdFirmwareVersionString` is `a8b755c`. It was tested twice with temporary
+`fastboot boot` only; both runs returned to Android without modifying
+`userdata`, `dtbo`, or any persistent partition. The phone reported `munch`,
+`androidboot.dtbo_idx=0`, and `androidboot.dtb_idx=0` after the tests. The
+framebuffer text visible in the supplied photographs is an early UEFI
+banner/debug line; the photographs are too blurred to transcribe reliably and
+do not establish an XNU panic.
 
 **Candidate, not validated:** `[0x100000000, 0x200000000)` (4-8 GiB) lies
 inside the later EDK2 source's conventional RAM descriptor and below its
