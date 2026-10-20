@@ -28,8 +28,9 @@
   conflicting `rd=` selectors, a UFS ADT, overlong boot args, and an oversized
   sparse RAM disk before opening it. No XNU build, CI, phone connection, boot,
   or storage access was performed.
-- Worktree is intentionally uncommitted; preserve all existing `shim/out`
-  artifacts and external non-userdata backups. Next: establish a realistic
+- Milestone committed as `b11ba39` (`Constrain Munch bring-up to RAM-only
+  path`). Existing `shim/out` artifacts and external non-userdata backups were
+  preserved. Next: establish a realistic
   RAM-root footprint/design and verify the XNU RAM-disk path offline; only then
   resume Munch memory/loader integration. Do not use the unverified 4-8 GiB
   range or create a phone payload yet.
