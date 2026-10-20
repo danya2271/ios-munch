@@ -5,6 +5,22 @@ is the Redmi Note 10 Pro donor platform (SM7150), not this target device. The
 current shim, XNU machine configuration, and ADT generator still describe the
 donor; the Munch name does not make those values portable.
 
+## Current safety boundary
+
+The current device-test phase is RAM-only. Any test image must use a payload RAM
+disk with `rd=md0`, a temporary `fastboot boot` image, and an ADT without an UFS
+node. Do not read, back up, mount, or write `userdata`; the existing
+non-userdata backups remain outside the repository. UFS is a possible later
+boot mode, but it is not part of the current tests and needs its own reviewed
+storage design before use.
+
+No local iOS root image is available in `research/`. The inherited root builder
+defaults to a 16-GB raw HFS+ image, and `mkpayload.py` embeds that image
+uncompressed as a resident RAM disk. That exceeds the 4-GB source-derived
+candidate memory window; the candidate itself is not a verified runtime map.
+A RAM-sized root or demand-paged design is unresolved and must be measured
+before proposing a phone boot.
+
 ## Live device evidence (2026-10-20)
 
 Read-only ADB inspection identifies `ro.product.device=munch`, model
@@ -101,10 +117,9 @@ must be checked against the exact running firmware and XNU's required handoff.
 
 ## Port sequence and current boundary
 
-1. Capture and validate the live/stock Munch DTB and read the partition layout
-   without writing to the device.
+1. Capture and validate the live/stock Munch DTB without reading `userdata`.
 2. Build a Munch-specific hardware profile from verified memory carve-outs,
-   GIC, timer, PSCI, UFS, framebuffer, touch, and power data. Keep the SWEET
+   GIC, timer, PSCI, framebuffer, touch, and power data. Keep the SWEET
    profile intact as the known-good reference.
 3. Adapt the shim's boot handoff and XNU ADT generation to that profile; do not
    copy SWEET addresses such as its GIC, UFS, framebuffer, or RAM bounds.
@@ -119,11 +134,10 @@ must be checked against the exact running firmware and XNU's required handoff.
    reference. Port the SE4 SPI controller and GPIO/regulator sequencing into
    XNU, then adapt its report path. Verify whether firmware upload is needed
    when booting outside the Android kernel.
-6. Treat Android dual boot as a separate storage/boot-menu task. Although
-   `userdata` is large, the existing SWEET flow uses the whole partition for
-   the iOS root and would destroy Android's data filesystem. A dual-boot design
-   needs a verified way to store and locate an iOS root without overwriting
-   Android data; keep Android partitions untouched until that design exists.
+6. Keep storage boot modes separate. Current phone tests use RAM only and leave
+   `userdata` untouched. A later UFS boot may be explored after the RAM bring-up;
+   it requires a verified root layout, explicit write policy, and a storage
+   recovery plan. Do not let that future mode leak into RAM test images.
 
 The device identity and live Linux-tree hardware observations are verified for
 this handset, but the tree is reconstructed, Android-version metadata is

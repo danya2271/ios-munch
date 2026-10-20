@@ -15,7 +15,7 @@ The inherited `sweet` bring-up baseline boots Apple's open-source XNU kernel (xn
 | Boot | Stock Xiaomi bootloader → `fastboot boot` of our shim → XNU. Nothing is flashed to the boot partitions |
 | CPU | All 8 cores (six Cortex-A55s and two Cortex-A76s) via PSCI, 16K pages, GICv3 interrupts, timers |
 | Memory | About 3.95 GiB of the upper DDR bank |
-| Storage | Own UFS host driver; the iOS root is a journaled HFS+ volume in `userdata`, read/write |
+| Storage | SWEET baseline uses a UFS root; Munch testing is planned for RAM only and has not booted |
 | iOS userland | Real iPhone X 16.7.16 root filesystem and shared cache; launchd and the system daemons run |
 | Display | Kernel IOSurface + IOMobileFramebuffer (`AppleCLCD`) services; CoreAnimation renders in software; frames are copied into the bootloader's framebuffer. Presented to iOS as an iPhone X panel (1125×2436) |
 | GUI | backboardd, SpringBoard, lock screen, home screen, Control Center, notification center, Settings |
@@ -33,28 +33,28 @@ The inherited `sweet` bring-up baseline boots Apple's open-source XNU kernel (xn
 - **Slow boot:** about 4 minutes on the Apple logo.
 - **Security is off:** permissive code signing (AMFI) and sandbox policies, a stub AppleKeyStore, no data protection. Do not put anything personal on it.
 
-## How it boots
+## Intended Munch test flow
 
 ```
 ABL (stock Xiaomi bootloader, unlocked)
   -> fastboot boot shim-boot.img              (temporary; nothing is flashed to boot)
      -> shim: own MMU setup, reads the live FDT, loads the payload from the ramdisk
         -> XNU Mach-O + generated Apple Device Tree (ADT) + boot-args
-           -> XNU -> UFS driver -> HFS+ root in the userdata partition
-              -> dyld + shared cache -> launchd -> daemons -> backboardd + SpringBoard
+           -> XNU -> virtual RAM disk (`rd=md0`)
+              -> iOS userspace, if a RAM-sized root can be prepared
 ```
 
-There is no serial port (the debug UART is wired as SPI on this board). The kernel draws its console into the framebuffer that ABL leaves at `0x9c000000`, and keeps a persistent 4 MiB log ring at the end of `userdata`. You read that log from OrangeFox recovery with `tools/munch-log-pull.sh`, so you don't have to film the screen.
+This is a target design, not a validated Munch boot path. No runtime UEFI memory map, Munch XNU build, or Munch device boot is available yet. No iOS root image is present locally. The inherited root builder defaults to a 16-GB raw HFS+ image, and the current payload format embeds the entire uncompressed image in RAM; that image cannot fit the source-derived 4-GB candidate window. A RAM-sized or demand-paged root design remains unresolved. For the current phase, do not read, back up, mount, or write `userdata`. UFS may be evaluated in a later phase with a separately reviewed storage plan.
 
 ## How to do it yourself
 
-> These steps document the inherited `sweet` bring-up, not installation instructions for the POCO F4. They have not been adapted or validated for `munch`. In particular, do not flash `userdata`, UEFI, or any boot partition on a POCO F4 using this guide.
+> These steps document offline preparation for Munch RAM-only bring-up. They do not install anything and do not read, back up, mount, or write `userdata`.
 
-The legacy bring-up used a Redmi Note 10 Pro (`sweet`, global or Indian variant, SM7150) with an **unlocked bootloader**, a Linux PC, and a GitHub account for the kernel build. **Everything on `userdata` is lost.** Bootloaders, recovery, modem and persist partitions are never touched.
+The inherited Redmi Note 10 Pro (`sweet`) workflow used a destructive UFS root and is retained only as historical reference. Do not apply those storage steps to Munch. Bootloaders, recovery, modem, persist, GPT and `userdata` remain untouched.
 
-### 0. Back up the phone
+### 0. Preserve non-userdata state
 
-Boot OrangeFox (or any recovery with adb root) temporarily and pull at least `persist`, `modemst1`, `modemst2`, `fsg`, `fsc` and `boot`, `dtbo`, `vbmeta`. They contain per-device calibration data. Keep them off git; `.gitignore` already excludes `backup/`, `dtb/` and `recovery/`.
+Keep the existing non-userdata backups outside git. Do not create a `userdata` backup and do not dump it for this workflow. The shim's first device test is allowed only as a temporary `fastboot boot` image after the runtime UEFI memory map is verified.
 
 The shim needs the stock DTB. Unpack your phone's stock `boot.img`:
 
@@ -73,7 +73,10 @@ gh run download RUN_ID -R YOU/ios-munch -n xnu-kernel -D xnu/out
 
 To check a patch locally before spending a CI run, `tools/xnu-cc.py` replays the compile commands of a previous CI log for single files.
 
-### 2. Build the iOS root image
+### 2. Legacy SWEET root image (reference only)
+
+This creates the inherited on-disk SWEET root; it is not part of Munch RAM
+testing. Do not write this image to the phone during the current phase.
 
 Download the iPhone X (iPhone10,3) iOS 16.7.16 (20H392) IPSW from Apple. Then, on Linux, with `apfs-fuse`, `hfsprogs` and sudo:
 
@@ -96,48 +99,42 @@ python3 tools/remotezip.py IPSW_URL DeviceTree.d22ap.im4p research/ipsw-x/dt
 ipsw img4 im4p extract research/ipsw-x/dt/Firmware/all_flash/DeviceTree.d22ap.im4p -o research/ipsw-x/d22ap.adt
 ```
 
-### 3. Build the boot image
+### 3. Munch RAM boot status
 
-Needs `aarch64-linux-gnu-gcc` and `mkbootimg`.
+There is no safe, reproducible Munch image build command yet. Do not substitute
+the SWEET kernel or the source-derived 4–8 GiB memory candidate: the XNU
+platform configuration and memory map are unverified for this phone. A device
+test remains blocked until the runtime UEFI map, Munch-specific XNU profile,
+and a root image that fits the available RAM are established. Any eventual
+device test in this phase must use `rd=md0`, omit UFS from the ADT, and use
+temporary `fastboot boot` only.
 
-```sh
-python3 tools/mkadt.py shim/out/munch.adt --highmem
-python3 tools/mkpayload.py xnu/out/kernel.development.sweet shim/out/munch.adt shim/out/payload.bin \
-    --cmdline 'debug=0xc serial=3 cpus=8 keepsyms=1 -enable_kprintf_spam -noprogress rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin ufsrw=1 rootrw=1 launchd_unsecure_cache=1 wdt=-1 sweetfb_noconsole=1 sweetfb_hz=30'
-shim/build.sh ../shim/out/payload.bin      # -> shim/out/shim-boot.img
-```
-
-What the less obvious boot-args do:
+The following SWEET-only boot arguments are historical reference, not a Munch
+recipe:
 
 | Boot-arg | Effect |
 | --- | --- |
-| `rd=ufsroot0 ufsrw=1 rootrw=1` | Root on the `userdata` partition, writable |
+| `rd=md0` | Root on the payload's RAM disk; no UFS access |
 | `cpus=8` | Start all eight cores on the inherited sweet baseline; `cpus=1` is the safe fallback |
 | `launchd_unsecure_cache=1` | launchd accepts its job cache without AMFI |
 | `wdt=-1 wdt_test=no_user_checkin` | No hardware watchdog |
-| `sweetfb_noconsole=1` | Stop drawing kernel text over the GUI. It still goes to the persistent log; panics are drawn |
+| `sweetfb_noconsole=1` | SWEET console option; Munch diagnostics must not use persistent storage |
 | `sweetfb_hz=30` | Panel refresh rate of the CPU copy |
 | `sweettouch=0`, `sweetkeys=0` | Disable the touch or button driver |
 
-### 4. Flash the root and boot
+### 4. Device testing boundary
+
+When the prerequisites above are met, device tests are limited to a temporary
+`fastboot boot` image. Do not flash partitions or access `userdata` during this
+RAM-only phase. The 4–5 minute boot-to-lock-screen result refers to SWEET only.
+
+### 5. Read offline logs
 
 ```sh
-fastboot -S 512M flash userdata ios16-root.simg   # ~7 minutes; do not unplug
-# Xiaomi's fastboot often hangs after a large flash: re-enter fastboot with Power + Volume down
-fastboot boot shim/out/shim-boot.img
+tools/qemu-munch.py /tmp/payload.bin /tmp/qemu-run --secs 45 --fail-on-panic
 ```
 
-The first boot takes about 4–5 minutes on the Apple logo, then the lock screen appears. Swipe up to unlock. To get back to fastboot, hold Power + Volume down.
-
-### 5. Read the kernel log
-
-```sh
-fastboot boot recovery/recovery.img        # OrangeFox, temporary
-tools/munch-log-pull.sh logs/boot.txt      # 4 MiB console ring from the end of userdata
-adb reboot bootloader
-```
-
-The log contains crash reports with backtraces (`CRASH name ...`), IOKit traces of backboardd and SpringBoard, and the inherited drivers' `SWEET ...` lines. `tools/munch-crash.py` symbolicates them against the shared cache.
+The QEMU output contains the framebuffer and kernel logs without touching the phone. A device test must use the same RAM-only payload and a temporary `fastboot boot`; no storage root is supported by this workflow.
 
 ### QEMU
 
@@ -154,7 +151,7 @@ The log contains crash reports with backtraces (`CRASH name ...`), IOKit traces 
 | `tools/mkpayload.py` | Packs kernel + ADT + boot-args into the shim payload |
 | `tools/mkiosroot.sh` | Builds the HFS+ iOS root from the IPSW images |
 | `tools/munch-root-tweaks.py` | Bring-up changes to the root (Setup skip, activation, daemons) |
-| `tools/munch-log-pull.sh`, `munch-log.py` | Read the persistent kernel log from recovery |
+| `tools/munch-log-pull.sh`, `munch-log.py` | Legacy SWEET persistent-log tools; not for the current Munch RAM phase |
 | `tools/munch-crash.py` | Symbolicate console crash reports |
 | `tools/xnu-cc.py` | Local single-file compile check from a CI log |
 | `tools/qemu-munch.py` | QEMU test boots with framebuffer text decoding |

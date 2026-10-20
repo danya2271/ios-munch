@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Build the minimal Apple Device Tree that the SWEET xnu needs to boot.
+"""Build the minimal Apple Device Tree used by the XNU bring-up.
 
-Only what the early boot path actually reads (see NOTES.md); every MMIO
-address comes from the sweet live FDT. Usage:  mkadt.py OUT.adt [--dump] [--qemu] [--highmem]
+The default profile is the inherited SWEET donor profile. ``--munch`` emits
+only verified POCO F4 SoC/display identity and deliberately omits UFS; its
+RAM window must be supplied explicitly after a runtime UEFI map is verified.
+Usage: mkadt.py OUT.adt [--dump] [--qemu] [--highmem] [--munch]
 """
 import hashlib, os, struct, sys
 
@@ -24,7 +26,9 @@ GICD, GICD_SIZE = 0x17a00000, 0x10000
 GICR, GICR_SIZE = 0x17a60000, 0x100000
 FB, FB_SIZE = 0x9c000000, 0x1700000
 SWEET_ECID = 0x5357454554000001  # 'SWEET' + 1, synthetic
+MUNCH_ECID = 0x4d554e4348000001  # 'MUNCH' + 1, synthetic
 FB_W, FB_H, FB_STRIDE = 1080, 2400, 1080 * 4
+MUNCH_FB, MUNCH_FB_SIZE = 0x9c000000, 0x2300000
 # Internal UFS host (ufshc@1d84000 "ufs_mem"); QEMU virt has none
 UFS, UFS_SIZE = 0x01d84000, 0x3000
 TIMEBASE = 19200000
@@ -68,10 +72,36 @@ def node(name, props=(), children=()):
     return n
 
 
-def build(seed=None, qemu=False, highmem=False):
-    """qemu=True: same tree, but with QEMU virt's GIC addresses and CNTFRQ (tools/qemu-munch.py)."""
-    phys_base, mem_size = (HIGH_PHYS_BASE, HIGH_MEM_SIZE) if highmem else (PHYS_BASE, MEM_SIZE)
+def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dram_size=None,
+          ram_only=False):
+    """Build a SWEET, QEMU, or explicit-memory Munch profile.
+
+    Munch memory is intentionally not guessed from Linux or the public UEFI
+    source map. Callers must pass the runtime-verified ``dram_base`` and
+    ``dram_size`` values explicitly; the profile is always RAM-only.
+    """
+    if munch and qemu:
+        raise ValueError('--munch and --qemu are separate hardware profiles')
+    if munch and (dram_base is None or dram_size is None):
+        raise ValueError('--munch requires --dram-base and --dram-size from a verified runtime UEFI map')
+    if dram_base is not None or dram_size is not None:
+        if dram_base is None or dram_size is None:
+            raise ValueError('--dram-base and --dram-size must be supplied together')
+        if dram_base < 0 or dram_size <= 0:
+            raise ValueError('dram-base must be non-negative and dram-size must be positive')
+
+    if dram_base is not None:
+        phys_base, mem_size = dram_base, dram_size
+    elif highmem:
+        phys_base, mem_size = HIGH_PHYS_BASE, HIGH_MEM_SIZE
+    else:
+        phys_base, mem_size = PHYS_BASE, MEM_SIZE
     gicd, gicr, timebase = (QEMU_GICD, QEMU_GICR, QEMU_TIMEBASE) if qemu else (GICD, GICR, TIMEBASE)
+    platform = 'munch' if munch else 'sweet'
+    ecid = MUNCH_ECID if munch else SWEET_ECID
+    fb, fb_size = (MUNCH_FB, MUNCH_FB_SIZE) if munch else (FB, FB_SIZE)
+    display_compatible = 'munch,display' if munch else 'sweet,display'
+    display_w, display_h = (FB_W, FB_H) if munch else (1125, 2436)
     seed = seed if seed is not None else os.urandom(64)
     phandle = iter(range(1, 1000))
     ph = lambda: ('AAPL,phandle', u32(next(phandle)))
@@ -82,8 +112,8 @@ def build(seed=None, qemu=False, highmem=False):
         ('dram-size', u64(mem_size)),
         ('random-seed', seed),
         ('debug-enabled', u32(1)),
-        ('firmware-version', cstr('sweet-shim')),
-        ('system-firmware-version', cstr('sweet-shim')),
+        ('firmware-version', cstr(f'{platform}-shim')),
+        ('system-firmware-version', cstr(f'{platform}-shim')),
         # iBoot's SHA-384 of the boot manifest; /sbin/mount -P 1 exits unless
         # it exists (bind mounts /private/preboot/<hex>/usr/standalone/firmware,
         # tolerating a missing directory). Fixed stand-in value.
@@ -101,7 +131,7 @@ def build(seed=None, qemu=False, highmem=False):
         # files), so e.g. DataMigration never records LastSystemVersion and
         # migrates on every boot. Synthetic ECID (not the phone's); chip-id
         # of the A11 that the iPhone X userland expects.
-        ('unique-chip-id', struct.pack('<Q', SWEET_ECID)),
+        ('unique-chip-id', struct.pack('<Q', ecid)),
         ('chip-id', u32(0x8015)),
         # Security status as on a dev-fused, undemoted board (tuple 0,0,1,1):
         # MobileGestalt reads these from /chosen, and mobileactivationd's
@@ -119,16 +149,26 @@ def build(seed=None, qemu=False, highmem=False):
         # with CSR_ALLOW_UNRESTRICTED_FS (vm_unix.c shared region checks).
         node('asmb', [ph(), ('lp-sip0', u64(0x6f)), ('lp-sip1', u32(1))])])
 
-    # SWEET SMP: all eight cores in physical-core order (0-5 Cortex-A55,
-    # 6-7 Cortex-A76), one homogeneous cluster. The kernel defaults to one
-    # and uses cpus=N to select an initial prefix (N <= 8).
-    # QEMU retains its original single-CPU tree: its MPIDRs differ from sweet.
+    # The donor SWEET profile and the Munch profile both expose Aff1:Aff0
+    # MPIDRs. Munch's actual Kona topology is 4 little + 3 big + 1 prime;
+    # the current XNU patches still treat the CPUs as one generic cluster.
+    # QEMU retains its original single-CPU tree: its MPIDR differs from phone.
     cpu_nodes = []
     for core in range(1 if qemu else 8):
+        if munch:
+            cpu_compatible = ('qcom,kryo', 'ARM,v8')
+            freq_domain = 0 if core < 4 else 1 if core < 7 else 2
+            capacity = 448 if core < 4 else 1023 if core < 7 else 1024
+            dynamic_power = 89 if core < 4 else 304 if core < 7 else 386
+        else:
+            cpu_compatible = ('qcom,kryo470', 'ARM,v8')
+            freq_domain = None
+            capacity = None
+            dynamic_power = None
         cpu_nodes.append(node(f'cpu{core}', [
             ph(),
             ('device_type', cstr('cpu')),
-            ('compatible', cstr('qcom,kryo470') + cstr('ARM,v8')),
+            ('compatible', b''.join(cstr(value) for value in cpu_compatible)),
             ('reg', u32(core << 8)),  # actual MPIDR Aff1:Aff0, NOT logical ID
             ('cpu-id', u32(core)),   # descriptive: XNU assigns IDs by DT order
             ('cluster-id', u32(0)),  # descriptive; see ml_parse_cpu_topology
@@ -144,7 +184,9 @@ def build(seed=None, qemu=False, highmem=False):
             ('memory-frequency', u32(1866000000)),
             ('peripheral-frequency', u32(timebase)),
             ('fixed-frequency', u32(timebase)),
-        ]))
+        ] + ([('qcom,freq-domain', u32(freq_domain)),
+              ('capacity-dmips-mhz', u32(capacity)),
+              ('dynamic-power-coefficient', u32(dynamic_power))] if munch else [])))
     cpus = node('cpus', [ph(), ('#address-cells', u32(1)),
                          ('#size-cells', u32(0))], cpu_nodes)
 
@@ -157,8 +199,8 @@ def build(seed=None, qemu=False, highmem=False):
     ])
     arm_io = node('arm-io', [
         ph(),
-        ('device_type', cstr('sweet-io')),
-        ('compatible', cstr('sweet-io') + cstr('arm-io')),
+        ('device_type', cstr(f'{platform}-io')),
+        ('compatible', cstr(f'{platform}-io') + cstr('arm-io')),
         ('#address-cells', u32(2)),
         ('#size-cells', u32(2)),
         ('ranges', u64(0, SOC_BASE, 0x100000000 - SOC_BASE)),
@@ -174,20 +216,19 @@ def build(seed=None, qemu=False, highmem=False):
         node('disp0', [
             ph(),
             ('device_type', cstr('display-subsystem')),
-            ('compatible', cstr('sweet,display')),
-            ('canvas-width', u32(1125)),
-            ('canvas-height', u32(2436)),
+            ('compatible', cstr('sweet,display') + cstr(display_compatible) if munch else cstr(display_compatible)),
+            ('canvas-width', u32(display_w)),
+            ('canvas-height', u32(display_h)),
         ])])
 
     fbcon = node('sweet-fbcon', [
         ph(),
-        ('reg', u64(FB, FB_SIZE)),
+        ('reg', u64(fb, fb_size)),
         ('width', u32(FB_W)),
         ('height', u32(FB_H)),
         ('stride', u32(FB_STRIDE)),
     ])
 
-    # bsd/dev/sweet_ufs.c: the UFS host ABL leaves running (absolute physical reg).
     ufs = node('sweet-ufs', [
         ph(),
         ('compatible', cstr('qcom,ufshc')),
@@ -217,18 +258,38 @@ def build(seed=None, qemu=False, highmem=False):
     # (iPhone10,3). 'xiaomi,sweet' stays for SweetPlatformExpert matching.
     return node('device-tree', [
         ph(),
-        ('compatible', cstr('D22AP') + cstr('iPhone10,3') + cstr('xiaomi,sweet') + cstr('qcom,sm7150') + cstr('AppleARM')),
+        ('compatible', cstr('D22AP') + cstr('iPhone10,3') +
+         (cstr('xiaomi,sweet') + cstr('xiaomi,munch') if munch else cstr('xiaomi,sweet')) +
+         cstr('qcom,sm8250' if munch else 'qcom,sm7150') + cstr('AppleARM')),
         ('model', cstr('iPhone10,3')),
         ('target-type', cstr('D22')),
         ('target-sub-type', cstr('D22AP')),
         ('manufacturer', cstr('Apple Inc.')),
         ('#address-cells', u32(2)),
         ('#size-cells', u32(2)),
-    ], [chosen, defaults, cpus, arm_io, fbcon, buttons] + product + ([] if qemu else [ufs]))
+    ], [chosen, defaults, cpus, arm_io, fbcon, buttons] + product +
+       ([] if qemu or munch or ram_only else [ufs]))
 
 
 if __name__ == '__main__':
-    root = build(qemu='--qemu' in sys.argv, highmem='--highmem' in sys.argv)
+    if len(sys.argv) < 2:
+        raise SystemExit('usage: mkadt.py OUT.adt [--dump] [--qemu] [--highmem] [--ram-only] [--munch --dram-base N --dram-size N]')
+    args = set(sys.argv[2:])
+
+    def option_value(name):
+        for i, arg in enumerate(sys.argv[2:], 2):
+            if arg == name:
+                if i + 1 >= len(sys.argv):
+                    raise SystemExit(f'{name} requires a value')
+                try:
+                    return int(sys.argv[i + 1], 0)
+                except ValueError as exc:
+                    raise SystemExit(f'{name} must be an integer literal') from exc
+        return None
+
+    root = build(qemu='--qemu' in args, highmem='--highmem' in args,
+                 munch='--munch' in args, ram_only='--ram-only' in args,
+                 dram_base=option_value('--dram-base'), dram_size=option_value('--dram-size'))
     blob = adt.serialize(root)
     open(sys.argv[1], 'wb').write(blob)
     if '--dump' in sys.argv:

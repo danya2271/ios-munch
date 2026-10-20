@@ -1,5 +1,39 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-20: RAM ROOT FEASIBILITY / PACKER GUARDS <<<
+
+- User clarified that a later UFS boot may be useful, but the current device
+  phase is RAM-only because there is no room to back up user data. `userdata`
+  must not be read, backed up, mounted, or written. Do not flash; any future
+  device test remains temporary `fastboot boot` only.
+- Static XNU patch-path inspection: `sweet_ufs_rootdev()` is selected only for
+  `rd=ufsroot0`; persistent log flushing starts only after UFS initialization
+  finds a writable partition. A RAM boot with `rd=md0` and an ADT without UFS
+  does not enter those paths. This is a source-code path analysis, not runtime
+  proof that every unrelated kernel/userspace component is storage-free.
+- Root feasibility blocker: `tools/mkiosroot.sh` defaults to a 16-GB raw HFS+
+  image. `tools/mkpayload.py` embeds the entire RAM disk as an uncompressed
+  resident segment, so this default image cannot fit the source-derived 4-GB
+  candidate RAM window. The candidate window is not verified, and no iOS root
+  image exists locally under `research/`; a smaller or demand-paged root design
+  is unresolved.
+- Updated `mkpayload.py` to reject oversized RAM disks from file size before
+  reading their contents, and to reject empty RAM disks, conflicting root
+  selectors, UFS-bearing ADTs, and overlong boot arguments. README and porting
+  notes now distinguish the unvalidated Munch RAM design, historical SWEET
+  UFS workflow, and possible future UFS work.
+- Validation on 2026-10-20: `python3 tools/validate-repo.py` passed (81 XNU
+  patches, 16 Python tools, 7 shell scripts); `git diff --check` passed.
+  Synthetic packer tests accepted a valid RAM payload and rejected empty root,
+  conflicting `rd=` selectors, a UFS ADT, overlong boot args, and an oversized
+  sparse RAM disk before opening it. No XNU build, CI, phone connection, boot,
+  or storage access was performed.
+- Worktree is intentionally uncommitted; preserve all existing `shim/out`
+  artifacts and external non-userdata backups. Next: establish a realistic
+  RAM-root footprint/design and verify the XNU RAM-disk path offline; only then
+  resume Munch memory/loader integration. Do not use the unverified 4-8 GiB
+  range or create a phone payload yet.
+
 ### >>> HANDOFF 2026-10-20: MUNCH MEMORY / TOUCH PORT RESEARCH <<<
 
 **Target identity:** `munch` is the POCO F4 / SM8250 target. `sweet` is the
@@ -533,3 +567,12 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
      cpu_init, before arm_vm_init.
   5. panic hook at top of panic_trap_to_debugger: va_copy + _doprnt(fmt, &copy, sweet_early_putc, 16).
   Verify with tools/xnu-cc.py (compile+symbols) and patch-order simulation before the single CI run.
+
+## Handoff 2026-10-20: RAM-only Munch boundary
+- User confirmed `userdata` must never be read, backed up, mounted, or written; all device tests are to run from RAM via temporary `fastboot boot` only.
+- Offline worktree changes prepared for that boundary: RAM-only boot guidance in README and Munch port notes; shim no longer falls back to its UFS probe and the build excludes `ufs.c`; `mkadt.py` has an explicit Munch profile requiring supplied DRAM bounds and omitting UFS; RAM-disk payload construction requires `rd=md0` and rejects ADTs exposing UFS.
+- Munch ADT generation is scaffolding only, not boot-ready: the running UEFI memory map is unverified and XNU still uses SWEET-only platform matching/drivers. No claim of Munch XNU boot support.
+- Existing `tools/mkpayload.py` memory-window checks predate the RAM-only edits and were preserved.
+- After the user asked to stop, no device command was run. `userdata` was not accessed. No cleanup, reset, commit, CI run, or device test was performed; preserve all tracked and untracked artifacts and the non-userdata backups.
+- At this checkpoint the work was paused; it resumed on 2026-10-20 and continued
+  in the active handoff at the top of this file.

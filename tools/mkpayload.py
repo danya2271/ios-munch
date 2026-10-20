@@ -140,7 +140,26 @@ def adt_dram(adt_blob):
             struct.unpack('<Q', chosen.prop('dram-size'))[0])
 
 
+def adt_has_ufs(adt_blob):
+    """Return whether an ADT exposes an internal UFS host to XNU."""
+    root, _ = adt.parse(adt_blob)
+
+    def visit(node):
+        if node.name in ('sweet-ufs', 'munch-ufs', 'ufs'):
+            return True
+        compatible = node.prop('compatible') or b''
+        if b'qcom,ufshc\0' in compatible:
+            return True
+        return any(visit(child) for child in node.children)
+
+    return visit(root)
+
+
 def build(kernel_path, adt_path, cmdline, ramdisk_path=None):
+    cmdline_bytes = cmdline.encode()
+    if len(cmdline_bytes) >= BOOT_LINE_LENGTH:
+        raise ValueError(f'boot arguments exceed {BOOT_LINE_LENGTH - 1} bytes')
+
     buf = bytearray(open(kernel_path, 'rb').read())
     m = parse_macho(buf)
     nfix = apply_chained_fixups(buf, m)
@@ -156,17 +175,37 @@ def build(kernel_path, adt_path, cmdline, ramdisk_path=None):
     adt_blob = open(adt_path, 'rb').read()
     # The ADT decides where the kernel's RAM is (mkadt.py --highmem).
     PHYS_BASE, MEM_SIZE = adt_dram(adt_blob)
+    if kernel_end < virt_base or kernel_end - virt_base > MEM_SIZE:
+        raise ValueError('kernel image exceeds the ADT memory window')
     pieces = [(s['vmaddr'], s['vmsize'], buf[s['fileoff']:s['fileoff'] + s['filesize']]) for s in segs]
     ramdisk = None
     if ramdisk_path:
-        image = open(ramdisk_path, 'rb').read()
-        rd_size = (len(image) + PAGE - 1) & ~(PAGE - 1)
+        root_args = [arg for arg in cmdline.split() if arg.startswith('rd=')]
+        if root_args != ['rd=md0']:
+            raise ValueError('RAM-disk payloads require exactly one root selector: rd=md0')
+        if adt_has_ufs(adt_blob):
+            raise ValueError('RAM-only payload requires an ADT without a UFS node')
+        image_size = os.path.getsize(ramdisk_path)
+        if not image_size:
+            raise ValueError('RAM disk image is empty')
+        rd_size = (image_size + PAGE - 1) & ~(PAGE - 1)
         rd_va = kernel_end
         kernel_end = rd_va + rd_size
         rd_pa = rd_va - virt_base + PHYS_BASE
+        if rd_pa < PHYS_BASE or rd_size > MEM_SIZE or rd_pa - PHYS_BASE > MEM_SIZE - rd_size:
+            raise ValueError(f'RAM disk exceeds the ADT memory window ({MEM_SIZE:#x} bytes)')
+        image = open(ramdisk_path, 'rb').read()
+        if len(image) != image_size:
+            raise ValueError('RAM disk image changed while being read')
         pieces.append((rd_va, rd_size, image))
         adt_blob = add_ramdisk_to_adt(adt_blob, rd_pa, rd_size)
         ramdisk = (hex(rd_pa), hex(rd_size))
+
+    adt_pa = kernel_end - virt_base + PHYS_BASE
+    boot_args_pa = (adt_pa + len(adt_blob) + PAGE - 1) & ~(PAGE - 1)
+    required_end = boot_args_pa + PAGE
+    if required_end > PHYS_BASE + MEM_SIZE:
+        raise ValueError('kernel, RAM disk, ADT, and boot arguments exceed the ADT memory window')
 
     hdr_size = SEG_TABLE + 32 * len(pieces)
     out = bytearray(hdr_size)
@@ -183,7 +222,7 @@ def build(kernel_path, adt_path, cmdline, ramdisk_path=None):
     struct.pack_into('<8sII', out, 0, b'MUNCHXNU', 1, len(pieces))
     struct.pack_into('<7Q', out, 0x10, virt_base, m['entry'], adt_off, len(adt_blob), kernel_end,
                      PHYS_BASE, MEM_SIZE)
-    cl = cmdline.encode()[:BOOT_LINE_LENGTH - 1]
+    cl = cmdline_bytes
     out[CMDLINE:CMDLINE + len(cl)] = cl
     for i, t in enumerate(seg_table):
         struct.pack_into('<4Q', out, SEG_TABLE + 32 * i, *t)
