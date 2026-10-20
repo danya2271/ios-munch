@@ -62,6 +62,10 @@ The shim needs the stock DTB. Unpack your phone's stock `boot.img`:
 python3 tools/unpack_bootv2.py backup/boot.img dtb/boot_unpacked   # -> dtb/boot_unpacked/dtb
 ```
 
+For a read-only live-DTB build without storing the dump in the repository, set
+`DTB_PATH` to an external file, for example
+`DTB_PATH=/tmp/munch-live.dtb (cd shim && ./build.sh)`.
+
 ### 1. Build the kernel
 
 The XNU workflow builds either the inherited `SWEET` reference or the new isolated `MUNCH` target on GitHub's macOS runners with [blacktop/darwin-xnu-build](https://github.com/blacktop/darwin-xnu-build). It fetches xnu-8796, applies the patch series in order, and stages the pinned open-source libpthread, HFS and BearSSL sources. `MUNCH` has not yet completed a CI build. Fork the repo (public repos get free macOS minutes) and run:

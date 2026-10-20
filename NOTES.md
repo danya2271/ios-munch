@@ -1,5 +1,24 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-21: RAM-ONLY SHIM LOCAL BUILD <<<
+
+- Fixed `shim/build.sh`: it compiled `fdt_memory.c` but omitted
+  `out/fdt_memory.o` from the linker command, causing an undefined
+  `fdt_memory_range_usable` symbol. The relocation scan now covers that object
+  too.
+- Added `DTB_PATH` override while preserving the historical default
+  `../dtb/boot_unpacked/dtb`; this lets local builds use a captured DTB in
+  `/tmp` without putting a device dump in the repository.
+- Successful local command:
+  `cd shim && DTB_PATH=/tmp/munch-live.dtb ./build.sh`. The host FDT/console
+  test passed. Outputs are ignored build artifacts:
+  `shim/out/Image` (151,552 bytes, SHA-256
+  `a5e82d5a0267a89445e55dc7cfe5b5147925a487af08b2503c770ee448bc7478`) and
+  `shim/out/shim-boot.img` (974,848 bytes, SHA-256
+  `203a9b9a0943c56e57084953af97b36a0eeae87e85502b267c4a6e479f6603b2`).
+- The image contains the empty diagnostic cpio ramdisk, not an XNU payload;
+  it was not sent to the phone. No device command or `userdata` access occurred.
+
 ### >>> HANDOFF 2026-10-21: UEFI IDENTITY BOOT + FRAMEBUFFER CHECK <<<
 
 - The embedded UEFI DTB was corrected to match the live phone identity:
