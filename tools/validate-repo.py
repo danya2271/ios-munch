@@ -125,6 +125,41 @@ def validate_shell_scripts(verbose=False):
     return True
 
 
+def validate_munch_build_plumbing():
+    patch_dir = os.path.join(REPO_ROOT, 'xnu/patches')
+    required = {
+        '0083-munch-machine-config.patch': [
+            'ifeq ($(filter SWEET MUNCH,$(CURRENT_MACHINE_CONFIG)),)',
+        ],
+        '0019-munch-builtin-pthread.patch': [
+            'ifneq ($(filter SWEET MUNCH,$(CURRENT_MACHINE_CONFIG)),)',
+        ],
+        '0020-munch-portable-aes-cbc.patch': [
+            'ifneq ($(filter SWEET MUNCH,$(CURRENT_MACHINE_CONFIG)),)',
+        ],
+    }
+    errors = []
+    for fname, needles in required.items():
+        path = os.path.join(patch_dir, fname)
+        try:
+            text = open(path, errors='replace').read()
+        except OSError as exc:
+            errors.append(f'{fname}: cannot read ({exc})')
+            continue
+        for needle in needles:
+            if needle not in text:
+                errors.append(f'{fname}: missing MUNCH build condition {needle!r}')
+
+    if errors:
+        print(red(f"[-] MUNCH build-plumbing validation failed with {len(errors)} error(s):"))
+        for err in errors:
+            print(f"    - {err}")
+        return False
+
+    print(green("[✓] MUNCH arm64 and dependency staging guards present"))
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser(description="Validate repository integrity, patches, and scripts.")
     ap.add_argument('-v', '--verbose', action='store_true', help='Show detailed per-file output')
@@ -132,10 +167,11 @@ def main():
 
     print(bold("=== Running ios-munch Repository Validation ==="))
     ok_patches = validate_patches(a.verbose)
+    ok_munch = validate_munch_build_plumbing()
     ok_python = validate_python_scripts(a.verbose)
     ok_shell = validate_shell_scripts(a.verbose)
 
-    if ok_patches and ok_python and ok_shell:
+    if ok_patches and ok_munch and ok_python and ok_shell:
         print(bold(green("\nAll repository integrity checks PASSED successfully!")))
         return 0
     else:

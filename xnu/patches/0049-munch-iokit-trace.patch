@@ -1,11 +1,10 @@
 --- a/iokit/Kernel/IOUserClient.cpp
 +++ b/iokit/Kernel/IOUserClient.cpp
-@@ -2599,7 +2599,62 @@
+@@ -2599,7 +2599,61 @@
  	return internal_io_service_match_property_table(service, matching, matchingCnt, matches);
  }
  
 -static kern_return_t
-+static 
 +#if defined(ARM64_BOARD_CONFIG_SWEET)
 +/*
 + * SWEET IOKit trace: registry and matching calls made by the processes
@@ -60,7 +59,7 @@
 +}
 +#endif
 +
-+kern_return_t
++static kern_return_t
  internal_io_service_get_matching_services(
  	mach_port_t main_port,
  	const char * matching,

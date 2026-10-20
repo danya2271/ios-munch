@@ -2,7 +2,7 @@
 
 **An experimental iOS 16 port targeting the POCO F4 (`munch`).**
 
-> **Port status:** `munch` (POCO F4, SM8250 / Snapdragon 870) is the target device. `sweet` (Redmi Note 10 Pro, SM7150 / Snapdragon 732G) is the upstream donor platform whose working XNU port is being used as a reference. The current XNU patches, machine config, and default CI build still target that donor; no POCO F4 boot has been verified. Renaming files and host tools does not port hardware drivers. Do not use the inherited build/boot steps on a POCO F4.
+> **Port status:** `munch` (POCO F4, SM8250 / Snapdragon 870) is the target device. `sweet` (Redmi Note 10 Pro, SM7150 / Snapdragon 732G) is the upstream donor platform whose working XNU port is being used as a reference. Patch `0083` now adds an isolated `MUNCH` machine-config target for plain-arm64, RAM-root and single-CPU bring-up; it has not yet been built by CI or booted on the POCO F4. Donor touch, PMIC, UFS and watchdog paths remain SWEET-only. Do not use the inherited storage/boot steps on a POCO F4.
 
 The inherited `sweet` bring-up baseline boots Apple's open-source XNU kernel (xnu-8796, the iOS 16 generation) with the **unmodified iOS 16.7.16 (20H392) userland of the iPhone X**: launchd, the system daemons, backboardd, SpringBoard and stock apps. As of **2026-10-18**, that Redmi Note 10 Pro baseline reaches the iOS home screen, supports touch, hardware buttons, and home/app-switcher gestures. Rendering runs entirely on the CPU; there is no GPU driver. These results have not been reproduced on `munch`.
 
@@ -64,10 +64,11 @@ python3 tools/unpack_bootv2.py backup/boot.img dtb/boot_unpacked   # -> dtb/boot
 
 ### 1. Build the kernel
 
-The inherited `SWEET` kernel builds on GitHub's macOS runners with [blacktop/darwin-xnu-build](https://github.com/blacktop/darwin-xnu-build). The workflow fetches xnu-8796, applies the Munch-renamed patch files (whose contents still target the known-good `SWEET` configuration) in order, and stages the pinned open-source libpthread, HFS and BearSSL sources. This does not build a POCO F4 kernel. Fork the repo (public repos get free macOS minutes) and run:
+The XNU workflow builds either the inherited `SWEET` reference or the new isolated `MUNCH` target on GitHub's macOS runners with [blacktop/darwin-xnu-build](https://github.com/blacktop/darwin-xnu-build). It fetches xnu-8796, applies the patch series in order, and stages the pinned open-source libpthread, HFS and BearSSL sources. `MUNCH` has not yet completed a CI build. Fork the repo (public repos get free macOS minutes) and run:
 
 ```sh
 gh workflow run xnu.yml -R YOU/ios-munch
+gh workflow run xnu.yml -R YOU/ios-munch -f machine_config=MUNCH
 gh run download RUN_ID -R YOU/ios-munch -n xnu-kernel -D xnu/out
 ```
 
@@ -101,13 +102,14 @@ ipsw img4 im4p extract research/ipsw-x/dt/Firmware/all_flash/DeviceTree.d22ap.im
 
 ### 3. Munch RAM boot status
 
-There is no safe, reproducible Munch image build command yet. Do not substitute
-the SWEET kernel or the source-derived 4–8 GiB memory candidate: the XNU
-platform configuration and memory map are unverified for this phone. A device
-test remains blocked until the runtime UEFI map, Munch-specific XNU profile,
-and a root image that fits the available RAM are established. Any eventual
-device test in this phase must use `rd=md0`, omit UFS from the ADT, and use
-temporary `fastboot boot` only.
+The `MUNCH` kernel target now has a reproducible CI invocation, but no MUNCH
+kernel artifact or device boot result exists yet. Do not substitute the SWEET
+kernel or the source-derived 4–8 GiB memory candidate: the XNU platform
+handoff and memory map are unverified for this phone. A device test remains
+blocked until CI produces the MUNCH kernel, the runtime UEFI/ABL map is
+resolved, and a root image that fits the available RAM is established. Any
+eventual device test in this phase must use `rd=md0`, omit UFS from the ADT,
+start with `cpus=1`, and use temporary `fastboot boot` only.
 
 The following SWEET-only boot arguments are historical reference, not a Munch
 recipe:
@@ -178,6 +180,7 @@ Not in git: partition backups, live device trees, recovery images, Apple firmwar
 | 0060 | Power and volume keys over SPMI; touch over GENI I²C |
 | 0061 | Present the display as 1125×2436 |
 | 0062 | RPMh regulator vote for the touch rail; battery power source |
+| 0083 | Isolated MUNCH machine config: SM8250 board header, Munch platform/CPU match, shared RAM-root/crypto guards, and boot-CPU-only startup |
 | 0063 | GENI FIFO packing fix and the Goodix GT9896 protocol |
 | 0064 | Grant PRIV_WORK_INTERVAL (UIKit's CoreAnimation work interval) |
 | 0065 | SMP: secondary A55 cores via PSCI CPU_ON |

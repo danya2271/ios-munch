@@ -1,5 +1,30 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-20: MUNCH MACHINE CONFIG MILESTONE <<<
+
+- Completed the isolated MUNCH build target in patch `0083`: plain `arm64`,
+  `MUNCH.h`, `MASTER.arm64.munch`, `xiaomi,munch` platform matching,
+  `qcom,kryo` boot-CPU matching, 16K pages, GICv3 and virtual timer INTID 27.
+  MUNCH reuses only the RAM-root/crypto/trust-cache/early-debug plumbing needed
+  for bring-up; inherited SWEET touch, PMIC/SPMI, UFS, USB, watchdog and
+  battery paths remain excluded.
+- Fixed the adjacent IOKit trace patch so the generated source has one valid
+  `static` declaration, and extended dependency staging for MUNCH's built-in
+  libpthread, BearSSL and HFS inputs. The workflow now accepts
+  `machine_config=MUNCH` without changing the SWEET default.
+- Clean validation on upstream `xnu-8796.141.3` commit
+  `1b191cb58250d0705d8a51287127505aa4bc0789`: pinned dependency staging and
+  all 83 patches applied in order; final `git diff --check` passed. Local
+  `python3 tools/validate-repo.py` also passed: 83 patches, 16 Python tools and
+  7 shell scripts.
+- This milestone is source/patch-apply validation only. No macOS compile, GitHub
+  Actions run, payload, ADB/fastboot command, phone boot, or `userdata` access
+  occurred. `gh` is unavailable on this host, so the next build gate is a
+  manual GitHub Actions run or an environment with `gh`.
+- Do not implement Munch SE4 SPI touch, PMIC, UFS, SMP or phone boot yet. First
+  confirm the MUNCH target on CI, then continue the separately gated runtime
+  UEFI memory-map probe and RAM payload design.
+
 ### >>> HANDOFF 2026-10-20: MUNCH CPU MATCH / TOUCH AUDIT <<<
 
 - Local Munch DTS review confirms the eight CPU nodes use
@@ -27,8 +52,9 @@
   RAM candidates from the direct Android-ABL runtime gate. The shim's FDT
   preflight, not the unverified public UEFI source map, remains the required
   memory safety check for a future direct `fastboot boot` payload.
-- Validation: `python3 tools/validate-repo.py` passed with 82 contiguous XNU
-  patches; generated a 10,692-byte Munch ADT for offline inspection with
+- Validation before patch `0083`: `python3 tools/validate-repo.py` passed with
+  82 contiguous XNU patches; generated a 10,692-byte Munch ADT for offline
+  inspection with
   `[0x100000000,0x200000000)` and confirmed all eight `qcom,kryo` nodes;
   `git diff --check` passed. This is source/offline validation only.
 - Deeper source audit of `spi-geni-qcom.c` and `focaltech_3658u/focaltech_spi.c`
@@ -64,35 +90,33 @@
   SE4 at `0x990000` usable, powered, clocked, SPI-configured, or available to
   XNU. Panel rail/reset state is also unknown after ABL. Do not implement or
   call an SE4 MMIO transport until runtime state and exclusive ownership are
-  established. Current XNU machine configuration remains `SWEET`; there is no
-  `MUNCH` machine config yet, so the inherited SWEET touch/keys code is not a
-  Munch implementation.
-- Machine-config inventory confirms that a MUNCH build cannot be enabled by
-  selecting another workflow string alone. Patch `0004` defines only
-  `SWEET.h` and `MASTER.arm64.sweet`; multiple later patches modify that same
-  master config. Never create MUNCH by aliasing `SWEET` or
-  `ARM64_BOARD_CONFIG_SWEET`: those guards activate donor platform, display,
-  I2C touch, PMIC/SPMI, UFS and logging paths. The Kona DTS statically confirms
-  eight `qcom,kryo` nodes, PSCI via SMC, GICv3, and vtimer PPI 11 / INTID 27;
-  it does not confirm ABL's runtime EL, actual MPIDR handoff, GIC security/group
-  state, or PSCI CPU_ON behavior. `SweetCPU` also assumes a homogeneous cluster
-  and its secondary entry changes EL2 state. Munch's DTS instead reports 4+3+1
-  capacity groups, so the inherited eight-core topology is not a validated
-  Munch SMP implementation. Keep the first isolated MUNCH profile at one CPU,
-  with board paths disabled, until those runtime contracts are checked. Details
-  and patch/config inventory are in `docs/MUNCH_PORTING.md`.
-- This milestone is an offline source audit only. No source patch, kernel build,
-  CI run, payload, device command, or `userdata` operation was performed. The
-  local XNU checkout/buildtree needed to construct and compile a separate MUNCH
-  machine-config patch is absent; `gh` is also not installed. Current branch
-  passed `python3 tools/validate-repo.py` after this documentation update:
-  82 patches, 16 Python tools, 7 shell scripts; `git diff --check` also passed.
+  established. The new `MUNCH` machine configuration still must not enable the
+  inherited SWEET touch/keys code; those paths remain donor-only and the SE4
+  transport is not implemented.
+- Machine-config inventory showed that MUNCH could not be enabled by selecting
+  another workflow string alone. That gap is now addressed by patch `0083`:
+  it adds `MUNCH.h`, `MASTER.arm64.munch`, the `MUNCH` compiler target, a
+  `xiaomi,munch` platform personality and a `qcom,kryo` boot-CPU personality.
+  Shared RAM-root, crypto, trust-cache and early-debug paths are enabled for
+  MUNCH; donor I2C touch, PMIC/SPMI, UFS/logging, USB and watchdog/battery paths
+  remain SWEET-only. The Munch CPU driver deliberately matches only CPU0 and
+  reports one selected CPU; it does not start secondaries. Never alias MUNCH to
+  `SWEET` or `ARM64_BOARD_CONFIG_SWEET`.
+- The Kona DTS statically confirms eight `qcom,kryo` nodes, PSCI via SMC,
+  GICv3, and vtimer PPI 11 / INTID 27; it does not confirm ABL's runtime EL,
+  actual MPIDR handoff, GIC security/group state, or PSCI CPU_ON behavior. The
+  DTS capacity groups are 4+3+1, so the inherited eight-core topology is not a
+  validated final Munch SMP implementation. Details and guard inventory are in
+  `docs/MUNCH_PORTING.md`.
+- Munch machine-config milestone is source/patch-apply validation only. A clean
+  xnu-8796.141.3 tree accepted all 83 patches after pinned dependency staging;
+  no macOS compile, CI run, payload, device command, or `userdata` operation
+  was performed. `gh` is not installed on this host. The final validation is
+  recorded in the newer handoff above.
 - Audit/documentation milestone is committed as `77352b3` (`docs: audit Munch
-  XNU config boundary`). Next concrete action: obtain the exact xnu-8796 patched
-  buildtree/source context, then add an isolated `MUNCH` machine config and
-  single-core bring-up profile without enabling SWEET hardware paths. Do not
-  start SMP or a device boot until ABL EL/MPIDR/GIC/PSCI behavior and the
-  RAM-root/memory-map gates are independently resolved.
+  XNU config boundary`). The isolated MUNCH machine config is now present, but
+  the ABL EL/MPIDR/GIC/PSCI behavior and RAM-root/memory-map gates remain
+  independently unresolved; do not start SMP or a device boot.
 - Completed commits: `67ff9bf` touch safety audit, `489d55d` corrected report
   lengths, `f0dc497` audit handoff, and `8be542d` Munch timer INTID. Validation
   after the latest code change: `python3 tools/validate-repo.py` passed (82
@@ -102,11 +126,9 @@
   product ADT is absent, so `/product` was omitted. No XNU CI, payload build,
   fastboot, phone boot, panel reset, UFS, or `userdata` operation occurred.
   Android ADB observations above were metadata-only and read-only.
-- Next: design a distinct MUNCH machine-config series by extracting the exact
-  architecture assumptions from patches `0004`, `0017`, `0018`, `0065`, `0078`,
-  and `0082`; preserve SWEET behavior and keep board-specific drivers behind
-  SWEET-only guards. Do not build or boot a Munch payload until memory handoff
-  and RAM-root blockers are cleared.
+- Next: run the MUNCH compile gate through GitHub Actions, then continue the
+  runtime UEFI memory-map and RAM-root work without changing SWEET behavior or
+  enabling board-specific drivers.
 
 ### >>> HANDOFF 2026-10-20: ABL-FDT MEMORY PREFLIGHT <<<
 

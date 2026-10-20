@@ -249,8 +249,24 @@ The following are static-source evidence, not runtime handoff guarantees:
   after ABL have not been measured on this Munch boot path. SWEET runtime GIC
   observations must not be carried over as Munch facts.
 
-The first Munch kernel profile should therefore be isolated from SWEET hardware
-drivers, use the Munch ADT without a UFS node and `rd=md0`, and start with one
-CPU. Reuse the generic architecture pieces only after source-level guards are
-separated and runtime EL/GIC/PSCI assumptions are checked. No Munch XNU target or
-bootable Munch payload exists yet.
+Patch `0083-munch-machine-config.patch` now provides that first isolated Munch
+profile. It adds `MACHINE_CONFIG=MUNCH`, `MASTER.arm64.munch`, `MUNCH.h`, a
+`xiaomi,munch` platform/`qcom,kryo` CPU personality, and shared RAM-root/crypto
+guards. The Munch CPU driver matches only the boot CPU and reports one selected
+CPU; it does not call PSCI `CPU_ON` for secondaries. Donor SWEET hardware paths
+remain guarded out, including the I2C touch path, PMIC/SPMI, UFS/persistent
+logging, USB bring-up and watchdog/battery services. The staging scripts now
+also fetch the pinned libpthread, BearSSL and HFS inputs for a MUNCH CI build.
+
+The MUNCH make configuration must stay plain `arm64`, not XNU's default
+`arm64e`; the pthread, BearSSL AES/hash, and HFS staging templates are enabled
+for both SWEET and MUNCH. Repository validation checks these build-plumbing
+conditions, and the complete patch series still needs a fresh apply/build check.
+No MUNCH CI artifact, local macOS compile, payload, or phone boot exists.
+The generated Munch ADT still must be used without UFS and with `rd=md0`; the
+runtime ABL memory/EL/GIC/PSCI contracts and a RAM-sized root remain blockers.
+The ADT's `sweet-fbcon` entry currently points at the Munch continuous-splash
+candidate (`0x9c000000`, size `0x2300000`) seen in the reconstructed Android
+tree. This does not prove ABL ownership or framebuffer validity after
+`fastboot boot`; all inherited early and normal framebuffer writes remain a
+separate runtime-safety gate and must not be treated as verified Munch support.
