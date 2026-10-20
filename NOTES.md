@@ -1,5 +1,43 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-20: ABL-FDT MEMORY PREFLIGHT <<<
+
+- Public UEFI release re-check: the latest available GitHub release remains
+  `munch-uefi-d4b3760e83ed094230d2e34025cfdf1247d8e19f`, published August 20,
+  2026. Its `boot-munch.img` is 3,950,592 bytes with SHA-256
+  `a1d96e148becbcaec21d6e2f902ac0b9156c90719b6d94e28ed062406ec8e4aa`.
+  The image is an Android boot header v1 containing an EDK2-MSM trampoline
+  and gzip-compressed EDK2 payload. It was downloaded to `/tmp` for static
+  inspection only; it was not sent to the phone.
+- The released UEFI's source build includes `UFSDxe`, block/partition/FAT
+  drivers, `VariableRuntimeDxe`, Shell and `EfiBootManagerConnectAll()`. Its
+  platform boot manager explicitly connects every `BlockIo` handle and scans
+  all filesystems for Windows/Linux boot files. Therefore this stock image is
+  not an acceptable current test image under the user's rule that `userdata`
+  must not be accessed; no UEFI boot was attempted.
+- The backup directory's inventory is internally consistent: all 116 rows in
+  its `partitions.tsv` have a matching manifest entry and `.img` file, with no
+  `userdata` row/file; sizes match and every SHA-256 verifies. The two
+  `ALIGN_TO_128K_*` entries are included. Hashing read file bytes, but no backup
+  was mounted or semantically parsed. This is not an independent comparison
+  against the phone's current GPT, so backup completeness is not certified.
+- Added `shim/fdt_memory.c` and loader integration. Before copying XNU, the
+  shim now requires the payload RAM window to be inside an ABL `/memory` node,
+  outside the FDT reservation map and fixed/dynamic `/reserved-memory` ranges,
+  and inside `linux,usable-memory-range` when supplied. This is a fail-closed
+  Android-ABL safety check, not a UEFI runtime-map proof.
+- Host tests on `research/munch-live.dtb`: `[0x100000000,0x200000000)` was
+  accepted; `0x9c000000`, the low bank `[0x80000000,0x100000000)`, an address
+  above `0x280000000`, and an overflowing range were rejected. ARM64 compile
+  and link passed; all six C objects have zero `ABS64` relocations (`start.o`
+  is intentionally excluded by `build.sh`). Repository validation and
+  `git diff --check` passed. No ADB, fastboot, phone boot, or userdata access
+  occurred.
+- Completed change is ready for commit. Remaining blocker is unchanged:
+  obtain a separately reviewed way to observe the actual runtime UEFI memory
+  map, then create a Munch-specific ADT/profile. Do not use the accepted
+  source-derived candidate to build or boot a payload yet.
+
 ### >>> HANDOFF 2026-10-20: RAM ROOT FEASIBILITY / PACKER GUARDS <<<
 
 - User clarified that a later UFS boot may be useful, but the current device

@@ -64,6 +64,30 @@ released image's successful boot and its runtime descriptors are unverified.
 The compatibility DTB bundled in that source still identifies as `alioth`,
 so it is not a substitute for the live Munch tree.
 
+The shim now performs a fail-closed preflight against the FDT supplied by the
+Android bootloader. Before copying any XNU segment, it requires the payload's
+`physBase..physBase+memSize` range to be contained in a `/memory` node, outside
+the FDT reservation map and fixed `/reserved-memory` regions, and outside every
+declared dynamic reservation allocation range. A `linux,usable-memory-range`
+restriction is honored when present. This protects the current Android-ABL
+RAM path from an unsafe ADT choice; it does not prove that an EDK2 UEFI memory
+map, cache attributes, or XNU reservations will match.
+
+The host-only check can be run without a phone or storage access:
+
+```sh
+gcc -O1 -Wall -Wextra -Werror -Ishim \
+  -o /tmp/ios-munch-host-test \
+  shim/console.c shim/fdt.c shim/fdt_memory.c shim/host_test.c
+/tmp/ios-munch-host-test --fdt-range research/munch-live.dtb \
+  0x100000000 0x100000000 1
+```
+
+On the saved Munch Linux FDT this accepts the source-derived 4-8 GiB
+candidate, rejects the framebuffer at `0x9c000000`, rejects the low bank, and
+rejects an address beyond the advertised RAM. The candidate remains a
+research result only; no Munch ADT or phone payload is generated from it.
+
 ADB reports `boot_b` as 192 MiB, `vendor_boot_b` as 96 MiB, `dtbo_b` as 32 MiB,
 and `userdata` as about 224.8 GiB. Both boot headers are v3 while the published
 UEFI boot image uses header v1. Only partition links, sizes, and the four-byte

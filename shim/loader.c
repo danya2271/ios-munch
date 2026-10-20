@@ -99,6 +99,8 @@ const char *loader_boot(uintptr_t dtb)
 	/* The payload must not overlap where the kernel goes. */
 	if (rd_end > p->phys_base && rd_start < p->phys_base + p->mem_size)
 		return "ramdisk overlaps kernel memory";
+	if (!fdt_memory_range_usable(dtb, p->phys_base, p->mem_size))
+		return "XNU memory range is not free in ABL FDT";
 
 	for (uint32_t i = 0; i < p->nsegs; i++) {
 		const struct payload_seg *s = &p->segs[i];
