@@ -1,5 +1,74 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-21: UEFI IDENTITY BOOT + FRAMEBUFFER CHECK <<<
+
+- The embedded UEFI DTB was corrected to match the live phone identity:
+  `model = "Qualcomm Technologies, Inc. xiaomi munch"` and
+  `qcom,board-id = <0x32 0x00>`. The change is pushed to the user fork as
+  `a8b755c` (`fix(munch): match live device identity in embedded DTB`). The
+  fork still has only the expected dirty `tools/Installer` submodule.
+- Identity-fixed local build artifact: `/tmp/edk2-munch-identity-build/boot-munch.img`,
+  1,536,000 bytes, SHA-256
+  `b7153bc6de91227d25ac051452288a8763d093c753fd20ad5f501f3a5c2f417f`.
+  Embedded DTB SHA-256 is
+  `66f1d179b219585dc4a2bfcf53a858cd8f141b4002d4dfb1599a1a8fdaa80981`.
+- Two tests used only temporary `fastboot boot`; no `fastboot flash`, erase,
+  partition read/write, `userdata` access, or `dtbo` modification occurred.
+  The first boot returned fastboot in about 6 seconds and ADB in about 26
+  seconds. The second run was started at `01:32:44 +05:00`; Android again
+  returned. Host logs are `/tmp/munch-uefi-identity-boot-20261021-013117.log`
+  and `/tmp/munch-uefi-identity-boot-20261021-013229-manual.log`.
+- After both tests Android reported `ro.product.device=munch`,
+  `androidboot.dtbo_idx=0`, and `androidboot.dtb_idx=0`; the phone is currently
+  in Android on slot `_b`. `/sys/fs/pstore` is empty, so old UEFI framebuffer
+  text cannot be recovered after reboot.
+- The supplied frames visibly contain readable white early-UEFI text, but are
+  too blurred for a reliable line-by-line transcription. This is not evidence
+  of an XNU panic. The current framebuffer setup matches the live display
+  reservation: base `0x9c000000`, `1080x2400`, 32 bpp, and reserved range
+  `0x9c000000+0x2300000`. Do not change `dtbo` or framebuffer stride based on
+  the camera artifact alone.
+- Next gate: preserve the identity-fixed UEFI commit, add a short explicit
+  memory-map marker if another RAM-only boot is needed, then validate the
+  MUNCH RAM-root/XNU handoff. Do not start XNU or UFS until UEFI memory-map,
+  framebuffer handoff, and a storage-free payload are independently verified.
+
+### >>> HANDOFF 2026-10-21: LOCAL RAM-ONLY UEFI BUILD <<<
+
+- The GitHub Actions XNU workflow was deleted locally from
+  `.github/workflows/xnu.yml`; it is intentionally not pushed because the
+  current GitHub token lacks the `workflow` scope. No device command,
+  `fastboot`, partition read/write, or `userdata` access occurred.
+- The Munch UEFI fork is `danya2271/edk2-msm-munch`, current pushed commit
+  `3bb06c2` (`Fix RAM-only Munch UEFI build`). It adds the missing RAM-only FDF
+  guard around `FvSimpleFileSystemDxe` and a valid `TRUE` DXE dependency for
+  `MunchMemoryMapDxe`.
+- Exact successful local command from that commit:
+  `BUILD_CC=gcc-14 BUILD_CXX=g++-14
+  EXTRA_OPTFLAGS=-Wno-error=unused-but-set-variable ./build.sh --device munch
+  --release RELEASE --outputdir /tmp/edk2-munch-build`.
+  Build target is `RELEASE`, EDK2 toolchain is `CLANG38`, and the build
+  completed on 2026-10-21 in 38 seconds after dependencies were initialized.
+- Artifacts are outside Git in `/tmp`: `boot-munch.img` is 1,536,000 bytes,
+  SHA-256 `dcddcc2f3898257d8c50ceb8e12df0a9a29374c661f0a7d256b6fa3f718d7da5`;
+  the raw `SM8250_UEFI.fd` is 7,340,032 bytes, SHA-256
+  `a9ee2fddf8b5a7807a847f246e3e265842ec1da6e16296313699be901ce621bd`.
+  The build embeds `FIRMWARE_VER=3bb06c2` and includes `MunchMemoryMapDxe`.
+- The RAM-only build log contains no `UFSDxe`, FAT/GPT, USB mass-storage,
+  Linux mass-storage, or Shell module. This is a build-time module boundary,
+  not proof that unrelated firmware or a future payload cannot access storage.
+- Observed build blockers and resolutions: GCC 16 failed on legacy BaseTools
+  warnings and Pccts function-pointer rules, so host tools use installed
+  GCC 14 plus a narrow warning override; `--skip-rootfs-gen` failed because
+  `SimpleInitRootFS.inf` needs generated `build/rootfs.c`; the nested FreeType
+  submodule was initialized at its pinned commit. These are host-build facts,
+  not phone-runtime results.
+- `xnu/` still contains the patched source series only. The removed workflow
+  depended on macOS/Xcode/KDK/iig; `tools/xnu-cc.py` replays commands from a
+  CI buildtree and is not a standalone Linux XNU builder. No XNU kernel was
+  produced in this milestone. Next work remains local shim/XNU payload
+  validation and only then a reviewed temporary `fastboot boot` test.
+
 ### >>> HANDOFF 2026-10-20: LIVE FDT + MUNCH UEFI INVENTORY <<<
 
 - The phone remains in Android, connected over ADB as `munch`, root via `su`;
@@ -8,7 +77,7 @@
 - A root read-only capture of `/sys/firmware/fdt` succeeded on the current
   boot. The FDT is v17 and 812,778 bytes; it reports memory tuples
   `<0x80000000 0x3bb00000>` and `<0xc0000000 0x1c0000000>`, with the second
-  bank ending at `0x2c0000000`. The capture stays in `/tmp` and is not tracked.
+  bank ending at `0x280000000`. The capture stays in `/tmp` and is not tracked.
 - The public device-specific UEFI tree inspected is
   `0xSelenicDove/edk2-msm-munch`, at source commit `d4b3760`. Its bundled
   `munch.dtb` has the same two memory tuples and its Munch memory-map library
@@ -31,9 +100,22 @@
   --dram-size 0x100000000` generated a 10,692-byte ADT in `/tmp` with no UFS
   node. It warned only that the optional Apple D22AP `/product` artifact is
   absent; no kernel, payload, boot image, or phone boot was produced.
-- Next: get the MUNCH XNU compile through CI, then build a small RAM-root
-  payload and run the shim only with temporary `fastboot boot`; do not install
-  UEFI or enable legacy UFS yet.
+- The user forked the UEFI tree as `danya2271/edk2-msm-munch`. I added and
+  pushed commit `cb48979` (`Add RAM-only Munch UEFI profile`): the `munch`
+  configuration now omits UFS, SCSI, GPT/partition, filesystem, USB
+  mass-storage, Linux mass-storage and Shell components, while retaining the
+  Munch DTB and platform firmware paths. This is a source change only; it has
+  not been built or booted.
+- The fork's existing Actions workflow is visible but has zero runs as of
+  2026-10-21. The attempted workflow hardening commit was not pushed because
+  GitHub rejected the token without the `workflow` OAuth scope. No installer,
+  release, device command, UEFI boot, partition access, or `userdata` access
+  occurred. Local `bash -n`, YAML parsing, and conditional storage scans pass;
+  `actionlint` is unavailable and the EDK2 submodules were not initialized.
+- Next: run the fork's build workflow from GitHub Actions (or provide a token
+  with `workflow` scope), then inspect the UEFI artifact statically. Separately
+  get the MUNCH XNU compile through CI and keep all phone tests on temporary
+  `fastboot boot` with RAM-only payloads.
 
 ### >>> HANDOFF 2026-10-20: RAM-ONLY STORAGE ACCESS AUDIT <<<
 

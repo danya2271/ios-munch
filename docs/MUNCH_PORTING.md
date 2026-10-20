@@ -69,6 +69,28 @@ validated XNU handoff image. These are source and static-image observations,
 not proof that this UEFI build is installed or that its runtime descriptors
 match every firmware variant of this phone.
 
+The working fork is now `danya2271/edk2-msm-munch`. Commit `cb48979` adds a
+Munch-only `MUNCH_RAM_ONLY=TRUE` build profile: it removes UFS, SCSI,
+partition/filesystem, USB mass-storage, Linux mass-storage and Shell modules
+from the UEFI firmware file lists. Commit `3bb06c2` closes the remaining
+`FvSimpleFileSystemDxe` FDF reference and makes the memory-map tracer a valid
+DXE module. A local RELEASE build from `3bb06c2` succeeded with GCC 14 host
+tools and produced `/tmp/edk2-munch-build/boot-munch.img` (1,536,000 bytes,
+SHA-256
+`dcddcc2f3898257d8c50ceb8e12df0a9a29374c661f0a7d256b6fa3f718d7da5`). The
+artifact is only statically validated; it has not been sent to the phone.
+
+The follow-up identity fix is pushed as `a8b755c`: the embedded Munch DTB now
+matches the live Android FDT model and board ID (`0x32`). The resulting local
+artifact `/tmp/edk2-munch-identity-build/boot-munch.img` has SHA-256
+`b7153bc6de91227d25ac051452288a8763d093c753fd20ad5f501f3a5c2f417f`. It was
+tested twice with temporary `fastboot boot` only; both runs returned to Android
+without modifying `userdata`, `dtbo`, or any persistent partition. The phone
+reported `munch`, `androidboot.dtbo_idx=0`, and `androidboot.dtb_idx=0` after
+the tests. The framebuffer text visible in the supplied photographs is an
+early UEFI banner/debug line; the photographs are too blurred to transcribe
+reliably and do not establish an XNU panic.
+
 **Candidate, not validated:** `[0x100000000, 0x200000000)` (4-8 GiB) lies
 inside the later EDK2 source's conventional RAM descriptor and below its
 reported end. It also lies in the upper range advertised by the reconstructed
