@@ -1,8 +1,8 @@
 # ios-munch
 
-**An experimental iOS 16 porting fork targeting the POCO F4 (`munch`).**
+**An experimental iOS 16 port targeting the POCO F4 (`munch`).**
 
-> **Port status:** this repository is a `munch`-targeted fork of the upstream `ios-sweet` project. All implementation and successful boot results documented below are for the Redmi Note 10 Pro (`sweet`, SM7150 / Snapdragon 732G), not the POCO F4 (`munch`, SM8250 / Snapdragon 870). No POCO F4 boot has been verified. The XNU patch payloads and default CI configuration intentionally remain `SWEET` until an actual SM8250 port is developed; renaming filenames and host tools does not port hardware drivers. Do not use the inherited build/boot steps on a POCO F4.
+> **Port status:** `munch` (POCO F4, SM8250 / Snapdragon 870) is the target device. `sweet` (Redmi Note 10 Pro, SM7150 / Snapdragon 732G) is the upstream donor platform whose working XNU port is being used as a reference. The current XNU patches, machine config, and default CI build still target that donor; no POCO F4 boot has been verified. Renaming files and host tools does not port hardware drivers. Do not use the inherited build/boot steps on a POCO F4.
 
 The inherited `sweet` bring-up baseline boots Apple's open-source XNU kernel (xnu-8796, the iOS 16 generation) with the **unmodified iOS 16.7.16 (20H392) userland of the iPhone X**: launchd, the system daemons, backboardd, SpringBoard and stock apps. As of **2026-10-18**, that Redmi Note 10 Pro baseline reaches the iOS home screen, supports touch, hardware buttons, and home/app-switcher gestures. Rendering runs entirely on the CPU; there is no GPU driver. These results have not been reproduced on `munch`.
 

@@ -1,8 +1,9 @@
 # POCO F4 (`munch`) Porting Notes
 
-This is a hardware bring-up guide for the Munch fork. The current shim, XNU
-machine configuration, and ADT generator still describe Redmi Note 10 Pro
-(`sweet`, SM7150); the Munch name does not make those values portable.
+This is a hardware bring-up guide for the POCO F4 (`munch`, SM8250). `sweet`
+is the Redmi Note 10 Pro donor platform (SM7150), not this target device. The
+current shim, XNU machine configuration, and ADT generator still describe the
+donor; the Munch name does not make those values portable.
 
 ## Live device evidence (2026-10-20)
 
@@ -27,13 +28,25 @@ The reconstructed tree reports 8 PSCI CPUs, GICv3 at `0x17a00000` and
 reserved pools whose actual placement is not encoded as fixed addresses.
 These are live Linux-tree observations, not proof that XNU can use the ranges.
 
-The public EDK2 Munch map reserves PSTORE at `0xb0000000+0x400000` and display
-ramdump at `0xb0400000+0x1000000`, directly invalidating SWEET's current
-`PHYS_BASE=0xb0000000`. Its high RAM descriptor ends at `0x200000000`, whereas
-the live tree describes RAM up to `0x280000000`. Establish the exact UEFI map
-and reconcile this 2 GiB span difference before choosing XNU memory bounds.
-The bundled UEFI compatibility DTB identifies as `alioth`, not `munch`; a
-successful CI build or release is not evidence of a successful phone boot.
+The public EDK2 repository has two Munch image releases, both published on
+2026-08-20: `v1.1.0` at source commit `1b11fb1` and a later build at
+`d4b3760`. In the later source map, PSTORE is at
+`0xb0000000+0x400000`, display ramdump at `0xb0400000+0x1000000`, and the
+last conventional RAM descriptor is `0xffc20000+0x1003e0000`, ending at
+`0x200000000` (8 GiB). Thus SWEET's current `PHYS_BASE=0xb0000000` overlaps
+reserved regions. The live Linux tree reports RAM through `0x280000000` (10
+GiB address), so the EDK2 source map omits the top 2 GiB of that address span.
+This is an address-limit comparison, not proof of 2 GiB of missing physical
+capacity or of the map installed/running on this phone.
+
+**Candidate, not validated:** `[0x100000000, 0x200000000)` (4-8 GiB) lies
+inside the later EDK2 source's conventional RAM descriptor and below its
+reported end. It avoids the listed low-memory carve-outs and is a plausible
+region to test for XNU placement after confirming the UEFI runtime memory map
+on this handset. It must not yet be used to build or boot a Munch payload: the
+released image's successful boot and its runtime descriptors are unverified.
+The compatibility DTB bundled in that source still identifies as `alioth`,
+so it is not a substitute for the live Munch tree.
 
 ADB reports `boot_b` as 192 MiB, `vendor_boot_b` as 96 MiB, `dtbo_b` as 32 MiB,
 and `userdata` as about 224.8 GiB. Both boot headers are v3 while the published
@@ -48,8 +61,9 @@ user data.
 Do not use a DTB just because its filename or UEFI package says `munch`. The
 public EDK2 compatibility DTB inspected for this port identifies itself as
 `alioth` / `qcom,kona-mtp`, so it is not a trustworthy source for Munch hardware
-addresses. A UEFI build or release is also not evidence that it boots on the
-phone.
+addresses. The existence of two public EDK2 image releases is evidence that
+images were published, not that either image has been validated on this phone
+or that its runtime memory map matches the source descriptors.
 
 Prefer a read-only DTB captured from the exact POCO F4 variant and installed
 Android firmware. With Android booted and root access available, first check
@@ -96,15 +110,24 @@ must be checked against the exact running firmware and XNU's required handoff.
    copy SWEET addresses such as its GIC, UFS, framebuffer, or RAM bounds.
 4. Cross-compile and validate the shim/profile offline, then test only with a
    temporary `fastboot boot` image. Do not flash boot partitions or repartition.
-5. Treat Android dual boot as a separate storage/boot-menu task. Although
+5. Port touch separately from the inherited SWEET driver. Munch's live/kernel
+   DTS places a FocalTech controller on QUPv3 SE4 SPI (CS0, up to 6 MHz), with
+   IRQ GPIO 39 and reset GPIO 33. The donor driver's FocalTech path is QUP I2C;
+   it cannot be reused as-is. The provided Munch kernel tree enables
+   `CONFIG_TOUCHSCREEN_FOCALTECH_3658U` and contains a matching FT3658U SPI
+   driver plus `fw_ft3658_k11.i`, which provides a concrete protocol/report
+   reference. Port the SE4 SPI controller and GPIO/regulator sequencing into
+   XNU, then adapt its report path. Verify whether firmware upload is needed
+   when booting outside the Android kernel.
+6. Treat Android dual boot as a separate storage/boot-menu task. Although
    `userdata` is large, the existing SWEET flow uses the whole partition for
    the iOS root and would destroy Android's data filesystem. A dual-boot design
    needs a verified way to store and locate an iOS root without overwriting
    Android data; keep Android partitions untouched until that design exists.
 
-The device identity and live Linux-tree hardware observations are now verified
-for this handset, but the tree is reconstructed, the Android-version metadata
-is inconsistent, and the UEFI memory map does not agree with the live RAM
-extent. No Munch XNU machine profile, Munch ADT, or POCO F4 boot result exists
-yet. The first implementation remains blocked on a trustworthy, reconciled
-memory/firmware handoff; do not invent `physBase` or `memSize` values.
+The device identity and live Linux-tree hardware observations are verified for
+this handset, but the tree is reconstructed, Android-version metadata is
+inconsistent, and the UEFI source map has not been confirmed at runtime. No
+Munch XNU machine profile, Munch ADT, or POCO F4 boot result exists yet. The
+4-8 GiB range is a source-derived candidate only; do not set `physBase` or
+`memSize` until the actual boot handoff and reservations are verified.

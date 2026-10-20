@@ -1,13 +1,60 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
-### >>> HANDOFF 2026-10-20: LIVE MUNCH DEVICE EVIDENCE <<<
+### >>> HANDOFF 2026-10-20: MUNCH MEMORY / TOUCH PORT RESEARCH <<<
+
+**Target identity:** `munch` is the POCO F4 / SM8250 target. `sweet` is the
+Redmi Note 10 Pro / SM7150 donor platform. Existing `SWEET` XNU identifiers in
+the patch series name the donor configuration; they are not Munch hardware
+support.
+
+- UEFI inventory via GitHub API found one device-specific project and two
+  public image releases, both published 2026-08-20: `v1.1.0` (source tag
+  `1b11fb1`, `boot-munch.img` 3,952,640 bytes) and later build
+  `munch-uefi-d4b3760e83ed094230d2e34025cfdf1247d8e19f` (source `d4b3760`,
+  image 3,950,592 bytes). Neither was tested on this phone. The newer source
+  still bundles a compatibility DTB whose root identifies as `alioth`.
+- Compared the later source's `PlatformMemoryMapLib.c` with live Linux FDT.
+  EDK2 describes PSTORE `0xb0000000+0x400000`, display ramdump
+  `0xb0400000+0x1000000`, and conventional RAM through
+  `0xffc20000+0x1003e0000 = 0x200000000` (8 GiB address). Live Linux advertises
+  `0x80000000+0x3bb00000` and `0xc0000000+0x1c0000000`, ending at
+  `0x280000000` (10 GiB address). This is a 2 GiB address-span difference;
+  it does not establish missing physical capacity or the map of a running UEFI.
+- **Hypothesis only:** `[0x100000000,0x200000000)` is wholly inside the later
+  EDK2 source's conventional RAM descriptor and avoids its listed low carveouts.
+  This is a plausible XNU load region to verify against the handset's runtime
+  UEFI memory map, not a boot-ready ADT or payload. Keep `mkadt.py` SWEET
+  defaults unchanged and do not emit a Munch ADT from this guess.
+- Kernel DTS `/home/danya2271/xiaomi_sm8250_kernel/arch/arm64/boot/dts/vendor/qcom/munch-sm8250.dtsi`
+  describes `focaltech,fts` on QUPv3 SE4 SPI, CS0, max 6 MHz, IRQ GPIO 39,
+  reset GPIO 33, 10 contacts, display coordinates `10800x24000`, supplies L10C
+  and L1C. `munch_defconfig` enables `CONFIG_TOUCHSCREEN_FOCALTECH_3658U=y`;
+  `/drivers/input/touchscreen/focaltech_3658u/` is an SPI driver matching this
+  compatible, selects FT3658U, and embeds `fw_ft3658_k11.i`. Thus the exact
+  model's transport/protocol and report parsing have a local reference. Existing
+  donor XNU touch support is QUP I2C and cannot be reused as-is. XNU still needs
+  a QUPv3 SE4 SPI master path, GPIO/regulator sequencing, and FT3658U report/event
+  integration; whether controller firmware needs loading during this boot path
+  remains to be checked.
+- No files in the kernel repository were changed; its untracked
+  `gcc-compiler/` remains untouched. No device writes, reboot, or fastboot.
+- Validation: `python3 tools/validate-repo.py` passed (81 patches, 16 Python
+  tools, 7 shell scripts); `git diff --check` and
+  `tools/inspect-munch-dtb.py research/munch-live.dtb --expect-munch` passed.
+  No XNU build/CI or phone boot was run; `gh` is not installed here.
+- Next: obtain a read-only runtime UEFI memory map through a separately
+  controlled UEFI boot; reconcile it with live FDT, then implement a Munch ADT
+  and XNU loader profile. In parallel, map QUPv3 SE4 registers/protocol from
+  the kernel sources before attempting a new SPI driver.
+
+### >>> HANDOFF 2026-10-20 (HISTORICAL): LIVE MUNCH DEVICE EVIDENCE <<<
 
 **Read-only Android inspection; no reboot, fastboot, or writes. Only partition links, sizes, and the four-byte boot-header version fields were read; no full partition was dumped.**
 
 - ADB reports `ro.product.device=munch`, `ro.product.model=22021211RG`, active slot `_b`, and `MemTotal=7815544 kB`. `ro.build.version.release=16` / SDK `36`, while the fingerprint is `POCO/munch_global/munch:13/RKQ1.211001.001/V816.0.9.0.ULMMIXM:user/release-keys`; the Android-version fields disagree and need clarification before treating this as a firmware baseline.
 - `/sys/firmware/fdt` is absent. Read-only `su -M` access to `/proc/device-tree` was reconstructed as FDT v17, 812030 bytes. Root identity is `Qualcomm Technologies, Inc. xiaomi munch`, compatibles `qcom,kona-mtp; qcom,kona; qcom,mtp`. SHA-256: `7ac4e2551f5d76d1f46d0ef6d53a3246bd5cd498417a466b23e1eb0cf985025c`. The local `research/munch-live.dtb` is ignored by Git and mode 0600; it contains a device serial in `chosen/bootargs`, so never publish or copy it into tracked files.
 - The updated inspector passes with `--expect-munch`. The tree reports 8 CPUs (MPIDRs `0x0` through `0x700`, `enable-method=psci`, PSCI via SMC), GICv3 at `0x17a00000` / `0x17a60000`, UFS at `0x1d84000`, SDE display at `0xae00000`, Focaltech touch on SPI at `0x990000`, and RAM ranges `0x80000000+0x3bb00000` and `0xc0000000+0x1c0000000` (end `0x280000000`). This is a reconstructed live Linux tree, not the original DTB blob.
-- Critical overlap: SWEET `tools/mkadt.py` uses `PHYS_BASE=0xb0000000`; the public Munch EDK2 map reserves PSTORE at `0xb0000000+0x400000` and display ramdump at `0xb0400000+0x1000000`. Do not build a Munch ADT with the SWEET base. The EDK2 map's high RAM descriptor ends at `0x200000000`, but the live DTB reports RAM through `0x280000000`; resolve this 2 GiB address-span discrepancy and the exact usable ranges before selecting XNU RAM bounds. DTB dynamic reserved pools have sizes/constraints but no fixed allocation addresses.
+- Critical overlap: SWEET `tools/mkadt.py` uses `PHYS_BASE=0xb0000000`; the public Munch EDK2 map reserves PSTORE at `0xb0000000+0x400000` and display ramdump at `0xb0400000+0x1000000`. Do not build a Munch ADT with the SWEET base. Initial inspection noted that the EDK2 source map ends at `0x200000000` while live Linux RAM extends to `0x280000000`; the newer comparison and unvalidated 4-8 GiB candidate are recorded in the active handoff above.
 - Public UEFI search found one device-specific project, `0xSelenicDove/edk2-msm-munch`; its latest release on 2026-10-20 check is `munch-uefi-d4b3760e83ed094230d2e34025cfdf1247d8e19f` (2026-08-20), alongside `v1.1.0`. Source commit `d4b3760` builds, but its bundled compatibility DTB identifies as `alioth`; build/release success is not a Munch phone boot. UEFI image is Android boot header v1; installed `boot_b` and `vendor_boot_b` are header v3. Do not use the installer or infer `fastboot boot` compatibility without a controlled, separately approved test.
 - Read-only partition metadata: `boot_b` 201326592 bytes (192 MiB), `vendor_boot_b` 100663296 (96 MiB), `dtbo_b` 33554432 (32 MiB), `userdata` 241382174720 (~224.8 GiB). In addition to by-name links and sizes, only the four-byte header-version fields were read; no full partition was dumped. `userdata`, GPT, boot, recovery, modem, persist, and backups remain untouched.
 - Milestone close: `python3 tools/validate-repo.py` passed (81 patches, 16 Python tools, 7 shell scripts); `git diff --check` and `--expect-munch` live-DTB inspection passed. Commit `ce20490` (`docs: record live Munch hardware evidence`) records the new inspector output and evidence. No kernel CI or phone boot was run; `gh` is not installed on this host. No Munch XNU profile/ADT exists yet, and the SWEET XNU RAM base is unsafe for this map.
@@ -17,7 +64,7 @@
 
 - The public EDK2 source has a Munch platform directory and `munch.dsc`, but its bundled `Platform/Xiaomi/sm8250/FdtBlob_compat/munch.dtb` is not a Munch-identifying tree: the examined blob reports model `Qualcomm Technologies, Inc. xiaomi alioth` and compatibles `qcom,kona-mtp; qcom,kona; qcom,mtp`. Do not take its board-level addresses as Munch facts.
 - The UEFI DSC sets GOP values to framebuffer `0x9c000000`, 1080x2400. This is a build configuration, not evidence of a successful POCO F4 UEFI boot or proof that a compatibility DTB matches the phone.
-- Latest release check on 2026-10-20: `v1.1.0` published 2026-08-20; no later release appeared in the GitHub releases API. Its flashable A/B installer is not a temporary-boot workflow: installer source patches the active `boot` slot and copies the original to `/sdcard/boot_backup<slot>.img`. Do not use it for initial bring-up.
+- The initial release search found only `v1.1.0`; a later full API inventory on 2026-10-20 also found the same-day build `munch-uefi-d4b3760e83ed094230d2e34025cfdf1247d8e19f` (see active handoff). The `v1.1.0` installer is not a temporary-boot workflow: installer source patches the active `boot` slot and copies the original to `/sdcard/boot_backup<slot>.img`. Do not use it for initial bring-up.
 - `tools/inspect-munch-dtb.py` now makes `--expect-munch` fail with exit 2 on root identity mismatch, classifies device nodes using node names/compatibles rather than arbitrary full-path substrings, and limits noisy output. Candidate test: normal inspection exited 0; `--expect-munch` exited 2 and printed the `alioth` identity. DTB/DTS remained in `/tmp`, outside Git.
 - Added `docs/MUNCH_PORTING.md` with safe stock/live DTB collection and inspection steps, evidence requirements, and staged port/dual-boot boundaries. No XNU/ADT hardware constants were changed because the only public candidate is mismatched. No phone was connected, booted, flashed, or modified.
 - Validation on 2026-10-20: `python3 tools/validate-repo.py` passed (81 patches, 16 Python tools, 7 shell scripts); `git diff --check` passed. Implementation commit: `f613b8e` (`docs: add Munch DTB verification guard`). No kernel CI run was started.
