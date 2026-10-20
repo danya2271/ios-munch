@@ -4,6 +4,45 @@ This is a hardware bring-up guide for the Munch fork. The current shim, XNU
 machine configuration, and ADT generator still describe Redmi Note 10 Pro
 (`sweet`, SM7150); the Munch name does not make those values portable.
 
+## Live device evidence (2026-10-20)
+
+Read-only ADB inspection identifies `ro.product.device=munch`, model
+`22021211RG`, active slot `_b`, and `MemTotal=7815544 kB`. The reported Android
+version (`16`, SDK `36`) conflicts with the version component (`13`) in the
+fingerprint `POCO/munch_global/munch:13/RKQ1.211001.001/V816.0.9.0.ULMMIXM:user/release-keys`;
+resolve this before treating the capture as a stable firmware baseline.
+
+`/sys/firmware/fdt` is absent. The tree was reconstructed read-only from
+`/proc/device-tree` using root access in the global mount namespace. It is FDT
+v17, 812030 bytes, with root model `Qualcomm Technologies, Inc. xiaomi munch`
+and compatibles `qcom,kona-mtp; qcom,kona; qcom,mtp`. SHA-256 is
+`7ac4e2551f5d76d1f46d0ef6d53a3246bd5cd498417a466b23e1eb0cf985025c`. The local
+copy is `research/munch-live.dtb` (ignored by Git, mode 0600); it contains a
+device serial in `chosen/bootargs` and must not be published or added to Git.
+
+The reconstructed tree reports 8 PSCI CPUs, GICv3 at `0x17a00000` and
+`0x17a60000`, UFS at `0x1d84000`, SDE at `0xae00000`, Focaltech touch on SPI at
+`0x990000`, and RAM ranges `0x80000000+0x3bb00000` and
+`0xc0000000+0x1c0000000` (ending at `0x280000000`). It also contains dynamic
+reserved pools whose actual placement is not encoded as fixed addresses.
+These are live Linux-tree observations, not proof that XNU can use the ranges.
+
+The public EDK2 Munch map reserves PSTORE at `0xb0000000+0x400000` and display
+ramdump at `0xb0400000+0x1000000`, directly invalidating SWEET's current
+`PHYS_BASE=0xb0000000`. Its high RAM descriptor ends at `0x200000000`, whereas
+the live tree describes RAM up to `0x280000000`. Establish the exact UEFI map
+and reconcile this 2 GiB span difference before choosing XNU memory bounds.
+The bundled UEFI compatibility DTB identifies as `alioth`, not `munch`; a
+successful CI build or release is not evidence of a successful phone boot.
+
+ADB reports `boot_b` as 192 MiB, `vendor_boot_b` as 96 MiB, `dtbo_b` as 32 MiB,
+and `userdata` as about 224.8 GiB. Both boot headers are v3 while the published
+UEFI boot image uses header v1. Only partition links, sizes, and the four-byte
+header-version fields were read; no full partition was dumped and no partition
+or GPT entry has been changed. `userdata` remains Android's data partition;
+using it wholesale for the SWEET-style iOS root would not preserve Android
+user data.
+
 ## Establish a trustworthy device tree
 
 Do not use a DTB just because its filename or UEFI package says `munch`. The
@@ -57,12 +96,15 @@ must be checked against the exact running firmware and XNU's required handoff.
    copy SWEET addresses such as its GIC, UFS, framebuffer, or RAM bounds.
 4. Cross-compile and validate the shim/profile offline, then test only with a
    temporary `fastboot boot` image. Do not flash boot partitions or repartition.
-5. Treat Android dual boot as a separate storage/boot-menu task. The existing
-   SWEET flow uses all of `userdata` for the iOS root; it cannot preserve
-   Android user data as-is. Keep Android partitions untouched until a distinct
-   storage design has been implemented and explicitly approved.
+5. Treat Android dual boot as a separate storage/boot-menu task. Although
+   `userdata` is large, the existing SWEET flow uses the whole partition for
+   the iOS root and would destroy Android's data filesystem. A dual-boot design
+   needs a verified way to store and locate an iOS root without overwriting
+   Android data; keep Android partitions untouched until that design exists.
 
-No verified Munch DTB, Munch XNU machine profile, or POCO F4 boot result is
-currently in this repository. The first board-specific port is blocked on
-trustworthy device-tree and firmware evidence; inventing constants would make
-the port less safe, not more complete.
+The device identity and live Linux-tree hardware observations are now verified
+for this handset, but the tree is reconstructed, the Android-version metadata
+is inconsistent, and the UEFI memory map does not agree with the live RAM
+extent. No Munch XNU machine profile, Munch ADT, or POCO F4 boot result exists
+yet. The first implementation remains blocked on a trustworthy, reconciled
+memory/firmware handoff; do not invent `physBase` or `memSize` values.

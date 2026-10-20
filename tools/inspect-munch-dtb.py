@@ -222,6 +222,38 @@ def describe_regs(node):
     return ', '.join(output)
 
 
+def describe_reserved(node):
+    entries = describe_regs(node)
+    if entries:
+        return entries
+
+    size_prop = node.props.get('size')
+    if size_prop is None:
+        return ''
+
+    parent = node.parent
+    size_cells = cell_count(parent, '#size-cells', 1)
+    size = decode_group(cell_words(size_prop)[-size_cells:])
+    output = [f'dynamic-size={size:#x}']
+    alignment_prop = node.props.get('alignment')
+    if alignment_prop is not None:
+        alignment = decode_group(cell_words(alignment_prop)[-size_cells:])
+        output.append(f'alignment={alignment:#x}')
+
+    ranges_prop = node.props.get('alloc-ranges')
+    if ranges_prop is not None:
+        address_cells = cell_count(parent, '#address-cells', 2)
+        ranges = cell_tuples(ranges_prop, (address_cells, size_cells))
+        shown_ranges = ','.join(f'{address:#x}+{length:#x}'
+                                for address, length in ranges)
+        output.append(f'alloc-ranges={shown_ranges}')
+
+    flags = [name for name in ('no-map', 'reusable') if name in node.props]
+    if flags:
+        output.append(','.join(flags))
+    return ', '.join(output)
+
+
 def report(path, root, total_size, version, expect_munch):
     model = strings(root.props.get('model'))
     compatible = strings(root.props.get('compatible'))
@@ -245,7 +277,7 @@ def report(path, root, total_size, version, expect_munch):
         print(f'  {node.path}: {describe_regs(node) or "reg missing"}')
     print('reserved-memory:')
     for node in reserved:
-        entries = describe_regs(node)
+        entries = describe_reserved(node)
         if entries:
             print(f'  {node.path}: {entries}')
 
@@ -266,10 +298,11 @@ def report(path, root, total_size, version, expect_munch):
             'compatible_prefixes': ('qcom,ufshc', 'qcom,ufs-phy'),
         },
         'display': {
-            'name_prefixes': ('mdss@', 'sde@', 'dsi@', 'dsi-phy@', 'dsi_phy@',
+            'name_prefixes': ('mdss@', 'qcom,mdss_mdp@', 'sde@', 'dsi@', 'dsi-phy@', 'dsi_phy@',
                               'display@', 'framebuffer@'),
             'name_exact': ('display', 'framebuffer'),
-            'compatible_prefixes': ('qcom,mdss', 'qcom,dsi-panel', 'simple-framebuffer'),
+            'compatible_prefixes': ('qcom,sde-kms', 'qcom,mdss_mdp', 'qcom,dsi-panel',
+                                    'simple-framebuffer'),
         },
         'touch': {
             'name_prefixes': ('touch@', 'goodix@', 'focaltech@'),
