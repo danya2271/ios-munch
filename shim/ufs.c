@@ -13,6 +13,10 @@
 #include "console.h"
 #include "ufs.h"
 
+#ifndef IOS_MUNCH_ALLOW_LEGACY_UFS_PROBE
+#error "Legacy UFS probe is disabled for RAM-only Munch builds"
+#endif
+
 #define UFS_BASE	0x01d84000UL	/* ufshc@1d84000, sweet live FDT */
 
 #define REG_CAP		0x00

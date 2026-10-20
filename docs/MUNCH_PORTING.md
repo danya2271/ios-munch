@@ -14,6 +14,15 @@ non-userdata backups remain outside the repository. UFS is a possible later
 boot mode, but it is not part of the current tests and needs its own reviewed
 storage design before use.
 
+The active shim source list excludes `shim/ufs.c`, and neither the shim entry
+point nor the XNU loader calls its `test_ufs()` probe. That legacy probe is now
+compile-time disabled unless `IOS_MUNCH_ALLOW_LEGACY_UFS_PROBE` is explicitly
+defined. Static source inspection shows the probe programs UFSHCI registers,
+submits SCSI read commands for LBA 0 and the GPT, then reads filesystem
+superblocks from `userdata`, `cust`, and `cache` entries. It contains no SCSI
+write command, but its controller takeover and storage reads violate the
+current RAM-only boundary; do not enable it for Munch bring-up.
+
 No local iOS root image is available in `research/`. The inherited root builder
 defaults to a 16-GB raw HFS+ image, and `mkpayload.py` embeds that image
 uncompressed as a resident RAM disk. That exceeds the 4-GB source-derived

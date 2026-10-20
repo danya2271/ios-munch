@@ -1,5 +1,32 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-20: RAM-ONLY STORAGE ACCESS AUDIT <<<
+
+- Disabled `tools/munch-log-pull.sh` as a fail-closed stub. `--help` explains
+  that it never contacts ADB; all other invocations exit 1 without device
+  commands. `tools/munch-log.py` is documented as an offline parser only.
+- Audited the pre-XNU shim path: `shim/build.sh` compiles and links an explicit
+  source list that excludes `shim/ufs.c`; neither `shim.c` nor `loader.c` calls
+  `test_ufs()`. If the RAM payload is absent, the loader reports failure and
+  the shim halts rather than falling back to UFS.
+- The excluded legacy `shim/ufs.c` probe does program UFSHCI registers and
+  submits SCSI reads for LBA 0/GPT, then reads filesystem signatures from
+  `userdata`, `cust`, and `cache`. Source inspection found no SCSI WRITE
+  command. Added a compile-time opt-in guard so accidental inclusion in a
+  RAM-only build fails; the repository validator now checks this guard, source
+  list exclusion, and absence of entrypoint calls. These are static checks,
+  not runtime guarantees about unrelated firmware behavior.
+- `python3 tools/validate-repo.py`, `git diff --check`, and local helper checks
+  passed. The pull helper's help and disabled paths were exercised without
+  ADB; no ADB/fastboot command, phone boot, or `userdata` access occurred.
+- No `gh` binary is installed. A public GitHub Actions API check on 2026-10-20
+  found zero workflow runs for this repository; no CI was started and nothing
+  was pushed. Current local commit before this handoff: `bf10b91`.
+- Next: get a MUNCH CI compile through the web UI or a host with authenticated
+  `gh`, then continue runtime UEFI memory-map and RAM-root feasibility work.
+  Any phone test remains temporary `fastboot boot` only and must not touch
+  `userdata`; do not enable the legacy UFS probe.
+
 ### >>> HANDOFF 2026-10-20: MUNCH MACHINE CONFIG MILESTONE <<<
 
 - Completed the isolated MUNCH build target in patch `0083`: plain `arm64`,

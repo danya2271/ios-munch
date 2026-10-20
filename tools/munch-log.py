@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Decode the MUNCH persistent console log (kernel patch 0047).
+"""Decode an offline MUNCH console-log capture.
 
   munch-log.py AREA.bin [OUT.txt]
 
-AREA.bin is the last (1 + ring/4096) device blocks of the userdata
-partition as read by tools/munch-log-pull.sh: block 0 is the header
+AREA.bin is a local file containing the last (1 + ring/4096) device blocks
+from an approved capture: block 0 is the header
 ("MUNCHLOG", u32 version, u32 ring size, u64 total bytes, u64 flush seq),
 the ring follows. Byte n of the console stream is at ring offset n % size.
+This parser never contacts a device and does not read userdata itself.
 """
 import struct, sys
 

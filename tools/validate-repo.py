@@ -160,6 +160,66 @@ def validate_munch_build_plumbing():
     return True
 
 
+def validate_userdata_safety():
+    path = os.path.join(REPO_ROOT, 'tools/munch-log-pull.sh')
+    try:
+        text = open(path, errors='replace').read()
+    except OSError as exc:
+        print(red(f"[-] userdata safety validation failed: {exc}"))
+        return False
+
+    forbidden = ('adb ', 'exec-out', 'blockdev', 'dd if=', '/dev/block')
+    errors = [needle for needle in forbidden if needle in text]
+    if errors:
+        print(red("[-] userdata safety validation failed: pull helper is not fail-closed"))
+        for needle in errors:
+            print(f"    - forbidden device-access token: {needle!r}")
+        return False
+
+    print(green("[✓] Munch userdata pull helper is fail-closed"))
+    return True
+
+
+def validate_ram_only_shim():
+    shim_dir = os.path.join(REPO_ROOT, 'shim')
+    paths = {
+        name: os.path.join(shim_dir, name)
+        for name in ('build.sh', 'shim.c', 'loader.c', 'ufs.c')
+    }
+    contents = {}
+    errors = []
+    for name, path in paths.items():
+        try:
+            contents[name] = open(path, errors='replace').read()
+        except OSError as exc:
+            errors.append(f'{name}: cannot read ({exc})')
+
+    build = contents.get('build.sh', '')
+    source_list = re.search(r'for f in ([^;]+); do', build)
+    if source_list is None:
+        errors.append('build.sh: cannot identify compiled shim source list')
+    elif re.search(r'\bufs\.c\b', source_list.group(1)):
+        errors.append('build.sh: legacy UFS probe must not be compiled')
+    if re.search(r'\bout/ufs\.o\b', build):
+        errors.append('build.sh: legacy UFS probe must not be linked')
+
+    for name in ('shim.c', 'loader.c'):
+        if re.search(r'\btest_ufs\s*\(', contents.get(name, '')):
+            errors.append(f'{name}: RAM-only boot path must not call test_ufs')
+
+    if 'IOS_MUNCH_ALLOW_LEGACY_UFS_PROBE' not in contents.get('ufs.c', ''):
+        errors.append('ufs.c: missing explicit compile-time opt-in guard')
+
+    if errors:
+        print(red("[-] RAM-only shim storage validation failed:"))
+        for err in errors:
+            print(f"    - {err}")
+        return False
+
+    print(green("[✓] RAM-only shim excludes and guards legacy UFS probe"))
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser(description="Validate repository integrity, patches, and scripts.")
     ap.add_argument('-v', '--verbose', action='store_true', help='Show detailed per-file output')
@@ -168,10 +228,12 @@ def main():
     print(bold("=== Running ios-munch Repository Validation ==="))
     ok_patches = validate_patches(a.verbose)
     ok_munch = validate_munch_build_plumbing()
+    ok_userdata = validate_userdata_safety()
+    ok_shim_storage = validate_ram_only_shim()
     ok_python = validate_python_scripts(a.verbose)
     ok_shell = validate_shell_scripts(a.verbose)
 
-    if ok_patches and ok_munch and ok_python and ok_shell:
+    if ok_patches and ok_munch and ok_userdata and ok_shim_storage and ok_python and ok_shell:
         print(bold(green("\nAll repository integrity checks PASSED successfully!")))
         return 0
     else:

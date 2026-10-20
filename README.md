@@ -153,7 +153,8 @@ The QEMU output contains the framebuffer and kernel logs without touching the ph
 | `tools/mkpayload.py` | Packs kernel + ADT + boot-args into the shim payload |
 | `tools/mkiosroot.sh` | Builds the HFS+ iOS root from the IPSW images |
 | `tools/munch-root-tweaks.py` | Bring-up changes to the root (Setup skip, activation, daemons) |
-| `tools/munch-log-pull.sh`, `munch-log.py` | Legacy SWEET persistent-log tools; not for the current Munch RAM phase |
+| `tools/munch-log-pull.sh` | Disabled fail-closed stub; it never reads `userdata` |
+| `tools/munch-log.py` | Offline parser for an already-approved local log capture |
 | `tools/munch-crash.py` | Symbolicate console crash reports |
 | `tools/xnu-cc.py` | Local single-file compile check from a CI log |
 | `tools/qemu-munch.py` | QEMU test boots with framebuffer text decoding |
