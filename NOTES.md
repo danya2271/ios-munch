@@ -33,7 +33,8 @@
   is intentionally excluded by `build.sh`). Repository validation and
   `git diff --check` passed. No ADB, fastboot, phone boot, or userdata access
   occurred.
-- Completed change is ready for commit. Remaining blocker is unchanged:
+- Completed change is committed as `ea46c23` (`Guard Munch XNU RAM range
+  against ABL FDT`). Remaining blocker is unchanged:
   obtain a separately reviewed way to observe the actual runtime UEFI memory
   map, then create a Munch-specific ADT/profile. Do not use the accepted
   source-derived candidate to build or boot a payload yet.
