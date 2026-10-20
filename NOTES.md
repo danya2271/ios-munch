@@ -31,25 +31,41 @@
   SWEET SE7 I2C and must not be enabled on Munch. Linux report reads use one
   full-duplex transfer with `[0x01, 0xa0, length_hi, length_lo]`, three dummy
   bytes, report bytes, and a little-endian CRC-16/Kermit (init `0xffff`,
-  reflected polynomial `0x8408`). Ten-contact payload length is 63 bytes;
-  vendor report parsing scales 12-bit coordinates by `10/16` for Munch's
-  `10800x24000` display extent. Linux's ID/reset/config and firmware-upgrade
-  routines issue additional controller writes and are excluded from any XNU
-  probe. Read protocol reference and no-write boundary are documented in
-  `docs/MUNCH_PORTING.md`.
+  reflected polynomial `0x8408`). Corrected length accounting: Linux's local
+  `FTS_TOUCH_DATA_LEN` is 63 bytes including the `0x01` command marker; the
+  controller's touch section is 62 bytes (two leading bytes plus ten 6-byte
+  slots). Normal Linux reads request 90 response bytes (62 touch + 28 gesture),
+  so the full SPI transaction is 99 bytes including header, three dummy bytes,
+  and two CRC bytes. A shorter 62-byte read is not yet validated. Vendor report
+  parsing scales 12-bit coordinates by `10/16` for Munch's `10800x24000`
+  display extent. The boot-ID fallback, reset, mode/config and firmware-upgrade
+  paths issue controller/GPIO writes; the firmware path can rewrite
+  nonvolatile firmware. They are excluded from any XNU probe. Report protocol
+  and the no-write boundary are documented in `docs/MUNCH_PORTING.md`.
+- Read-only Android ADB snapshot on 2026-10-20: platform device `990000.spi`
+  is bound to `spi_geni`, and SPI child `spi1.0` is bound to `fts_ts`.
+  `/proc/interrupts` exposes SPI GENI lines, but the snapshot does not safely
+  identify SE4's runtime FIFO/GSI selection; clock and pinctrl debugfs views
+  are unavailable. This is Android-only evidence, not ABL handoff evidence.
+  The command accessed only `/sys` and `/proc`; it did not read, mount, back up,
+  or modify `userdata`. No SPI transfer or controller probe was issued.
 - Critical unresolved dependency: the Linux SPI master chooses FIFO or GSI/DMA
-  using the runtime `FIFO_IF_DISABLE` register and obtains clocks/pinctrl through
-  Linux resource frameworks. Static DTS/source cannot establish whether ABL
-  leaves SE4 at `0x990000` usable, powered, clocked, SPI-configured, or available
-  to XNU. The panel rail/reset state is also not established. Do not implement
-  or call an SE4 MMIO transport until these runtime states can be observed and
-  an ownership-safe bring-up sequence is justified. No phone/ADB/fastboot,
-  panel reset, UFS, or `userdata` access occurred in this pass.
-- Next: continue offline by mapping the SPI FIFO/GSI configuration and locate
-  a safe runtime observation point in the temporary RAM loader/handoff. Do not
-  create or boot a payload yet: runtime memory handoff and RAM-root image are
-  still unresolved. The previous source-only validation counts above predate
-  this documentation-only update; rerun validation before committing it.
+  using `GENI_IF_FIFO_DISABLE`; otherwise it uses the FIFO path. In either case,
+  GENI setup and transfers program controller registers; Linux also votes clocks
+  and selects pinctrl states through resource frameworks and runtime PM. Static
+  DTS/source and the Android sysfs snapshot cannot establish whether ABL leaves
+  SE4 at `0x990000` usable, powered, clocked, SPI-configured, or available to
+  XNU. Panel rail/reset state is also unknown after ABL. Do not implement or
+  call an SE4 MMIO transport until runtime state and exclusive ownership are
+  established. Current XNU machine configuration remains `SWEET`; there is no
+  `MUNCH` machine config yet, so the inherited SWEET touch/keys code is not a
+  Munch implementation.
+- Next: continue offline with the Munch machine-config / RAM-handoff blockers;
+  do not create or boot a payload yet because runtime memory handoff and the
+  RAM-root image are unresolved. The diagnostic ADB read was non-destructive;
+  no `fastboot`, panel reset, UFS, or `userdata` operation occurred. This
+  handoff follows documentation commit `67ff9bf`; validation must be rerun for
+  the current correction before committing it.
 
 ### >>> HANDOFF 2026-10-20: ABL-FDT MEMORY PREFLIGHT <<<
 

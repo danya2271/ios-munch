@@ -161,10 +161,14 @@ must be checked against the exact running firmware and XNU's required handoff.
    `CONFIG_TOUCHSCREEN_FOCALTECH_3658U` and contains the matching FT3658U SPI
    driver plus `fw_ft3658_k11.i`. The safe report-read reference is a single
    full-duplex SPI transfer: command `0x01`, read opcode `0xa0`, big-endian
-   payload length, three dummy bytes, report payload, then little-endian
-   CRC-16/Kermit (initial value `0xffff`, reflected polynomial `0x8408`). The
-   controller report is 63 bytes for ten contacts; Linux scales its 12-bit
-   coordinates by `10/16` for the DTS display extent `10800x24000`. Do not
+   length, three dummy bytes, response data, then little-endian CRC-16/Kermit
+   (initial value `0xffff`, reflected polynomial `0x8408`). Linux requests 90
+   response bytes per report read (99 wire bytes including header, dummy bytes,
+   and CRC). Its 63-byte local touch buffer includes the command marker; the
+   on-wire touch portion is 62 bytes: two leading bytes plus ten six-byte
+   contact slots. The remaining 28 requested bytes are reserved for gestures.
+   Linux scales 12-bit contact coordinates by `10/16` for the DTS display
+   extent `10800x24000`; a shorter 62-byte read has not been validated. Do not
    copy the Linux ID-detection sequence, reset sequence, configuration writes,
    or automatic firmware-upgrade path: they transmit controller commands and
    the latter can rewrite nonvolatile firmware. The XNU path must fail closed
@@ -174,7 +178,10 @@ must be checked against the exact running firmware and XNU's required handoff.
    bit selects FIFO versus GSI/DMA, and the ABL handoff value is not known from
    static DTS/source. Therefore no SE4 register programming or touch probe is
    currently enabled in XNU; the remaining work is a runtime-state observation
-   and a Munch-specific transport, not adaptation of the SWEET I2C path.
+   and a Munch-specific transport, not adaptation of the SWEET I2C path. A
+   read-only Android ADB snapshot confirmed the running kernel binds
+   `990000.spi` to `spi_geni` and `spi1.0` to `fts_ts`; it does not establish
+   what ABL leaves enabled or owned after `fastboot boot`.
 6. Keep storage boot modes separate. Current phone tests use RAM only and leave
    `userdata` untouched. A later UFS boot may be explored after the RAM bring-up;
    it requires a verified root layout, explicit write policy, and a storage
