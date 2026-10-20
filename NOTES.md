@@ -25,6 +25,11 @@
   archive command (`libtool -static -csD`), recorded in
   `/tmp/ios-munch-local-build-20261021/build-all-munch-30.log`. The kernel
   link itself completed, but the result remains invalid for boot.
+- Offline payload packing was also rejected as intended:
+  `python3 tools/mkpayload.py` stopped on
+  `AssertionError: kernel has binds; only rebases are supported`. The relaxed
+  Mach-O therefore cannot pass the repository's payload gate even before any
+  shim or device test.
 - Current repository tip remains `77e19c5` (`fix(munch): generate pid
   hibernate syscall args`), with the branch two commits ahead of
   `origin/main`. No repository source changes were needed for this smoke-build.
