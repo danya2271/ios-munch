@@ -1,5 +1,29 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-21: LINUX XNU SMOKE-BUILD / DOCKER DECISION <<<
+
+- No device command, ADB, fastboot, partition access, `userdata` access, or
+  permanent firmware change occurred in this milestone. All experiments remain
+  in `/tmp/ios-munch-local-build-20261021`; repository changes are unchanged.
+- A temporary Clang wrapper converts XNU's Darwin `-arch arm64` into
+  `--target=arm64-apple-darwin`; a one-file test produced a real Mach-O 64-bit
+  arm64 object. The full patched MUNCH tree then compiled deeply with temporary
+  Linux-only fallbacks for Apple typed-allocator builtins and Firehose headers.
+- The current smoke-build blockers are not Docker/environment blockers:
+  DriverKit still requires Apple `iig`, and BSD compilation reaches a real
+  XNU source/configuration error at `bsd/vm/vm_unix.c:1774` for an incomplete
+  `struct pid_hibernate_args`. The temporary DriverKit exclusion was not copied
+  into the repository.
+- Docker would only package this same Linux approximation; it cannot provide
+  Apple Clang's XNU builtins, `iig`, Xcode/KDK headers, or Apple's Mach-O/linker
+  behavior. It is therefore useful later for reproducible helper scripts, but
+  not a simpler route to a bootable kernel. The final Apple-toolchain build
+  still belongs on macOS/Xcode or a macOS CI runner.
+- Next practical step is to keep the Linux build as a diagnostic path, isolate
+  the `pid_hibernate_args` dependency and remaining non-Apple blockers, then
+  use a real Apple build for the first bootable XNU artifact. No XNU kernel or
+  phone boot image was produced in this milestone.
+
 ### >>> HANDOFF 2026-10-21: MACH-O PAYLOAD PACKER GATE <<<
 
 - `tools/mkpayload.py` incorrectly assumed `m.segs[0]` was `__TEXT`. A valid
