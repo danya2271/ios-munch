@@ -17,9 +17,8 @@ storage design before use.
 No local iOS root image is available in `research/`. The inherited root builder
 defaults to a 16-GB raw HFS+ image, and `mkpayload.py` embeds that image
 uncompressed as a resident RAM disk. That exceeds the 4-GB source-derived
-candidate memory window; the candidate itself is not a verified runtime map.
-A RAM-sized root or demand-paged design is unresolved and must be measured
-before proposing a phone boot.
+candidate memory window. A RAM-sized root or demand-paged design is unresolved
+and must be measured before proposing a phone boot.
 
 ## Live device evidence (2026-10-20)
 
@@ -57,12 +56,17 @@ capacity or of the map installed/running on this phone.
 
 **Candidate, not validated:** `[0x100000000, 0x200000000)` (4-8 GiB) lies
 inside the later EDK2 source's conventional RAM descriptor and below its
-reported end. It avoids the listed low-memory carve-outs and is a plausible
-region to test for XNU placement after confirming the UEFI runtime memory map
-on this handset. It must not yet be used to build or boot a Munch payload: the
-released image's successful boot and its runtime descriptors are unverified.
-The compatibility DTB bundled in that source still identifies as `alioth`,
-so it is not a substitute for the live Munch tree.
+reported end. It also lies in the upper range advertised by the reconstructed
+Android Munch FDT; the saved-tree shim test accepts it and rejects listed
+fixed/dynamic reservations. These are offline observations only. The public
+UEFI source map is not relevant to direct `fastboot boot` through Android ABL,
+and the reconstructed Linux FDT is not proof of what ABL supplies at runtime.
+The shim now checks the selected window against that actual handoff FDT before
+copying XNU. This fail-closed check is the runtime gate for the direct-ABL path;
+it does not validate an EDK2 UEFI boot path. The candidate ADT may be generated
+for offline inspection, but no phone payload or boot is authorized by this
+offline check. The compatibility DTB bundled in the EDK2 source identifies as
+`alioth`, so it is not a substitute for the live Munch tree.
 
 The shim now performs a fail-closed preflight against the FDT supplied by the
 Android bootloader. Before copying any XNU segment, it requires the payload's
@@ -155,9 +159,14 @@ must be checked against the exact running firmware and XNU's required handoff.
    it cannot be reused as-is. The provided Munch kernel tree enables
    `CONFIG_TOUCHSCREEN_FOCALTECH_3658U` and contains a matching FT3658U SPI
    driver plus `fw_ft3658_k11.i`, which provides a concrete protocol/report
-   reference. Port the SE4 SPI controller and GPIO/regulator sequencing into
-   XNU, then adapt its report path. Verify whether firmware upload is needed
-   when booting outside the Android kernel.
+   reference. Its SPI transactions use a 4-byte command header, 3 dummy bytes,
+   6 MHz maximum clock, three retries, and CRC-16/Kermit on reads. The Linux
+   config enables automatic firmware upgrade and embeds an image; that upgrade
+   path must not be ported into XNU because it can write the touch controller's
+   nonvolatile firmware. First determine whether ABL leaves the panel rails,
+   reset line, and GENI SE4 in a usable state; then implement read-only probe
+   and report handling. Porting full SPI transport needs QUPv3 GENI FIFO/packing
+   plus GPIO/regulator sequencing, not the current donor I2C path.
 6. Keep storage boot modes separate. Current phone tests use RAM only and leave
    `userdata` untouched. A later UFS boot may be explored after the RAM bring-up;
    it requires a verified root layout, explicit write policy, and a storage
@@ -167,5 +176,21 @@ The device identity and live Linux-tree hardware observations are verified for
 this handset, but the tree is reconstructed, Android-version metadata is
 inconsistent, and the UEFI source map has not been confirmed at runtime. No
 Munch XNU machine profile, Munch ADT, or POCO F4 boot result exists yet. The
-4-8 GiB range is a source-derived candidate only; do not set `physBase` or
-`memSize` until the actual boot handoff and reservations are verified.
+4-8 GiB range is an offline candidate only; do not boot a payload until the
+actual Android-ABL handoff passes the shim preflight and a RAM-root design is
+available.
+
+## CPU profile and XNU binding
+
+The local Munch kernel DTS and reconstructed live tree agree on eight CPU nodes
+with MPIDRs `0x000` through `0x700`. `kona.dtsi` groups cores 0-3 into
+frequency domain 0, cores 4-6 into domain 1, and core 7 into domain 2, with
+capacities 448, 1023, and 1024 respectively. The generated Munch ADT retains
+all CPUs as one `cluster-type = 0` SMP cluster because the current XNU port does
+not implement heterogeneous scheduling. All eight CPU nodes use
+`compatible = "qcom,kryo"`; before patch 0082, `SweetCPU` matched only
+`qcom,kryo470`, so the driver would not bind to the generated Munch CPUs. Patch
+0082 adds the missing match without changing the SWEET DT compatibility entry.
+The driver still reports the cosmetic name `Kryo 470`, and topology/power
+management remains a shared bring-up implementation rather than a Munch-specific
+CPU driver.

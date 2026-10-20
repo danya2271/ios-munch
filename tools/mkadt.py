@@ -2,8 +2,9 @@
 """Build the minimal Apple Device Tree used by the XNU bring-up.
 
 The default profile is the inherited SWEET donor profile. ``--munch`` emits
-only verified POCO F4 SoC/display identity and deliberately omits UFS; its
-RAM window must be supplied explicitly after a runtime UEFI map is verified.
+the POCO F4 SoC/display identity and deliberately omits UFS; its RAM window
+must be supplied explicitly. On the direct fastboot path, the shim validates
+that window against the runtime Android-ABL FDT before loading XNU.
 Usage: mkadt.py OUT.adt [--dump] [--qemu] [--highmem] [--munch]
 """
 import hashlib, os, struct, sys
@@ -76,14 +77,15 @@ def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dra
           ram_only=False):
     """Build a SWEET, QEMU, or explicit-memory Munch profile.
 
-    Munch memory is intentionally not guessed from Linux or the public UEFI
-    source map. Callers must pass the runtime-verified ``dram_base`` and
-    ``dram_size`` values explicitly; the profile is always RAM-only.
+    Munch memory is intentionally not guessed. Callers must pass an explicit
+    ``dram_base`` and ``dram_size`` candidate; on the direct ABL path the shim
+    checks it against the FDT actually supplied at boot. The profile is
+    always RAM-only.
     """
     if munch and qemu:
         raise ValueError('--munch and --qemu are separate hardware profiles')
     if munch and (dram_base is None or dram_size is None):
-        raise ValueError('--munch requires --dram-base and --dram-size from a verified runtime UEFI map')
+        raise ValueError('--munch requires an explicit --dram-base and --dram-size candidate; the shim validates it against the runtime ABL FDT')
     if dram_base is not None or dram_size is not None:
         if dram_base is None or dram_size is None:
             raise ValueError('--dram-base and --dram-size must be supplied together')

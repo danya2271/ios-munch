@@ -1,5 +1,36 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-20: MUNCH CPU MATCH / TOUCH AUDIT <<<
+
+- Local Munch DTS review confirms the eight CPU nodes use
+  `compatible = "qcom,kryo"` with MPIDRs `0x000` through `0x700`. Cores 0-3,
+  4-6, and 7 are in frequency domains 0, 1, and 2, with capacities 448, 1023,
+  and 1024. The generated Munch ADT already carries these eight nodes and the
+  current XNU SMP patch accepts the `0x000..0x700` MPIDR range.
+- Found and fixed an actual binding gap: `SweetCPU` previously matched only
+  `qcom,kryo470`, while the Munch ADT and live kernel DTS use `qcom,kryo`.
+  New patch `0082-munch-kryo-cpu-match.patch` adds a second IOKit personality;
+  the inherited SWEET match remains unchanged.
+- Re-audited Munch touch facts from the local kernel: FT3658U is on QUPv3
+  GENI SE4 at `0x990000`, CS0, up to 6 MHz, IRQ GPIO 39, reset GPIO 33. The
+  Linux driver uses a 4-byte SPI header, 3 dummy bytes, three retries, and
+  CRC-16/Kermit reads. Its automatic firmware-upgrade path writes controller
+  nonvolatile firmware and is explicitly excluded from the XNU RAM bring-up;
+  the first XNU touch implementation must be read-only probe/report handling.
+- `mkadt.py` documentation and porting notes now distinguish explicit offline
+  RAM candidates from the direct Android-ABL runtime gate. The shim's FDT
+  preflight, not the unverified public UEFI source map, is the safety check for
+  a future direct `fastboot boot` payload. No ADB, fastboot, phone boot, or
+  `userdata` access occurred.
+- Validation: `python3 tools/validate-repo.py` passed with 82 contiguous XNU
+  patches; generated a 10,692-byte Munch ADT for offline inspection with
+  `[0x100000000,0x200000000)` and confirmed all eight `qcom,kryo` nodes;
+  `git diff --check` passed. This is source/offline validation only.
+- Next: commit this milestone, then build a read-only GENI SPI design from the
+  Munch controller register map and decide how to observe the actual ABL FDT
+  during a later temporary boot. Do not create or boot a payload yet: the RAM
+  root image and runtime handoff are still unresolved.
+
 ### >>> HANDOFF 2026-10-20: ABL-FDT MEMORY PREFLIGHT <<<
 
 - Public UEFI release re-check: the latest available GitHub release remains
