@@ -46,9 +46,11 @@
   is bound to `spi_geni`, and SPI child `spi1.0` is bound to `fts_ts`.
   `/proc/interrupts` exposes SPI GENI lines, but the snapshot does not safely
   identify SE4's runtime FIFO/GSI selection; clock and pinctrl debugfs views
-  are unavailable. This is Android-only evidence, not ABL handoff evidence.
-  The command accessed only `/sys` and `/proc`; it did not read, mount, back up,
-  or modify `userdata`. No SPI transfer or controller probe was issued.
+  are unavailable, and the sysfs scan exposed no useful named L10C/L1C rail
+  state. The `devmem` utility exists, but it was not run and `/dev/mem` was not
+  opened. This is Android-only evidence, not ABL handoff evidence. Queries read
+  only metadata in `/sys`, `/proc`, and `/dev`; they did not read, mount, back
+  up, or modify `userdata`. No SPI transfer or controller probe was issued.
 - Critical unresolved dependency: the Linux SPI master chooses FIFO or GSI/DMA
   using `GENI_IF_FIFO_DISABLE`; otherwise it uses the FIFO path. In either case,
   GENI setup and transfers program controller registers; Linux also votes clocks
@@ -64,8 +66,12 @@
   do not create or boot a payload yet because runtime memory handoff and the
   RAM-root image are unresolved. The diagnostic ADB read was non-destructive;
   no `fastboot`, panel reset, UFS, or `userdata` operation occurred. This
-  handoff follows documentation commit `67ff9bf`; validation must be rerun for
-  the current correction before committing it.
+  handoff follows commits `67ff9bf` (touch safety audit) and `489d55d`
+  (report-length correction). After the correction, `python3
+  tools/validate-repo.py` passed (82 patches, 16 Python tools, 7 shell
+  scripts) and `git diff --check` passed. Next concrete offline task: inventory
+  `SWEET.h` and every `SWEET`-gated hardware path to scope a distinct MUNCH
+  machine configuration; do not alias MUNCH to SWEET or enable its touch path.
 
 ### >>> HANDOFF 2026-10-20: ABL-FDT MEMORY PREFLIGHT <<<
 
