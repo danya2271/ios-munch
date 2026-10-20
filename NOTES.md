@@ -27,6 +27,10 @@
   the helper, and the real helper capture all passed. Host FDT checks accepted
   `[0x100000000,0x200000000)` and rejected the framebuffer and an out-of-RAM
   range. No CI run was started; `gh` is still unavailable.
+- Offline `tools/mkadt.py --munch --dram-base 0x100000000
+  --dram-size 0x100000000` generated a 10,692-byte ADT in `/tmp` with no UFS
+  node. It warned only that the optional Apple D22AP `/product` artifact is
+  absent; no kernel, payload, boot image, or phone boot was produced.
 - Next: get the MUNCH XNU compile through CI, then build a small RAM-root
   payload and run the shim only with temporary `fastboot boot`; do not install
   UEFI or enable legacy UFS yet.
