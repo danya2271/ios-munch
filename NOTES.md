@@ -1,5 +1,24 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
+### >>> UPDATE 2026-10-20: POCO F4 / UEFI feasibility research <<<
+
+Read-only research; no POCO F4 was connected, booted, or modified.
+
+**Observed:**
+- `ios-sweet` still targets `sweet` / SM7150. Latest documented phone milestone is 2026-10-18: SpringBoard home screen, touch, hardware buttons and home/app-switcher gestures work. Eight-core support (6 A55 + 2 A76) is built; latest documented USB internet attempt is not working. README's hardware table lags NOTES (it still says navigation unavailable and six cores).
+- Public device-specific UEFI candidate found: `0xSelenicDove/edk2-msm-munch`, EDK2/SM8250, with release `v1.1.0` (2026-08-20). `munch.dsc` sets a GOP framebuffer at `0x9c000000`, 1080x2400. GitHub Actions run `32507483435` (2026-08-21, commit `a600ef86f32180d5c3b21ec54ed6bdf7f29cb78d`) completed successfully and produced build artifacts. This verifies CI build, not on-device boot.
+- Its README claims broad Windows hardware support, but no independent hardware test evidence was found in the inspected public materials; treat those feature claims as unverified. Renegade/edk2-msm is a useful upstream base, not a separately confirmed ready-made `munch` image.
+- The candidate installer patches the active Android `boot` slot and writes the result back; it backs up the original as `/sdcard/boot_backup<slot>.img`. Do not install it as part of initial iOS bring-up. Prefer a temporary boot image for first hardware tests, after device-specific validation.
+- POCO F4 is `munch`, Snapdragon 870 / SM8250-AC, 4x A77 + 4x A55, Adreno 650, LPDDR5/UFS 3.1; panel is 1080x2400 AMOLED. It is ARM64-compatible in principle, but not a drop-in SM7150 board.
+
+**Assessment (not yet hardware-validated):**
+- Reuse the generic XNU 8796/iOS 16 userland and porting techniques; redo board-specific machine config, memory map/ADT, boot handoff, GIC/timer/PSCI, UFS, display and touch/power drivers for SM8250 and the exact `munch` variant. CPU rendering can plausibly reach the current GUI milestone without Adreno support; phone-class GPU, Wi-Fi, modem, audio and camera support are much larger separate projects.
+- Dual boot is harder than getting the GUI to boot. Current `ios-sweet` uses the whole `userdata` GPT partition as its HFS+ root, which destroys Android user data. Preserving Android requires a separate iOS root partition or a new file-backed storage path, plus a boot menu/loader path that turns UEFI or the stock boot chain into XNU's `boot_args` + Apple Device Tree handoff. The existing UEFI does not itself solve either requirement.
+
+**Unfinished / next concrete step:**
+- No POCO F4 boot result exists. Before any test, identify the exact model/region and installed firmware, obtain its stock boot image and live DT, and inspect GPT/slot layout read-only. Then adapt the shim to the `munch` boot image and test only via `fastboot boot`; keep the Android partitions untouched. Do not flash UEFI, repartition, or write `userdata` without explicit confirmation.
+- Repository state at research start: `11da58b` (`main`, clean). This documentation update is the only change; no code or device changes made.
+
 ## Agent handoff / active work (2026-10-15, latest)
 
 ### >>> UPDATE 2026-10-18 (read first, then the 10-17 handoff below) <<<
