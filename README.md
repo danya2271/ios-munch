@@ -64,7 +64,7 @@ python3 tools/unpack_bootv2.py backup/boot.img dtb/boot_unpacked   # -> dtb/boot
 
 For a read-only live-DTB build without storing the dump in the repository, set
 `DTB_PATH` to an external file, for example
-`DTB_PATH=/tmp/munch-live.dtb (cd shim && ./build.sh)`.
+`cd shim && DTB_PATH=/tmp/munch-live.dtb ./build.sh`.
 
 ### 1. Build the kernel
 
