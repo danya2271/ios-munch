@@ -18,6 +18,8 @@
   `203a9b9a0943c56e57084953af97b36a0eeae87e85502b267c4a6e479f6603b2`).
 - The image contains the empty diagnostic cpio ramdisk, not an XNU payload;
   it was not sent to the phone. No device command or `userdata` access occurred.
+- Source fix is committed locally as `9eb6f41`; the follow-up documentation
+  syntax correction is `eb170b1`. Neither commit was pushed to `origin/main`.
 
 ### >>> HANDOFF 2026-10-21: UEFI IDENTITY BOOT + FRAMEBUFFER CHECK <<<
 
