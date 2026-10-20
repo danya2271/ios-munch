@@ -155,18 +155,26 @@ must be checked against the exact running firmware and XNU's required handoff.
    temporary `fastboot boot` image. Do not flash boot partitions or repartition.
 5. Port touch separately from the inherited SWEET driver. Munch's live/kernel
    DTS places a FocalTech controller on QUPv3 SE4 SPI (CS0, up to 6 MHz), with
-   IRQ GPIO 39 and reset GPIO 33. The donor driver's FocalTech path is QUP I2C;
-   it cannot be reused as-is. The provided Munch kernel tree enables
-   `CONFIG_TOUCHSCREEN_FOCALTECH_3658U` and contains a matching FT3658U SPI
-   driver plus `fw_ft3658_k11.i`, which provides a concrete protocol/report
-   reference. Its SPI transactions use a 4-byte command header, 3 dummy bytes,
-   6 MHz maximum clock, three retries, and CRC-16/Kermit on reads. The Linux
-   config enables automatic firmware upgrade and embeds an image; that upgrade
-   path must not be ported into XNU because it can write the touch controller's
-   nonvolatile firmware. First determine whether ABL leaves the panel rails,
-   reset line, and GENI SE4 in a usable state; then implement read-only probe
-   and report handling. Porting full SPI transport needs QUPv3 GENI FIFO/packing
-   plus GPIO/regulator sequencing, not the current donor I2C path.
+   IRQ GPIO 39, reset GPIO 33, and L10C/L1C supplies. The donor XNU driver is
+   QUP I2C on a different serial engine and its reset, clock, pin, and power
+   setup must not be called on Munch. The provided Munch kernel tree enables
+   `CONFIG_TOUCHSCREEN_FOCALTECH_3658U` and contains the matching FT3658U SPI
+   driver plus `fw_ft3658_k11.i`. The safe report-read reference is a single
+   full-duplex SPI transfer: command `0x01`, read opcode `0xa0`, big-endian
+   payload length, three dummy bytes, report payload, then little-endian
+   CRC-16/Kermit (initial value `0xffff`, reflected polynomial `0x8408`). The
+   controller report is 63 bytes for ten contacts; Linux scales its 12-bit
+   coordinates by `10/16` for the DTS display extent `10800x24000`. Do not
+   copy the Linux ID-detection sequence, reset sequence, configuration writes,
+   or automatic firmware-upgrade path: they transmit controller commands and
+   the latter can rewrite nonvolatile firmware. The XNU path must fail closed
+   unless the runtime handoff proves SE4 is available, powered, clocked, and
+   still configured for SPI; it must also establish safe panel-rail/reset and
+   IRQ state without disturbing an ABL-owned resource. Linux's `FIFO_IF_DISABLE`
+   bit selects FIFO versus GSI/DMA, and the ABL handoff value is not known from
+   static DTS/source. Therefore no SE4 register programming or touch probe is
+   currently enabled in XNU; the remaining work is a runtime-state observation
+   and a Munch-specific transport, not adaptation of the SWEET I2C path.
 6. Keep storage boot modes separate. Current phone tests use RAM only and leave
    `userdata` untouched. A later UFS boot may be explored after the RAM bring-up;
    it requires a verified root layout, explicit write policy, and a storage

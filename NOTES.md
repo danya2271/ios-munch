@@ -26,10 +26,30 @@
   patches; generated a 10,692-byte Munch ADT for offline inspection with
   `[0x100000000,0x200000000)` and confirmed all eight `qcom,kryo` nodes;
   `git diff --check` passed. This is source/offline validation only.
-- Next: commit this milestone, then build a read-only GENI SPI design from the
-  Munch controller register map and decide how to observe the actual ABL FDT
-  during a later temporary boot. Do not create or boot a payload yet: the RAM
-  root image and runtime handoff are still unresolved.
+- Deeper source audit of `spi-geni-qcom.c` and `focaltech_3658u/focaltech_spi.c`
+  corrected the proposed next step: the existing XNU touch transport is for
+  SWEET SE7 I2C and must not be enabled on Munch. Linux report reads use one
+  full-duplex transfer with `[0x01, 0xa0, length_hi, length_lo]`, three dummy
+  bytes, report bytes, and a little-endian CRC-16/Kermit (init `0xffff`,
+  reflected polynomial `0x8408`). Ten-contact payload length is 63 bytes;
+  vendor report parsing scales 12-bit coordinates by `10/16` for Munch's
+  `10800x24000` display extent. Linux's ID/reset/config and firmware-upgrade
+  routines issue additional controller writes and are excluded from any XNU
+  probe. Read protocol reference and no-write boundary are documented in
+  `docs/MUNCH_PORTING.md`.
+- Critical unresolved dependency: the Linux SPI master chooses FIFO or GSI/DMA
+  using the runtime `FIFO_IF_DISABLE` register and obtains clocks/pinctrl through
+  Linux resource frameworks. Static DTS/source cannot establish whether ABL
+  leaves SE4 at `0x990000` usable, powered, clocked, SPI-configured, or available
+  to XNU. The panel rail/reset state is also not established. Do not implement
+  or call an SE4 MMIO transport until these runtime states can be observed and
+  an ownership-safe bring-up sequence is justified. No phone/ADB/fastboot,
+  panel reset, UFS, or `userdata` access occurred in this pass.
+- Next: continue offline by mapping the SPI FIFO/GSI configuration and locate
+  a safe runtime observation point in the temporary RAM loader/handoff. Do not
+  create or boot a payload yet: runtime memory handoff and RAM-root image are
+  still unresolved. The previous source-only validation counts above predate
+  this documentation-only update; rerun validation before committing it.
 
 ### >>> HANDOFF 2026-10-20: ABL-FDT MEMORY PREFLIGHT <<<
 
