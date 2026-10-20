@@ -1,5 +1,36 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-20: LIVE FDT + MUNCH UEFI INVENTORY <<<
+
+- The phone remains in Android, connected over ADB as `munch`, root via `su`;
+  no reboot, fastboot command, partition read, `userdata` access, or device
+  write was performed in this milestone.
+- A root read-only capture of `/sys/firmware/fdt` succeeded on the current
+  boot. The FDT is v17 and 812,778 bytes; it reports memory tuples
+  `<0x80000000 0x3bb00000>` and `<0xc0000000 0x1c0000000>`, with the second
+  bank ending at `0x2c0000000`. The capture stays in `/tmp` and is not tracked.
+- The public device-specific UEFI tree inspected is
+  `0xSelenicDove/edk2-msm-munch`, at source commit `d4b3760`. Its bundled
+  `munch.dtb` has the same two memory tuples and its Munch memory-map library
+  exposes a conventional RAM descriptor `0xffc20000+0x1003e0000`, ending at
+  `0x200000000`. The 4-8 GiB candidate `[0x100000000,0x200000000)` is
+  therefore supported by both the live Android FDT and the published UEFI
+  source map, but the UEFI runtime map is still not measured on this phone.
+- Static inspection of the UEFI release `boot-munch.img` found Android boot
+  header v1 and a 3,946,361-byte UEFI payload. It was downloaded to `/tmp`
+  only and never booted. It is not yet integrated with the XNU shim.
+- Added `tools/munch-fdt-pull.sh`: it accepts only a Munch ADB device, reads
+  only `/sys/firmware/fdt` through `su`, validates the blob, and refuses
+  repository paths. The validator now checks this helper's read-only boundary.
+- Milestone committed as `0b0b558` (`Add safe live Munch FDT capture`).
+  `python3 tools/validate-repo.py`, `git diff --check`, `bash -n`/`sh -n` for
+  the helper, and the real helper capture all passed. Host FDT checks accepted
+  `[0x100000000,0x200000000)` and rejected the framebuffer and an out-of-RAM
+  range. No CI run was started; `gh` is still unavailable.
+- Next: get the MUNCH XNU compile through CI, then build a small RAM-root
+  payload and run the shim only with temporary `fastboot boot`; do not install
+  UEFI or enable legacy UFS yet.
+
 ### >>> HANDOFF 2026-10-20: RAM-ONLY STORAGE ACCESS AUDIT <<<
 
 - Disabled `tools/munch-log-pull.sh` as a fail-closed stub. `--help` explains

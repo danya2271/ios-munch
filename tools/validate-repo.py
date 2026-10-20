@@ -180,6 +180,28 @@ def validate_userdata_safety():
     return True
 
 
+def validate_live_fdt_helper():
+    path = os.path.join(REPO_ROOT, 'tools/munch-fdt-pull.sh')
+    try:
+        text = open(path, errors='replace').read()
+    except OSError as exc:
+        print(red(f"[-] live FDT helper validation failed: {exc}"))
+        return False
+
+    required = ('adb exec-out', '/sys/firmware/fdt', 'ro.product.device', 'munch')
+    forbidden = ('adb pull', 'fastboot', '/dev/block', 'userdata', '/data/', 'dd ')
+    errors = [f"missing required token: {needle!r}" for needle in required if needle not in text]
+    errors.extend(f"forbidden device-access token: {needle!r}" for needle in forbidden if needle in text)
+    if errors:
+        print(red("[-] live FDT helper validation failed:"))
+        for err in errors:
+            print(f"    - {err}")
+        return False
+
+    print(green("[✓] Live Munch FDT helper is read-only and repository-safe"))
+    return True
+
+
 def validate_ram_only_shim():
     shim_dir = os.path.join(REPO_ROOT, 'shim')
     paths = {
@@ -229,11 +251,12 @@ def main():
     ok_patches = validate_patches(a.verbose)
     ok_munch = validate_munch_build_plumbing()
     ok_userdata = validate_userdata_safety()
+    ok_live_fdt = validate_live_fdt_helper()
     ok_shim_storage = validate_ram_only_shim()
     ok_python = validate_python_scripts(a.verbose)
     ok_shell = validate_shell_scripts(a.verbose)
 
-    if ok_patches and ok_munch and ok_userdata and ok_shim_storage and ok_python and ok_shell:
+    if ok_patches and ok_munch and ok_userdata and ok_live_fdt and ok_shim_storage and ok_python and ok_shell:
         print(bold(green("\nAll repository integrity checks PASSED successfully!")))
         return 0
     else:

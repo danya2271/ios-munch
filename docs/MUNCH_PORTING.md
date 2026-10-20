@@ -37,13 +37,13 @@ version (`16`, SDK `36`) conflicts with the version component (`13`) in the
 fingerprint `POCO/munch_global/munch:13/RKQ1.211001.001/V816.0.9.0.ULMMIXM:user/release-keys`;
 resolve this before treating the capture as a stable firmware baseline.
 
-`/sys/firmware/fdt` is absent. The tree was reconstructed read-only from
-`/proc/device-tree` using root access in the global mount namespace. It is FDT
-v17, 812030 bytes, with root model `Qualcomm Technologies, Inc. xiaomi munch`
-and compatibles `qcom,kona-mtp; qcom,kona; qcom,mtp`. SHA-256 is
-`7ac4e2551f5d76d1f46d0ef6d53a3246bd5cd498417a466b23e1eb0cf985025c`. The local
-copy is `research/munch-live.dtb` (ignored by Git, mode 0600); it contains a
-device serial in `chosen/bootargs` and must not be published or added to Git.
+`/sys/firmware/fdt` is readable through root in the current Android boot. A
+read-only capture on 2026-10-20 is FDT v17, 812778 bytes, with root model
+`Qualcomm Technologies, Inc. xiaomi munch` and compatibles
+`qcom,kona-mtp; qcom,kona; qcom,mtp`. The capture was kept in `/tmp` only; it
+contains device-specific data in `chosen/bootargs` and must not be published or
+added to Git. `tools/munch-fdt-pull.sh` reproduces this capture, refuses to
+write inside the repository, and only reads `/sys/firmware/fdt`.
 
 The reconstructed tree reports 8 PSCI CPUs, GICv3 at `0x17a00000` and
 `0x17a60000`, UFS at `0x1d84000`, SDE at `0xae00000`, Focaltech touch on SPI at
@@ -52,16 +52,22 @@ The reconstructed tree reports 8 PSCI CPUs, GICv3 at `0x17a00000` and
 reserved pools whose actual placement is not encoded as fixed addresses.
 These are live Linux-tree observations, not proof that XNU can use the ranges.
 
-The public EDK2 repository has two Munch image releases, both published on
-2026-08-20: `v1.1.0` at source commit `1b11fb1` and a later build at
-`d4b3760`. In the later source map, PSTORE is at
+The public device-specific EDK2 repository inspected for Munch is
+`0xSelenicDove/edk2-msm-munch`; no other independent Munch-specific UEFI
+repository was found in the public repository search. It has two Munch image
+releases, both published on 2026-08-20: `v1.1.0` at source commit `1b11fb1`
+and a later build at `d4b3760`. In the later source map, PSTORE is at
 `0xb0000000+0x400000`, display ramdump at `0xb0400000+0x1000000`, and the
 last conventional RAM descriptor is `0xffc20000+0x1003e0000`, ending at
 `0x200000000` (8 GiB). Thus SWEET's current `PHYS_BASE=0xb0000000` overlaps
 reserved regions. The live Linux tree reports RAM through `0x280000000` (10
 GiB address), so the EDK2 source map omits the top 2 GiB of that address span.
-This is an address-limit comparison, not proof of 2 GiB of missing physical
-capacity or of the map installed/running on this phone.
+The bundled Munch compatibility DTB carries the same two `/memory` ranges as
+the live Android FDT. The published `boot-munch.img` is an Android boot-image
+v1 containing a 3,946,361-byte UEFI payload; it is a UEFI artifact, not a
+validated XNU handoff image. These are source and static-image observations,
+not proof that this UEFI build is installed or that its runtime descriptors
+match every firmware variant of this phone.
 
 **Candidate, not validated:** `[0x100000000, 0x200000000)` (4-8 GiB) lies
 inside the later EDK2 source's conventional RAM descriptor and below its
