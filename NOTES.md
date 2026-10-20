@@ -1,5 +1,39 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-21: LOCAL XNU MACH-O LINK GATE <<<
+
+- No ADB, fastboot, device command, partition access, `userdata` access,
+  `dtbo` access, or permanent firmware change occurred in this milestone.
+  All temporary build files remain under `/tmp/ios-munch-local-build-20261021`.
+- The incremental Linux MUNCH smoke-build advanced past BSD, libkern, libsa,
+  IOKit and symbolset generation after temporary-only DriverKit/iig header
+  fallbacks and a `plistutil`-backed `plutil` wrapper. These fallbacks are
+  diagnostic host scaffolding only and are not repository patches or boot
+  inputs.
+- Strict Darwin-style link with `ld64.lld` reached the real Apple SDK boundary:
+  `/tmp/ios-munch-local-build-20261021/build-all-munch-28.log` reports missing
+  `libcc_kext` and `libfirehose_kernel`, followed by unresolved platform and
+  IOKit symbols such as `_IOMallocData_external` and `__ZN9IOService18getResourceServiceEv`.
+- A separate relaxed link (`-undefined suppress`, no Apple support libraries)
+  produced only an offline diagnostic artifact:
+  `/tmp/ios-munch-local-build-20261021/build/obj/RELEASE_ARM64_MUNCH/kernel.release.munch.unstripped`
+  is Mach-O 64-bit arm64, 12,438,432 bytes, SHA-256
+  `a5df6330d91d0d08e55e5c00466fad03754cbea25810c8ace191d298135e8750`.
+  `llvm-nm -u` confirms unresolved Apple platform/IOKit symbols. It is not a
+  bootable XNU kernel and was not passed to the shim or sent to the phone.
+- The relaxed `build_all` then stopped only at the secondary Darwin `libtool`
+  archive command (`libtool -static -csD`), recorded in
+  `/tmp/ios-munch-local-build-20261021/build-all-munch-30.log`. The kernel
+  link itself completed, but the result remains invalid for boot.
+- Current repository tip remains `77e19c5` (`fix(munch): generate pid
+  hibernate syscall args`), with the branch two commits ahead of
+  `origin/main`. No repository source changes were needed for this smoke-build.
+- Next required build gate is a real Apple Clang/Xcode/KDK environment (or
+  macOS CI) providing `iig`, `libcc_kext`, `libfirehose_kernel`, Apple linker
+  semantics and platform headers. Do not use the relaxed Mach-O for
+  `fastboot boot`; keep phone testing RAM-only and only after a strict Apple
+  kernel plus valid payload exists.
+
 ### >>> HANDOFF 2026-10-21: LINUX XNU SMOKE-BUILD / DOCKER DECISION <<<
 
 - No device command, ADB, fastboot, partition access, `userdata` access, or
