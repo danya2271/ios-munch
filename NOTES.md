@@ -87,6 +87,12 @@
   machine-config patch is absent; `gh` is also not installed. Current branch
   passed `python3 tools/validate-repo.py` after this documentation update:
   82 patches, 16 Python tools, 7 shell scripts; `git diff --check` also passed.
+- Audit/documentation milestone is committed as `77352b3` (`docs: audit Munch
+  XNU config boundary`). Next concrete action: obtain the exact xnu-8796 patched
+  buildtree/source context, then add an isolated `MUNCH` machine config and
+  single-core bring-up profile without enabling SWEET hardware paths. Do not
+  start SMP or a device boot until ABL EL/MPIDR/GIC/PSCI behavior and the
+  RAM-root/memory-map gates are independently resolved.
 - Completed commits: `67ff9bf` touch safety audit, `489d55d` corrected report
   lengths, `f0dc497` audit handoff, and `8be542d` Munch timer INTID. Validation
   after the latest code change: `python3 tools/validate-repo.py` passed (82
