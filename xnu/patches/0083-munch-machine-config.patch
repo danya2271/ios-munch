@@ -650,7 +650,7 @@ index 88f9843..ddb4bdf 100644
 +    "   {"
 +    "     'IOClass'         = SweetPlatformExpert;"
 +    "     'IOProviderClass' = IOPlatformExpertDevice;"
-+    "     'IONameMatch'     = 'xiaomi,munch';"
++    "     'IONameMatch'     = 'D22AP';"
 +    "     'IOProbeScore'    = 10000:32;"
 +    "   },"
 +    "   {"

@@ -1,5 +1,42 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-21: LIVE FDT READY; REBUILD PLATFORM MATCHER
+
+- The handset is currently booted into Android (`munch`, build fingerprint
+  `POCO/munch_global/munch:13/RKQ1.211001.001/V816.0.9.0.ULMMIXM:user/release-keys`).
+  KernelSU ADB root is confirmed (`uid=0`). No device storage was accessed.
+- Captured the live `/sys/firmware/fdt` read-only to
+  `/tmp/munch-live-20261021-current.dtb` (812,778 bytes; kept outside Git).
+  It identifies `Qualcomm Technologies, Inc. xiaomi munch`, reports RAM at
+  `0x80000000+0x3bb00000` and `0xc0000000+0x1c0000000`, GICD/GICR at
+  `0x17a00000`/`0x17a60000`, and virtual timer PPI 11 / INTID 27.
+- The shim host preflight against this live FDT accepts the proposed XNU RAM
+  window `[0x100000000,0x200000000)`. This validates the captured Android FDT
+  only; the temporary ABL fastboot handoff must pass its own runtime check.
+- The existing Actions kernel is not ready for the D22AP-first ADT: a Munch
+  QEMU run reached `Unable to find driver for this platform: "D22AP"`.
+  The working tree already contains a local matcher change to D22AP and its
+  validator assertion; `python3 tools/validate-repo.py` and `git diff --check`
+  pass. These edits still need a new kernel build.
+- A 3-GiB minimized HFS root exists at
+  `/tmp/ios-munch-minroot-39597312881/minroot.img`; the earlier 16-GiB full
+  root does not fit the RAM window. The latest saved root-owned/csdisable QEMU
+  capture reports no panic through SpringBoard startup, though SpringBoard
+  crashes with SIGSEGV. Do not treat that as a hardware or usable-UI result.
+- Read-only `fsck_hfs -fn` found the 3-GiB image is truncated: its HFS+ header
+  still declares 4,194,304 allocation blocks (16 GiB), so fsck reports
+  `Invalid number of allocation blocks`. QEMU's successful mount does not
+  establish filesystem integrity. Do not use this image on the phone until a
+  correctly sized, verified HFS image is produced.
+- `gh` is not installed in this environment. The `xnu.yml` workflow runs on
+  pushes to `main` affecting `xnu/patches/**`; use that trigger or make `gh`
+  available before requesting Actions logs/artifacts.
+- Next: rebuild with the D22AP matcher, pack the already-QEMU-verified tiny
+  `munch-init.macho` mockfs root using the live Munch hardware ADT, validate the
+  boot image and shim FDT gate, then test with temporary `fastboot boot` only.
+  Repair/rebuild and fsck the full iOS HFS root separately before using it.
+  Never flash or access `userdata`.
+
 ### HANDOFF 2026-10-21: DEVICE STORAGE CHANGED; PAUSE WRITES
 
 - The user clarified that `/home/danya2271/Загрузки/recovery.img` is OrangeFox
