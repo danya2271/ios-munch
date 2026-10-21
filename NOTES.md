@@ -1,5 +1,25 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22 00:12 +05: UFS PROFILE RESTORED; DEVICE NOT CONNECTED
+
+- The EDK2 fork `/tmp/edk2-msm-munch-fork.m185A6/src` is on commit `85f4217`
+  (`fix(munch): restore UFS storage profile`), pushed to
+  `danya2271/edk2-msm-munch`. `configs/devices/munch.conf` now sets
+  `MUNCH_RAM_ONLY=FALSE`; the built firmware contains `UFSDxe`, `ScsiBus`,
+  `ScsiDisk` and `PartitionDxe`. Image:
+  `/tmp/edk2-msm-munch-fork.m185A6/src/boot-munch.img`, SHA-256
+  `e956a38d4bb2f63037b3d6d8a23c21a98b33cad6c375ab4fd836bc7310b34a45`.
+- At this checkpoint both `adb devices -l` and `fastboot devices` are empty.
+  No device command, partition access, `fastboot flash`, or `userdata` access
+  was performed in this step.
+- To connect for the next read-only UEFI test: boot Android and run
+  `adb reboot bootloader`, or power off and hold Volume Down + Power until
+  fastboot; then confirm `fastboot devices` prints the phone. Use only
+  `fastboot boot ...` for the first UFS test.
+- The XNU UFS patches are still donor SWEET code. Before a storage-backed iOS
+  root test, adapt the root driver to Munch and make GPT selection fixed to
+  partition name `iosroot`; keep `userdata` out of all boot paths.
+
 ### HANDOFF 2026-10-21 23:43 +05: RUN 8 RAM-ONLY PID 1 TEST
 
 - GitHub CLI is installed and authenticated as `danya2271` (keyring; `repo` and
