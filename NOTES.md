@@ -23,6 +23,14 @@
   userdata image. Copies and extracted staging trees were also observed under
   `/data/restore`; preserve them and the host archives. Do not claim Android
   data has been fully backed up or restored.
+- Archive inspection on 2026-10-21 found 43 `.apk` entries in `Android.tar`
+  and 37 `.apk` entries in `Download.tar` (some may be duplicates or merely
+  downloaded installers). `Android.tar` also contains 16,778 entries below
+  `Android/data`, 14 below `Android/obb`, and 19 below `Android/media`. These
+  are shared-storage files and can help reinstall or recover media, but they
+  are not the installed-app registry, `/data/app` package state, or private
+  `/data/user/0` data. Installed apps, their private databases, credentials,
+  and system settings were not backed up by this archive procedure.
 - `sda.gpt.backup` in that host directory is zero bytes and invalid. The
   `sda.gpt.print*` files are text reports, not binary GPT restore backups.
 - Do not format, repartition, restore, or otherwise write to the device now.
