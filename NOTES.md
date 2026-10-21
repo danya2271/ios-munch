@@ -58,13 +58,20 @@
   optional `dxb` paths are absent, no earlier `-C dxb` changes tar's working
   directory, so `..` points outside the workspace. Switched both archive roots
   to absolute `$GITHUB_WORKSPACE` paths. This explanation is confirmed by the
-  command's path semantics; verify the fix in the next run.
-- The actual `Build` failure remains unknown. The check-run annotations show
-  only exit codes, while unauthenticated log/artifact downloads return 403/401.
-  No new log archive is present in `~/Загрузки`. Next: obtain the full logs for
-  run `39593432412` from the Actions UI, inspect the preflight and first build
-  error, then rerun and verify a real kernel artifact. No device or partition
-  was accessed.
+  command's path semantics; a local smoke test passed with and without XNU
+  paths.
+- Commit `6aac5e6` was pushed. Run `39593841679` completed at 2026-10-21
+  11:42:07 UTC: `Build` exited 2, while build-tree packaging, KDK inspection
+  and both artifact uploads succeeded. Artifacts remain only 265 bytes
+  (`xnu-buildtree`) and 136 bytes (`xnu-kernel`), so no kernel was produced.
+  Their sizes suggest failure occurred before the XNU source/build tree was
+  staged, but that is not confirmed without the log.
+- The actual `Build` failure and MUNCH preflight result remain unknown. The
+  unauthenticated log/artifact API returns 403/401, no new log archive is
+  present in `~/Загрузки`, and the check-run annotations expose only exit
+  codes. Next: obtain the full logs for run `39593841679` from the Actions UI,
+  inspect the first build error and patch-application output, then fix and
+  rerun. No device or partition was accessed.
 
 ### >>> HANDOFF 2026-10-21: FIRST GITHUB ACTIONS MUNCH BUILD <<<
 
