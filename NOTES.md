@@ -1,5 +1,20 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: TEMPORARY UFS-ENABLED UEFI BOOT
+
+- `fastboot devices` detected one device, serial `7c8c92ae`.
+- Ran only `fastboot boot
+  /tmp/edk2-msm-munch-fork.m185A6/src/boot-munch.img`. Fastboot reported
+  `Sending 'boot.img' (3840 KB) OKAY [0.084s]`, `Booting OKAY [0.231s]`,
+  total `0.316s`. No `fastboot flash`, partition reads/writes, or `userdata`
+  access occurred.
+- Immediately after handoff, `fastboot devices` returned no device and
+  `adb devices -l` listed none. This establishes ABL accepted the temporary
+  boot image only; the UEFI screen and UFS enumeration are not yet confirmed.
+- Wait for the user to report/photograph the current screen before issuing any
+  further reboot or boot command. Next test, if UEFI is interactive: use only
+  read-only enumeration (`map -r`); do not launch installers or write tools.
+
 ### HANDOFF 2026-10-22 00:12 +05: UFS PROFILE RESTORED; DEVICE NOT CONNECTED
 
 - The EDK2 fork `/tmp/edk2-msm-munch-fork.m185A6/src` is on commit `85f4217`
