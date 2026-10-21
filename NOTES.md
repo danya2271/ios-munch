@@ -26,14 +26,15 @@
   and must not be reused for Munch's GENI SE4 SPI wiring.
 - Munch DTS confirms SE4 at `0x00990000`, CS0, maximum 6 MHz, reset GPIO 33,
   interrupt GPIO 39, and L10C/L1C supplies. Linux's `setup_fifo_xfer()`
-  explicitly switches transfers larger than computed FIFO capacity to DMA;
-  therefore the 99-byte frame needs a DMA-capable XNU path or a separately
-  verified protocol-fragmentation design, not an assumed single FIFO write.
-  Existing notes identify GCC SE4 source/branch registers, but do not establish
-  the runtime controller, clock, pinmux, or rail state inherited by the RAM
-  boot chain. Do not probe the controller or alter GPIO, clocks, rails, or
-  reset until a separately gated Munch-only implementation is reviewed; no
-  firmware commands or controller transfers were issued.
+  explicitly selects DMA for transfers larger than computed FIFO capacity.
+  Linux also has PIO IRQ handlers that refill TX and drain RX across FIFO
+  windows; an XNU polling equivalent may avoid DMA, but that is only a design
+  option until command setup, timing, and overflow handling are implemented
+  and tested. Existing notes identify GCC SE4 source/branch registers, but do
+  not establish the runtime controller, clock, pinmux, or rail state inherited
+  by the RAM boot chain. Do not probe the controller or alter GPIO, clocks,
+  rails, or reset until a separately gated Munch-only implementation is
+  reviewed; no firmware commands or controller transfers were issued.
 - Added `xnu/patches/0085-munch-focaltech-report-parser.patch`: it stages a
   pure frame/CRC/contact parser as BSD source but performs no MMIO, GPIO,
   clock, rail, reset, or SPI operation and is not wired to runtime init yet.
@@ -47,11 +48,10 @@
   persistent firmware was accessed. A strict Apple Clang/Xcode/KDK build is
   still unavailable on this Linux host (`xcodebuild` and `xcrun` are absent);
   Docker cannot supply that Apple toolchain by itself.
-- Next: implement Munch's SE4 read transport, independently of UFS and behind
-  explicit opt-in. It must either support DMA for the 99-byte frame (as Linux
-  does when it exceeds computed FIFO capacity) or prove a safe fragmented
-  transaction. Keep phone testing blocked until strict XNU and valid RAM
-  payload gates pass.
+- Next: audit the GENI SPI initialization and clock/pinmux handoff, then
+  implement an explicit-opt-in Munch SE4 transport with bounded polling PIO
+  or DMA. Keep it independent of UFS, and keep phone testing blocked until
+  strict XNU and valid RAM payload gates pass.
 
 ### >>> HANDOFF 2026-10-21: MUNCH SHARED IOKIT PATCH 0084 <<<
 
