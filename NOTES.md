@@ -26,10 +26,24 @@
   patch skip into a short, explicit failure before bootstrap/build time. The
   previous run's `xnu-kernel` artifact contains only KDK-library diagnostics;
   the collection log confirms there was no `kernel.*` output.
-- These changes fix the observed machine-config gate, not the kernel build.
-  They are validated locally but not yet committed or pushed. Push them to
-  trigger another Actions run; inspect the next compile/link result before
-  claiming an XNU artifact. No device or partition was accessed.
+- Committed as `1b6359e` (`fix(ci): apply Munch machine config patch`) and pushed
+  to `origin/main`. Repository validation and `actionlint` both passed before
+  push.
+- Actions run `39592383679` started at 2026-10-21 11:29:56 UTC and failed at
+  11:30:25 UTC. Checkout, build-script fetch and Xcode preparation succeeded;
+  `Build` exited 2. The unauthenticated API does not expose the run log
+  (`403: Must have admin rights to Repository`), so the first build error is
+  still unknown. The new `MUNCH` preflight result is also not visible without
+  that log.
+- Post-failure diagnostics had separate issues: packaging the build tree
+  exited 1, and `xnu-kernel` artifact upload failed because the KDK scan
+  created a literal `lib*.members.txt` when no archives matched. Added a
+  regular-file guard to the KDK scan; verify it in the next run. The
+  `xnu-buildtree` artifact uploaded, but its contents cannot be downloaded
+  without GitHub authentication.
+- Next: inspect run `39592383679` logs from the Actions UI, repair the first
+  actual build error and build-tree packaging failure, then rerun and verify
+  the kernel artifact. No device or partition was accessed.
 
 ### >>> HANDOFF 2026-10-21: FIRST GITHUB ACTIONS MUNCH BUILD <<<
 
