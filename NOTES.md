@@ -49,12 +49,22 @@
   annotations expose only exit codes, not the first build error; it is not yet
   known whether the MUNCH preflight passed.
 - Build-tree packaging listed generated paths unconditionally. They may not
-  exist when the build exits early, so it now adds only existing paths to tar.
-  This is a diagnostic-only workflow change and needs verification in the
-  next run.
-- Next: obtain the full logs for run `39592897886` from the Actions UI, inspect
-  the first actual build error and patch-application output, then rerun and
-  verify a real kernel artifact. No device or partition was accessed.
+  exist when the build exits early, so commit `d194655` changed it to add only
+  existing paths. Run `39593432412` completed at 2026-10-21 11:39:21 UTC with
+  `Build` exit 2 and build-tree packaging exit 1; both artifact uploads pass,
+  but the artifacts are only 171 bytes (`xnu-buildtree`) and 136 bytes
+  (`xnu-kernel`).
+- The tar command still used relative `-C ..` for `sdk-kernel-platform`. If all
+  optional `dxb` paths are absent, no earlier `-C dxb` changes tar's working
+  directory, so `..` points outside the workspace. Switched both archive roots
+  to absolute `$GITHUB_WORKSPACE` paths. This explanation is confirmed by the
+  command's path semantics; verify the fix in the next run.
+- The actual `Build` failure remains unknown. The check-run annotations show
+  only exit codes, while unauthenticated log/artifact downloads return 403/401.
+  No new log archive is present in `~/Загрузки`. Next: obtain the full logs for
+  run `39593432412` from the Actions UI, inspect the preflight and first build
+  error, then rerun and verify a real kernel artifact. No device or partition
+  was accessed.
 
 ### >>> HANDOFF 2026-10-21: FIRST GITHUB ACTIONS MUNCH BUILD <<<
 

@@ -91,11 +91,11 @@ jobs:
             --exclude='kernel.development.*' --exclude='.git'
           )
           for path in build/xnu.obj fakeroot/usr/local/include xnu; do
-            if [ -e "dxb/$path" ]; then
-              tar_args+=(-C dxb "$path")
+            if [ -e "$GITHUB_WORKSPACE/dxb/$path" ]; then
+              tar_args+=(-C "$GITHUB_WORKSPACE/dxb" "$path")
             fi
           done
-          tar_args+=(-C .. sdk-kernel-platform)
+          tar_args+=(-C "$GITHUB_WORKSPACE" sdk-kernel-platform)
           tar czf buildtree.tgz "${tar_args[@]}"
           ls -la buildtree.tgz
 
