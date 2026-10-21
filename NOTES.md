@@ -1,5 +1,29 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-21: FIRST GITHUB ACTIONS MUNCH BUILD <<<
+
+- The user updated the GitHub credential and pushed the branch. Remote `main`
+  now points to `584ccfde4da3ed2f32c9661086cf7751657253e2`; local `main` is in
+  sync with `origin/main`.
+- GitHub Actions run `39589581233` (`xnu`, push event) completed with failure.
+  Job `build` ran on the macOS runner: checkout, pinned build-script fetch, and
+  Xcode/iig preparation all succeeded. The `Build` step ran from 2026-10-21
+  11:07:34 to 11:10:46 UTC and failed with exit code 2. Post-failure buildtree
+  and kernel-diagnostics artifact upload steps succeeded.
+- The unauthenticated public API exposes step status and annotations but denies
+  run-log download (`403: Must have admin rights to Repository`); no usable
+  GitHub CLI credential is available in this shell. Therefore the exact make
+  compiler/linker error is not yet observed. Annotation also warns that the
+  Node 20 actions are forced onto Node 24; the checkout and artifact actions
+  themselves completed successfully, so this is not yet linked to the build
+  failure.
+- Artifacts `xnu-buildtree` and `xnu-kernel` are present and not expired, but
+  downloading them via the public API requires authentication. Next: inspect
+  the failed `Build` step's logs in Actions (run `39589581233`) or provide an
+  authorized read token/artifact; fix only the concrete first build error,
+  rerun, then validate the kernel artifact offline. No device or partition
+  was accessed.
+
 ### >>> HANDOFF 2026-10-21: GITHUB ACTIONS WORKFLOW RESTORED <<<
 
 - Diagnosed the earlier GitHub error: it was a `git push` rejection because
