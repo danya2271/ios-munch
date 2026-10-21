@@ -1,5 +1,26 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-21: MUNCH SHARED IOKIT PATCH 0084 <<<
+
+- Regenerated `xnu/patches/0084-munch-shared-iokit-services.patch` from the
+  exact post-`0083` XNU sources; the former draft had stale hunks and matched
+  the wrong `sweet,display` personality.
+- `MUNCH` now compiles the shared AppleKeyStore, IOWatchdog, IOSurface and
+  framebuffer implementations, publishes the two shared HID services, and
+  matches the display node as `munch,display`. Donor MMIO/UFS/PMIC/touch/USB
+  drivers remain SWEET-only and are not enabled by this patch.
+- The patch applies cleanly to the diagnostic post-`0083` tree and reverse
+  checks cleanly after application. `python3 tools/validate-repo.py` passes
+  with 84 contiguous patches; `git diff --check` passes.
+- Host syntax checks pass for `SweetKeyStore.cpp`, `SweetWatchdog.cpp`,
+  `SweetSurface.cpp`, `SweetFramebuffer.cpp` and `KernelConfigTables.cpp`
+  under the MUNCH flags. A standalone `serial_console.c` check is blocked by
+  the existing incomplete Linux include staging (`cpumap_t`, `mpqueue_head_t`
+  and related machine declarations), not by the new guard diff.
+- No ADB, fastboot, device, `userdata`, `dtbo` or persistent firmware action
+  occurred. Changes are committed as `87a878b`; the next gate is a strict
+  Apple Clang/Xcode/KDK build before any RAM-only phone boot.
+
 ### >>> HANDOFF 2026-10-21: LOCAL XNU MACH-O LINK GATE <<<
 
 - No ADB, fastboot, device command, partition access, `userdata` access,
