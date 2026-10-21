@@ -1,5 +1,126 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-21: DEVICE STORAGE CHANGED; PAUSE WRITES
+
+- The user clarified that `/home/danya2271/Загрузки/recovery.img` is OrangeFox
+  and was started with temporary `fastboot boot`, not flashed. ADB currently
+  reports the POCO F4 (`munch`) in recovery. The live read-only check found
+  `/data` mounted read-write as F2FS from `/dev/block/dm-5`.
+- A read-only `sgdisk --print/--verify /dev/block/sda` check reports no GPT
+  problems and 1 free 4-KiB sector. Partition 34 `userdata` is now sectors
+  `2949120-54540282` (196.8 GiB); partition 35 `iosroot` is sectors
+  `54540284-61880314` (28.0 GiB). The GPT was changed; do not describe it as
+  untouched.
+- In the previous session, `userdata` was formatted as F2FS with recovery's
+  `make_f2fs`; its output reported discarding 201,527 MB. Treat the old
+  filesystem and Android user data as destroyed. `iosroot` was also formatted
+  as F2FS; it is not an iOS HFS+ root and no iOS root has booted on-device.
+- The host directory
+  `/home/danya2271/Загрузки/ios-munch-userdata-backup-20261021` contains six
+  checksum-verified tar archives for selected shared-storage folders only:
+  `DCIM`, `Pictures`, `Android`, `Movies`, `vkmusic`, and `Download`. They do
+  not contain app-private data, Android app state, encryption keys, or a full
+  userdata image. Copies and extracted staging trees were also observed under
+  `/data/restore`; preserve them and the host archives. Do not claim Android
+  data has been fully backed up or restored.
+- `sda.gpt.backup` in that host directory is zero bytes and invalid. The
+  `sda.gpt.print*` files are text reports, not binary GPT restore backups.
+- Do not format, repartition, restore, or otherwise write to the device now.
+  Keep OrangeFox available and preserve `/data/restore`. The user asked to be
+  notified before booting Android to check data and configure screen locking.
+  Do not ask them to boot Android or set a lock yet; first establish a reviewed
+  plan for the partial archives and current `userdata` state, then notify them
+  before that checkpoint. Booting Android will not recover the old userdata.
+
+### HANDOFF 2026-10-21: QEMU USERSPACE PASSED; RAM ROOT TOO LARGE
+
+- `munch-init` QEMU test used the successful MUNCH kernel from Actions run
+  `39597312881`, a temporary QEMU-compatible ADT copy (Munch identity retained,
+  GIC addresses adjusted), and `rd=md0`. It ran for 150 seconds with
+  `no_panic_observed`, zero unknown glyphs, and regular PID 1
+  `MUNCH init: still alive` output. This validates kernel execution, RAM root
+  selection, Mach-O userspace execution, syscalls, `/dev/console`, timers, and
+  basic Munch ADT handoff. It does not prove hardware boot.
+- Kernel artifact:
+  `/tmp/ios-munch-artifacts-39597312881/kernel/kernel.development.munch`,
+  17,182,480-byte ARM64 Mach-O, SHA-256
+  `10a5fa286959a72934a86f71417b6809b619ef56ecae4dbe489663e6a3c597f1`.
+- Local userspace test executable and payload:
+  `/tmp/ios-munch-userspace-39597312881/munch-init.macho` and
+  `/tmp/ios-munch-userspace-39597312881/munch-init.payload.bin`.
+- Extracted official iPhone X iOS 16.7.16 build `20H392` to
+  `/home/danya2271/Загрузки/ios-munch-20H392`. Verified OS, SystemOS, AppOS and
+  DeviceTree CRCs; extracted `/home/danya2271/Загрузки/ios-munch-20H392/d22ap.adt`.
+- Built a local 16-GiB HFS+ root at
+  `/home/danya2271/Загрузки/ios-munch-20H392/ios16-root-20H392.img`, populated
+  from the OS/SystemOS/AppOS DMGs, applied `tools/munch-root-tweaks.py`, and
+  repaired it with `fsck.hfsplus -fy`. Its SHA-256 is
+  `382834b6c90cecf51bf146f1947194313c52681e61f1c8d025a10eb2817ec06e`.
+- Packing that root with `tools/mkpayload.py --ramdisk ... rd=md0` fails:
+  `ValueError: RAM disk exceeds the ADT memory window (0xfcc00000 bytes)`.
+  Current payload layout embeds the full image, so a full iOS root cannot fit.
+  Next concrete step is building a minimized root containing only the files
+  needed by launchd, testing it in QEMU first, and only later considering
+  demand paging or UFS. Do not boot a full-root image on the phone.
+
+### >>> HANDOFF 2026-10-21: FIRST MUNCH XNU FASTBOOT BOOT DISPATCHED <<<
+
+- The user-provided `/home/danya2271/Загрузки/logs_107299279209.zip` is run
+  `39594751289`, not the later successful run. It confirms patches 0083-0085
+  applied and XNU reached the final link; that attempt failed on the two SWEET-
+  only symbols `_sweet_crash_log` and `_sweet_sample_task`. Patch 0086 enables
+  their shared implementations for MUNCH.
+- GitHub API metadata confirms run `39597312881` (run 7), commit
+  `a8fa0eefb3f99953a12f456010370f6fb2872b69`, completed successfully on
+  2026-10-21 at 12:17:30 UTC. Its `xnu-kernel` artifact is ID `12345680427`,
+  59,790,641 bytes, digest
+  `sha256:6e296eda39716699404081a14a139b94a3f4eb847c682a995eb14348e346a844`;
+  `xnu-buildtree` is ID `12345820245`, 23,181,143 bytes, digest
+  `sha256:0cd3ef303ec382a7f6cb17174bfa0c578d53b86fe2fae2628a0e7a3c8f49b1ad`.
+  CI success plus the full kernel artifact confirms XNU compiled and linked.
+- The user supplied `/home/danya2271/Загрузки/xnu-kernel.zip` and
+  `/home/danya2271/Загрузки/xnu-buildtree.zip`. Their SHA-256 digests match
+  GitHub's artifact metadata. The kernel archive's internal checksum passes;
+  `kernel.development.munch` is a 17,182,480-byte Mach-O 64-bit ARM64
+  executable with SHA-256
+  `10a5fa286959a72934a86f71417b6809b619ef56ecae4dbe489663e6a3c597f1`.
+  Extracted artifacts are under `/tmp/ios-munch-artifacts-39597312881/`.
+- Packed the kernel with `tools/mkpayload.py`, using a generated RAM-only
+  Munch ADT with candidate DRAM `[0x100000000, 0x1fcc00000)`, no UFS node,
+  no root disk, and `debug=0xc serial=3 cpus=1 keepsyms=1 -noprogress`.
+  Payload SHA-256 is
+  `a9c82935dd0fe5252b5fb2af7e46b099a98b0b7a33170778174923941674bbbf`.
+  The memory candidate passes the shim's host FDT-range check against the
+  saved Munch Linux FDT; this does not establish the runtime fastboot/UEFI map.
+- QEMU with the original Munch GIC addresses predictably panicked because its
+  `virt` GIC is at different addresses. Repacking only a temporary ADT copy
+  with QEMU's GIC addresses kept the Munch identity and PPI; the 35-second run
+  had no visible panic and logged CPU/GIC initialization, platform expert,
+  AppleCLCD and HFS registration, then waited for an Apple_HFS root device.
+  This is expected without a root disk and does not prove hardware boot.
+- Built a separate test image under
+  `/tmp/ios-munch-test-39597312881/`, leaving the repository's `shim/out`
+  untouched. It is 17,543,168 bytes, Android boot header v2, SHA-256
+  `75e5ab2308854e6c49d86061b0f21e0ba3ca18b36b1e96bcc5abce1b7655db21`.
+  Unpacking verified the ramdisk equals the XNU payload and the embedded DTB
+  equals the saved live FDT.
+- Before boot, verified the external non-userdata backup read-only: all 116
+  SHA-256 entries pass, manifest and partition names match exactly, and no
+  `userdata` entry exists. This is the required backup preflight result, not
+  permission to write any partition.
+- Before boot, re-verified the external non-userdata backup: 116/116
+  SHA-256 entries pass, manifest and partition names match exactly, and no
+  `userdata` entry exists.
+- The user approved testing. `adb reboot bootloader` moved the Munch device to
+  fastboot; `fastboot boot
+  /tmp/ios-munch-test-39597312881/shim/out/shim-boot.img` returned `Sending`
+  OKAY (17,132 KB) and `Booting` OKAY. This confirms only ABL acceptance; the
+  on-screen shim/XNU result is not yet observed. No more device commands have
+  been issued; wait for the user to report or photograph the screen.
+- No `fastboot flash`, partition operation, or `userdata` read/write occurred.
+  The payload has no RAM root disk and its Apple Device Tree omits UFS. Keep all
+  subsequent device tests temporary `fastboot boot` only.
+
 ### >>> HANDOFF 2026-10-21: FIXED MUNCH MACHINE-CONFIG PATCH APPLY <<<
 
 - Inspected the user-provided Actions log archive

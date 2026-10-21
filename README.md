@@ -2,7 +2,7 @@
 
 **An experimental iOS 16 port targeting the POCO F4 (`munch`).**
 
-> **Port status:** `munch` (POCO F4, SM8250 / Snapdragon 870) is the target device. `sweet` (Redmi Note 10 Pro, SM7150 / Snapdragon 732G) is the upstream donor platform whose working XNU port is being used as a reference. Patch `0083` now adds an isolated `MUNCH` machine-config target for plain-arm64, RAM-root and single-CPU bring-up; it has not yet been built by CI or booted on the POCO F4. Donor touch, PMIC, UFS and watchdog paths remain SWEET-only. Do not use the inherited storage/boot steps on a POCO F4.
+> **Port status:** `munch` (POCO F4, SM8250 / Snapdragon 870) is the target device. `sweet` (Redmi Note 10 Pro, SM7150 / Snapdragon 732G) is the upstream donor platform whose working XNU port is being used as a reference. XNU for the isolated plain-arm64 `MUNCH` target built successfully in Actions run `39597312881`. A RAM-only diagnostic image was accepted by `fastboot boot` on 2026-10-21, but no successful Munch XNU boot is confirmed. The phone is currently in OrangeFox Recovery, temporarily booted with `fastboot boot`. During the 2026-10-21 storage test, the GPT was changed, `userdata` was reformatted as F2FS, and a 28-GiB `iosroot` partition was created and formatted as F2FS. Only selected shared-storage folders have partial archives; there is no full userdata backup. Do not use inherited storage/boot steps or perform further device writes; see `NOTES.md` for the handoff. Donor touch, PMIC, UFS and watchdog paths remain SWEET-only.
 
 The inherited `sweet` bring-up baseline boots Apple's open-source XNU kernel (xnu-8796, the iOS 16 generation) with the **unmodified iOS 16.7.16 (20H392) userland of the iPhone X**: launchd, the system daemons, backboardd, SpringBoard and stock apps. As of **2026-10-18**, that Redmi Note 10 Pro baseline reaches the iOS home screen, supports touch, hardware buttons, and home/app-switcher gestures. Rendering runs entirely on the CPU; there is no GPU driver. These results have not been reproduced on `munch`.
 
@@ -15,7 +15,7 @@ The inherited `sweet` bring-up baseline boots Apple's open-source XNU kernel (xn
 | Boot | Stock Xiaomi bootloader → `fastboot boot` of our shim → XNU. Nothing is flashed to the boot partitions |
 | CPU | All 8 cores (six Cortex-A55s and two Cortex-A76s) via PSCI, 16K pages, GICv3 interrupts, timers |
 | Memory | About 3.95 GiB of the upper DDR bank |
-| Storage | SWEET baseline uses a UFS root; Munch testing is planned for RAM only and has not booted |
+| Storage | SWEET baseline uses a UFS root; Munch bring-up is RAM-only and has no root volume yet |
 | iOS userland | Real iPhone X 16.7.16 root filesystem and shared cache; launchd and the system daemons run |
 | Display | Kernel IOSurface + IOMobileFramebuffer (`AppleCLCD`) services; CoreAnimation renders in software; frames are copied into the bootloader's framebuffer. Presented to iOS as an iPhone X panel (1125×2436) |
 | GUI | backboardd, SpringBoard, lock screen, home screen, Control Center, notification center, Settings |
@@ -44,17 +44,17 @@ ABL (stock Xiaomi bootloader, unlocked)
               -> iOS userspace, if a RAM-sized root can be prepared
 ```
 
-This is a target design, not a validated Munch boot path. No runtime UEFI memory map, Munch XNU build, or Munch device boot is available yet. No iOS root image is present locally. The inherited root builder defaults to a 16-GB raw HFS+ image, and the current payload format embeds the entire uncompressed image in RAM; that image cannot fit the source-derived 4-GB candidate window. A RAM-sized or demand-paged root design remains unresolved. For the current phase, do not read, back up, mount, or write `userdata`. UFS may be evaluated in a later phase with a separately reviewed storage plan.
+This remains an unvalidated Munch OS boot path. MUNCH XNU has completed CI, and a minimal RAM userspace has run for 150 seconds in QEMU without panic. No full-root userspace boot is available yet. A local iPhone X 16.7.16 root image is present, but the current payload format embeds the entire uncompressed image in RAM; that root exceeds the candidate memory window. A RAM-sized root, demand-paged root, or later UFS-root design remains unresolved. Device storage has already been modified: the original `userdata` filesystem was reformatted, and only selected shared-storage folders have archives. Do not perform additional userdata or partition writes until a recovery plan is reviewed.
 
 ## How to do it yourself
 
 > These steps document offline preparation for Munch RAM-only bring-up. They do not install anything and do not read, back up, mount, or write `userdata`.
 
-The inherited Redmi Note 10 Pro (`sweet`) workflow used a destructive UFS root and is retained only as historical reference. Do not apply those storage steps to Munch. Bootloaders, recovery, modem, persist, GPT and `userdata` remain untouched.
+The inherited Redmi Note 10 Pro (`sweet`) workflow used a destructive UFS root and is retained only as historical reference. Do not apply those storage steps to Munch. Bootloader, modem, and persist partitions were not intentionally changed; the GPT and `userdata` were changed during the 2026-10-21 storage test. OrangeFox was temporarily booted and was not flashed.
 
 ### 0. Preserve non-userdata state
 
-Keep the existing non-userdata backups outside git. Do not create a `userdata` backup and do not dump it for this workflow. The shim's first device test is allowed only as a temporary `fastboot boot` image after the runtime UEFI memory map is verified.
+Keep the existing non-userdata backups and the six partial shared-storage archives outside git. They are not a full `userdata` backup. Do not dump or write `userdata` for this RAM-only workflow. The shim's first device test is allowed only as a temporary `fastboot boot` image after the runtime UEFI memory map is verified.
 
 The shim needs the stock DTB. Unpack your phone's stock `boot.img`:
 
@@ -68,7 +68,7 @@ For a read-only live-DTB build without storing the dump in the repository, set
 
 ### 1. Build the kernel
 
-The XNU workflow builds either the inherited `SWEET` reference or the new isolated `MUNCH` target on GitHub's macOS runners with [blacktop/darwin-xnu-build](https://github.com/blacktop/darwin-xnu-build). It fetches xnu-8796, applies the patch series in order, and stages the pinned open-source libpthread, HFS and BearSSL sources. `MUNCH` has not yet completed a CI build. Fork the repo (public repos get free macOS minutes) and run:
+The XNU workflow builds either the inherited `SWEET` reference or the isolated `MUNCH` target on GitHub's macOS runners with [blacktop/darwin-xnu-build](https://github.com/blacktop/darwin-xnu-build). It fetches xnu-8796, applies the patch series in order, and stages the pinned open-source libpthread, HFS and BearSSL sources. MUNCH kernel build run `39597312881` succeeded; its artifact is available from that Actions run. To start another build:
 
 ```sh
 gh workflow run xnu.yml -R YOU/ios-munch
@@ -106,14 +106,14 @@ ipsw img4 im4p extract research/ipsw-x/dt/Firmware/all_flash/DeviceTree.d22ap.im
 
 ### 3. Munch RAM boot status
 
-The `MUNCH` kernel target now has a reproducible CI invocation, but no MUNCH
-kernel artifact or device boot result exists yet. Do not substitute the SWEET
-kernel or the source-derived 4–8 GiB memory candidate: the XNU platform
-handoff and memory map are unverified for this phone. A device test remains
-blocked until CI produces the MUNCH kernel, the runtime UEFI/ABL map is
-resolved, and a root image that fits the available RAM is established. Any
-eventual device test in this phase must use `rd=md0`, omit UFS from the ADT,
-start with `cpus=1`, and use temporary `fastboot boot` only.
+The `MUNCH` kernel artifact from Actions run `39597312881` has been packed into
+a diagnostic, RAM-only image and sent through temporary `fastboot boot` on
+2026-10-21. ABL accepted the image, but a successful XNU boot is not confirmed.
+The QEMU run reached CPU/GIC setup, platform registration and AppleCLCD, then
+waited for an HFS root device because this diagnostic intentionally contains no
+root disk. A future payload with a RAM root must use `rd=md0` and omit UFS from
+the ADT; start with `cpus=1`. Never flash this image. No further `userdata`
+or partition writes are allowed until the current storage state is reviewed.
 
 The following SWEET-only boot arguments are historical reference, not a Munch
 recipe:
@@ -130,9 +130,9 @@ recipe:
 
 ### 4. Device testing boundary
 
-When the prerequisites above are met, device tests are limited to a temporary
-`fastboot boot` image. Do not flash partitions or access `userdata` during this
-RAM-only phase. The 4–5 minute boot-to-lock-screen result refers to SWEET only.
+Device tests are limited to temporary `fastboot boot` images. Do not flash
+partitions or access `userdata` during this RAM-only phase. The 4–5 minute
+boot-to-lock-screen result refers to SWEET only.
 
 ### 5. Read offline logs
 
