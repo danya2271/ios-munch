@@ -1,5 +1,30 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-21: GITHUB ACTIONS WORKFLOW RESTORED <<<
+
+- Diagnosed the earlier GitHub error: it was a `git push` rejection because
+  the stored Personal Access Token lacked permission to create/update workflow
+  files, not a failing Actions build. Public GitHub API currently reports zero
+  enabled workflows and zero workflow runs; `.github/workflows/xnu.yml` had
+  been removed from the remote default branch.
+- Restored `.github/workflows/xnu.yml` as an XNU build triggered by XNU patch
+  or workflow pushes, with manual dispatch also available. The default machine
+  config is `MUNCH`; `SWEET` remains selectable for reference. It fetches the
+  pinned `darwin-xnu-build` revision, applies the checked-in XNU patch series,
+  builds on macOS, and uploads kernel/build-tree diagnostics. Permissions are
+  limited to `contents: read`.
+- The runner is `macos-14` because the build needs Xcode 15 `iig` for the
+  xnu-8796 IORPC ABI. GitHub currently schedules retirement of macOS 14 on
+  November 2, 2026, so this runner choice is temporary and should be used for
+  this test before that date.
+- This checkout has no `gh` CLI and the configured push token previously
+  lacked the workflow-file permission. The workflow has not been pushed or
+  dispatched yet. Update the credential to include classic PAT `workflow`
+  scope or use a fine-grained token with repository Workflows write permission;
+  then pushing this workflow and the pending XNU patches should start the run.
+- No device or partition was accessed. No kernel or boot image is claimed as
+  produced until the hosted job completes and its artifact passes local gates.
+
 ### >>> HANDOFF 2026-10-21: LINUX XNU BUILD RESULT <<<
 
 - Answer: XNU C/C++ sources can be cross-compiled on this Linux host, but the
