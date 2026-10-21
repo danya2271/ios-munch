@@ -17,11 +17,14 @@
   xnu-8796 IORPC ABI. GitHub currently schedules retirement of macOS 14 on
   November 2, 2026, so this runner choice is temporary and should be used for
   this test before that date.
-- This checkout has no `gh` CLI and the configured push token previously
-  lacked the workflow-file permission. The workflow has not been pushed or
-  dispatched yet. Update the credential to include classic PAT `workflow`
-  scope or use a fine-grained token with repository Workflows write permission;
-  then pushing this workflow and the pending XNU patches should start the run.
+- The workflow and this handoff are committed locally as `41a621a`; the branch
+  is six commits ahead of `origin/main`. `git push origin main` was attempted
+  and rejected with GitHub's exact message: `refusing to allow a Personal
+  Access Token to create or update workflow '.github/workflows/xnu.yml'
+  without 'workflow' scope`. The remote branch is unchanged, so no Actions run
+  has started. Update the credential with classic PAT `workflow` scope (or use
+  a fine-grained token with repository Workflows write permission), then push
+  the branch to trigger the MUNCH build.
 - No device or partition was accessed. No kernel or boot image is claimed as
   produced until the hosted job completes and its artifact passes local gates.
 
