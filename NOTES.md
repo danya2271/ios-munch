@@ -1,5 +1,49 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-21: MUNCH FOCALTECH SPI PROTOCOL RE-AUDIT <<<
+
+- Re-checked the exact local Munch sources under
+  `/home/danya2271/xiaomi_sm8250_kernel/`. The earlier 71-byte transaction
+  estimate is wrong for the active `focaltech_3658u` driver: normal report
+  reads request 90 response bytes (`FTS_TOUCH_DATA_LEN +
+  FTS_GESTURE_DATA_LEN - 1`), so the complete SPI transaction is 99 bytes:
+  4-byte command header + 3 dummy bytes + 90 response bytes + 2 CRC bytes.
+- The controller read is command `0x01`, read/CRC control `0xa0`, length
+  `0x005a`; Linux accepts status when `(rx[3] & 0xa0) == 0`, then validates
+  CRC-16/Kermit over the 90 response bytes with init `0xffff`, reflected
+  polynomial `0x8408`, and little-endian CRC bytes. Touch data occupies the
+  first 62 response bytes; 28 gesture bytes follow. The `0x01` marker in
+  `FTS_TOUCH_DATA_LEN` is not part of the returned payload.
+- Contact parsing in the Linux driver uses report byte 1 for point count,
+  ten 6-byte slots starting at report byte 2, and packs 16-bit X/Y values
+  across the coordinate and pressure nibbles. Linux scales values by `10/16`
+  into the DTS extent `10800x24000`; the existing XNU HID service takes panel
+  pixels (`1080x2400`), so a Munch parser must normalize to those pixels.
+- Confirmed the existing `sweet_touch_init()` is reached only from
+  `sweet_ufs_init()` in the SWEET UFS-root path. Munch RAM-root cannot depend
+  on that path; a future Munch driver needs an independent init hook. The
+  existing SWEET touch implementation targets a different SE/I²C controller
+  and must not be reused for Munch's GENI SE4 SPI wiring.
+- Munch DTS confirms SE4 at `0x00990000`, CS0, maximum 6 MHz, reset GPIO 33,
+  interrupt GPIO 39, and L10C/L1C supplies. Linux's `setup_fifo_xfer()`
+  explicitly switches transfers larger than computed FIFO capacity to DMA;
+  therefore the 99-byte frame needs a DMA-capable XNU path or a separately
+  verified protocol-fragmentation design, not an assumed single FIFO write.
+  Existing notes identify GCC SE4 source/branch registers, but do not establish
+  the runtime controller, clock, pinmux, or rail state inherited by the RAM
+  boot chain. Do not probe the controller or alter GPIO, clocks, rails, or
+  reset until a separately gated Munch-only implementation is reviewed; no
+  firmware commands or controller transfers were issued.
+- This is a source audit only: no repository source patch was added, no ADB or
+  fastboot command was run, and no partition, `userdata`, `dtbo`, or persistent
+  firmware was accessed. The existing strict Apple Clang/Xcode/KDK build gate
+  remains unresolved; this Linux host has neither `xcodebuild` nor `xcrun`,
+  and Docker cannot supply the missing Apple toolchain by itself.
+- Next: implement and host-check a standalone Munch report/CRC parser first,
+  then add the SE4 transport behind an explicit opt-in and independent of UFS.
+  Keep phone testing blocked until a strict kernel and valid RAM payload pass
+  the existing build gates.
+
 ### >>> HANDOFF 2026-10-21: MUNCH SHARED IOKIT PATCH 0084 <<<
 
 - Regenerated `xnu/patches/0084-munch-shared-iokit-services.patch` from the
