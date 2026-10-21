@@ -131,6 +131,9 @@ def validate_munch_build_plumbing():
         '0083-munch-machine-config.patch': [
             'ifeq ($(filter SWEET MUNCH,$(CURRENT_MACHINE_CONFIG)),)',
         ],
+        '0086-munch-shared-exception-diagnostics.patch': [
+            '+#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_MUNCH)',
+        ],
         '0019-munch-builtin-pthread.patch': [
             'ifneq ($(filter SWEET MUNCH,$(CURRENT_MACHINE_CONFIG)),)',
         ],

@@ -1,0 +1,20 @@
+diff --git a/osfmk/kern/exception.c b/osfmk/kern/exception.c
+--- a/osfmk/kern/exception.c
++++ b/osfmk/kern/exception.c
+@@ -820,7 +820,7 @@
+ #endif /* __has_feature(ptrauth_calls) */
+ 	return exception_triage_thread(exception, code, codeCnt, thread);
+ }
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_MUNCH)
+ #include <vm/vm_shared_region.h>
+ #include <arm/thread.h>
+@@ -1040,6 +1040,6 @@
+ 	task_unlock(task);
+ }
+ 
+-#endif /* ARM64_BOARD_CONFIG_SWEET */
++#endif /* ARM64_BOARD_CONFIG_SWEET || ARM64_BOARD_CONFIG_MUNCH */
+ 
+ kern_return_t

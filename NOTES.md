@@ -74,10 +74,23 @@
   invalid script.
 - Replaced the injection with an `awk` transformation and added `bash -n`
   immediately after rewriting the fetched build script. A local simulation
-  of the generated insertion passes `bash -n`. Next: validate the workflow,
-  push the fix, and confirm the `Fetch build script` step passes syntax check
-  before interpreting the next build result. No device or partition was
-  accessed.
+  of the generated insertion passes `bash -n`. Commit `8bf6718` was pushed.
+- The user supplied `/home/danya2271/Загрузки/logs_107299279209.zip` for run
+  `39594751289`. Patches `0083`, `0084` and `0085` applied; XNU compiled as
+  `DEVELOPMENT_ARM64_MUNCH` and reached the final kernel link. The linker
+  failed only on `_sweet_crash_log` (referenced by `proc_prepareexit`) and
+  `_sweet_sample_task` (referenced by `sweet_sample_proc`). There was no
+  kernel artifact; post-build diagnostic uploads succeeded.
+- Root cause: patch `0083` enables the MUNCH caller in `bsd/kern/kern_exit.c`,
+  and patch `0054` compiles `bsd/dev/sweet_sample.c`, but the shared
+  implementations of both functions in `osfmk/kern/exception.c` remain inside
+  `#if defined(ARM64_BOARD_CONFIG_SWEET)`. MUNCH therefore compiles both
+  callers while excluding their definitions.
+- Added `0086-munch-shared-exception-diagnostics.patch` to include MUNCH in
+  that implementation guard, and added a repository-validator assertion for
+  the guard. The patch applies to the replayed post-0085 XNU tree. Next: run
+  repository checks, push, and verify that the next CI link resolves both
+  symbols. No device or partition was accessed.
 
 ### >>> HANDOFF 2026-10-21: FIRST GITHUB ACTIONS MUNCH BUILD <<<
 
