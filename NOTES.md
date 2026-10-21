@@ -1,5 +1,36 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-21: FIXED MUNCH MACHINE-CONFIG PATCH APPLY <<<
+
+- Inspected the user-provided Actions log archive
+  `/home/danya2271/Загрузки/logs_107285093280.zip` for run `39589581233`.
+  Xcode setup used Xcode 15.0.1 / macOS SDK 14.0 successfully. Build then
+  stopped at `xnu/makedefs/MakeInc.kernel:22` with
+  `Unsupported CURRENT_MACHINE_CONFIG MUNCH`.
+- The cause was upstream of compilation: the build helper warned and skipped
+  patch `0083-munch-machine-config.patch` because its `bsd/vm/vm_unix.c` hunk
+  expected a SWEET-only conditional. Patch `0070-munch-pid-hibernate.patch`
+  had already changed that conditional to SWEET-or-MUNCH, making the hunk a
+  stale duplicate. Since `git apply` rejected patch 0083 atomically, the
+  required MUNCH machine config was never registered; patch 0084 was then also
+  skipped because its source context depended on 0083.
+- Removed only the redundant `vm_unix.c` file diff from patch 0083. Replayed
+  patches 0001-0085 in order on a clean Apple XNU `xnu-8796.141.3` checkout
+  (commit `1b191cb58250d0705d8a51287127505aa4bc0789`) after staging the same
+  pinned libpthread, BearSSL and HFS sources used by CI. All 85 patches now
+  apply. The staging scripts' final SDK-header copy could not run on Linux
+  because `xcrun` is absent; the vendor sources were staged before those steps,
+  which was sufficient to verify patch applicability only.
+- Added a workflow preflight after patch application that checks both the
+  `MakeInc.def` MUNCH registration and `MUNCH.h`; this turns a future silent
+  patch skip into a short, explicit failure before bootstrap/build time. The
+  previous run's `xnu-kernel` artifact contains only KDK-library diagnostics;
+  the collection log confirms there was no `kernel.*` output.
+- These changes fix the observed machine-config gate, not the kernel build.
+  They are validated locally but not yet committed or pushed. Push them to
+  trigger another Actions run; inspect the next compile/link result before
+  claiming an XNU artifact. No device or partition was accessed.
+
 ### >>> HANDOFF 2026-10-21: FIRST GITHUB ACTIONS MUNCH BUILD <<<
 
 - The user updated the GitHub credential and pushed the branch. Remote `main`

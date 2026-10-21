@@ -276,19 +276,6 @@ index b975a24..0478018 100644
  		/*
  		 * SWEET has no data volume: /private/var lives on the root, so
  		 * boot-arg rootrw=1 mounts it read-write from the start.
-diff --git a/bsd/vm/vm_unix.c b/bsd/vm/vm_unix.c
-index 636bd3d..6ef79c7 100644
---- a/bsd/vm/vm_unix.c
-+++ b/bsd/vm/vm_unix.c
-@@ -1755,7 +1755,7 @@ out:
- 	return error;
- }
- 
--#if !XNU_TARGET_OS_OSX || defined(ARM64_BOARD_CONFIG_SWEET)
-+#if !XNU_TARGET_OS_OSX || defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_MUNCH)
- /*
-  * SWEET runs the iOS userland on the macOS config: SpringBoard calls
-  * pid_hibernate when an app leaves the foreground, and nosys (SIGSYS)
 diff --git a/config/MASTER.arm64.munch b/config/MASTER.arm64.munch
 new file mode 100644
 index 0000000..6c25122
