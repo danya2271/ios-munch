@@ -1,5 +1,36 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### >>> HANDOFF 2026-10-21: LINUX XNU BUILD RESULT <<<
+
+- Answer: XNU C/C++ sources can be cross-compiled on this Linux host, but the
+  current MUNCH kernel cannot be completed into a valid bootable image here.
+  The upstream XNU README requires an SDKROOT (its examples use a macOS SDK);
+  this host has LLVM/LLD but no `xcodebuild`, `xcrun`, Apple SDK/KDK, or Apple
+  kernel support libraries.
+- Re-audited the previous temporary Linux smoke build under
+  `/tmp/ios-munch-local-build-20261021`. It contains 934 arm64 object files
+  (~90.8 MB) and a 12,438,432-byte Mach-O link artifact with SHA-256
+  `a5df6330d91d0d08e55e5c00466fad03754cbea25810c8ace191d298135e8750`.
+  This was made from the temporary diagnostic staging tree, before patch
+  `0085`; it is evidence of partial source compilation only, not a build of
+  the latest complete patch series.
+- Strict `ld64.lld` linking fails because `libcc_kext` and `libfirehose_kernel`
+  are unavailable and Apple platform/IOKit symbols are unresolved. A prior
+  relaxed link generated the Mach-O only by suppressing these errors;
+  `llvm-nm -u` reports 3,089 undefined-symbol entries. Re-running
+  `tools/mkpayload.py` rejects it with `kernel has binds; only rebases are
+  supported`. Do not pass this artifact to the shim or `fastboot boot`.
+- No source workaround, stub library, or linker relaxation was added to the
+  repository: that would conceal unresolved runtime dependencies, not produce
+  a usable kernel. Docker would not supply the missing Apple SDK/KDK, `iig`, or
+  Apple support libraries. A valid MUNCH XNU artifact still needs an Apple
+  build environment (or equivalent complete Apple build inputs).
+- No ADB/fastboot or device command ran; no partition, `userdata`, `dtbo`, or
+  persistent firmware was touched. All diagnostic artifacts remain under
+  `/tmp`; no workflow or CI build was added. Next: obtain/prepare a genuine
+  Apple XNU build environment, then build and validate the latest patch series
+  before any RAM-only device test.
+
 ### >>> HANDOFF 2026-10-21: MUNCH FOCALTECH SPI PROTOCOL RE-AUDIT <<<
 
 - Re-checked the exact local Munch sources under
