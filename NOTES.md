@@ -1,41 +1,52 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
-### HANDOFF 2026-10-21: LIVE FDT READY; REBUILD PLATFORM MATCHER
+### HANDOFF 2026-10-21 23:43 +05: RUN 8 RAM-ONLY PID 1 TEST
 
-- The handset is currently booted into Android (`munch`, build fingerprint
-  `POCO/munch_global/munch:13/RKQ1.211001.001/V816.0.9.0.ULMMIXM:user/release-keys`).
-  KernelSU ADB root is confirmed (`uid=0`). No device storage was accessed.
-- Captured the live `/sys/firmware/fdt` read-only to
-  `/tmp/munch-live-20261021-current.dtb` (812,778 bytes; kept outside Git).
-  It identifies `Qualcomm Technologies, Inc. xiaomi munch`, reports RAM at
-  `0x80000000+0x3bb00000` and `0xc0000000+0x1c0000000`, GICD/GICR at
-  `0x17a00000`/`0x17a60000`, and virtual timer PPI 11 / INTID 27.
-- The shim host preflight against this live FDT accepts the proposed XNU RAM
-  window `[0x100000000,0x200000000)`. This validates the captured Android FDT
-  only; the temporary ABL fastboot handoff must pass its own runtime check.
-- The existing Actions kernel is not ready for the D22AP-first ADT: a Munch
-  QEMU run reached `Unable to find driver for this platform: "D22AP"`.
-  The working tree already contains a local matcher change to D22AP and its
-  validator assertion; `python3 tools/validate-repo.py` and `git diff --check`
-  pass. These edits still need a new kernel build.
-- A 3-GiB minimized HFS root exists at
-  `/tmp/ios-munch-minroot-39597312881/minroot.img`; the earlier 16-GiB full
-  root does not fit the RAM window. The latest saved root-owned/csdisable QEMU
-  capture reports no panic through SpringBoard startup, though SpringBoard
-  crashes with SIGSEGV. Do not treat that as a hardware or usable-UI result.
-- Read-only `fsck_hfs -fn` found the 3-GiB image is truncated: its HFS+ header
-  still declares 4,194,304 allocation blocks (16 GiB), so fsck reports
-  `Invalid number of allocation blocks`. QEMU's successful mount does not
-  establish filesystem integrity. Do not use this image on the phone until a
-  correctly sized, verified HFS image is produced.
-- `gh` is not installed in this environment. The `xnu.yml` workflow runs on
-  pushes to `main` affecting `xnu/patches/**`; use that trigger or make `gh`
-  available before requesting Actions logs/artifacts.
-- Next: rebuild with the D22AP matcher, pack the already-QEMU-verified tiny
-  `munch-init.macho` mockfs root using the live Munch hardware ADT, validate the
-  boot image and shim FDT gate, then test with temporary `fastboot boot` only.
-  Repair/rebuild and fsck the full iOS HFS root separately before using it.
-  Never flash or access `userdata`.
+- GitHub CLI is installed and authenticated as `danya2271` (keyring; `repo` and
+  `workflow` scopes). Actions run `39651685900` (run 8), commit
+  `1290e65424fec47fbcfa1026de6aa4a0aab2eb37`, completed successfully. Its
+  `kernel.development.munch` artifact is 17,182,480 bytes, SHA-256
+  `e0b5e3d90917afde1650900383a1808a61d9dd941ec31d28e9c863d0849063bc`.
+- Built a fresh MUNCHXNU payload with the run 8 kernel and the 16,635-byte
+  `munch-init.macho` extracted from the prior QEMU-tested payload (byte-identical
+  to its saved source). The hardware ADT contains D22AP identity, the iPhone X
+  `/product` properties, the Munch timer/GIC mapping, the candidate RAM window
+  `[0x100000000,0x1fcc00000)`, and no UFS node. Payload: 16,591,008 bytes,
+  SHA-256 `e58260a7ff56eb50e50ff6aef12227d3c66749e5f7cb5853c5133d03218d7e0f`.
+- Rebuilt the temporary shim boot image with the captured live Android FDT
+  (812,778 bytes, SHA-256
+  `65f4987ebb592acf11867c22d92e7cd41a7b41ea1e10f96485863b38f7ac646d`).
+  Image: `/tmp/ios-munch-init-hw-20261021/shim/out/shim-boot.img`, 17,563,648
+  bytes, SHA-256
+  `c68df12be03597874d19deb146d3d9415f79830a8b8b84cf791e7f482bac8937`.
+  `unpack_bootimg` confirmed the shim kernel, payload ramdisk, and live DTB match
+  their inputs byte-for-byte. Host FDT preflight accepts the proposed RAM
+  window. `python3 tools/validate-repo.py` passes (86 patches, 16 Python tools,
+  8 shell scripts); `git diff --check` passes.
+- QEMU ran the rebuilt kernel/payload for 150 seconds: `no_panic_observed`,
+  zero unknown glyphs, 75 decoded `MUNCH init: still alive` lines. This proves
+  the minimal mockfs/PID 1 path in QEMU, not the full iOS userspace or hardware.
+- Hardware test on 2026-10-21: read-only ADB checks confirmed Android build
+  `V816.0.9.0.ULMMIXM` and KernelSU root (`uid=0`). `adb reboot bootloader`
+  returned 0; `fastboot boot /tmp/ios-munch-init-hw-20261021/shim/out/shim-boot.img`
+  returned 0 (send OKAY 0.373 s, boot OKAY 0.228 s, total 0.609 s). No `flash`
+  command, partition access, or userdata access occurred. The user's photo
+  `/tmp/codex-clipboard-Hq2XPC.png` confirms the on-device sequence reached
+  `BSD root: md0, major 1, minor 0`, then `load_init_program: attempting to
+  load /sbin/launchd`, `*** MUNCH userspace: init running as PID 1 ***`, and
+  repeated `MUNCH init: still alive` heartbeats. This is a confirmed hardware
+  boot through XNU, RAM mockfs root, and a live PID 1; it is not the iOS
+  launchd/System volume or SpringBoard. `adb devices` and `fastboot devices`
+  were both empty immediately after the fastboot handoff, before the photo.
+  No further reboot has been sent.
+- The 3-GiB HFS image at
+  `/tmp/ios-munch-minroot-39597312881/minroot.img` remains invalid/truncated
+  according to `fsck_hfs -fn`; do not use it. The current hardware attempt used
+  only the RAM-resident mockfs PID 1 image.
+- Next: rebuild a correctly sized, `fsck_hfs`-verified minimized iOS HFS root
+  from the extracted 20H392 files; validate it in QEMU before attempting a
+  temporary hardware boot. Keep the current PID 1 screen until the user is
+  ready for another reboot. Do not flash or read/write `userdata`.
 
 ### HANDOFF 2026-10-21: DEVICE STORAGE CHANGED; PAUSE WRITES
 
