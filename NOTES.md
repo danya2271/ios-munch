@@ -17,8 +17,12 @@
   fastboot; then confirm `fastboot devices` prints the phone. Use only
   `fastboot boot ...` for the first UFS test.
 - The XNU UFS patches are still donor SWEET code. Before a storage-backed iOS
-  root test, adapt the root driver to Munch and make GPT selection fixed to
-  partition name `iosroot`; keep `userdata` out of all boot paths.
+  root test, first validate UEFI UFS enumeration and determine what controller
+  state is handed to XNU on Munch. The donor driver takes over UFSHCI directly;
+  its SWEET behavior is not evidence that this is safe after Munch UEFI.
+  Do not port or enable its XNU path until that hardware handoff is verified.
+  If porting proceeds, bind GPT lookup and every write to the dedicated
+  `iosroot` partition; keep `userdata` out of all boot paths.
 
 ### HANDOFF 2026-10-21 23:43 +05: RUN 8 RAM-ONLY PID 1 TEST
 
