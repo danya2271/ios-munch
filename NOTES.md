@@ -17,8 +17,13 @@
   under the MUNCH flags. A standalone `serial_console.c` check is blocked by
   the existing incomplete Linux include staging (`cpumap_t`, `mpqueue_head_t`
   and related machine declarations), not by the new guard diff.
+- The incremental XNU `make` target was also attempted in
+  `/tmp/ios-munch-local-build-20261021/build-0084-iokit.log`; the Linux fake
+  Clang profile's `-Weverything -Werror` turns Darwin/XNU header diagnostics
+  into a large cascading failure. This does not invalidate the five relaxed
+  syntax checks; Apple Clang/Xcode remains authoritative for the real build.
 - No ADB, fastboot, device, `userdata`, `dtbo` or persistent firmware action
-  occurred. Changes are committed as `87a878b`; the next gate is a strict
+  occurred. Changes are committed as `dd89684`; the next gate is a strict
   Apple Clang/Xcode/KDK build before any RAM-only phone boot.
 
 ### >>> HANDOFF 2026-10-21: LOCAL XNU MACH-O LINK GATE <<<
