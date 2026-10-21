@@ -1,0 +1,156 @@
+diff --git a/bsd/conf/files b/bsd/conf/files
+--- a/bsd/conf/files
++++ b/bsd/conf/files
+@@ -111,3 +111,4 @@
+ bsd/dev/sweet_rpmh.c			standard
+ bsd/dev/sweet_spmi.c			standard
++bsd/dev/munch_touch.c			standard
+ bsd/dev/sweet_usb.c			standard
+diff --git a/bsd/dev/munch_touch.h b/bsd/dev/munch_touch.h
+new file mode 100644
+--- /dev/null
++++ b/bsd/dev/munch_touch.h
+@@ -0,0 +1,42 @@
++#ifndef _BSD_DEV_MUNCH_TOUCH_H_
++#define _BSD_DEV_MUNCH_TOUCH_H_
++
++#include <stddef.h>
++#include <stdint.h>
++
++#define MUNCH_TOUCH_FRAME_SIZE 99
++#define MUNCH_TOUCH_PAYLOAD_OFFSET 7
++#define MUNCH_TOUCH_PAYLOAD_SIZE 90
++#define MUNCH_TOUCH_REPORT_SIZE 62
++#define MUNCH_TOUCH_MAX_CONTACTS 10
++#define MUNCH_TOUCH_WIDTH 1080
++#define MUNCH_TOUCH_HEIGHT 2400
++
++enum munch_touch_error {
++	MUNCH_TOUCH_OK = 0,
++	MUNCH_TOUCH_INVALID_ARGUMENT = -1,
++	MUNCH_TOUCH_INVALID_LENGTH = -2,
++	MUNCH_TOUCH_INVALID_STATUS = -3,
++	MUNCH_TOUCH_INVALID_CRC = -4,
++	MUNCH_TOUCH_INVALID_REPORT = -5
++};
++
++struct munch_touch_point {
++	uint8_t id;
++	uint8_t down;
++	uint16_t x;
++	uint16_t y;
++};
++
++struct munch_touch_report {
++	uint8_t point_count;
++	uint16_t present_mask;
++	uint16_t down_mask;
++	struct munch_touch_point points[MUNCH_TOUCH_MAX_CONTACTS];
++};
++
++uint16_t munch_touch_crc16(const uint8_t *data, size_t length);
++int munch_touch_parse_frame(const uint8_t *frame, size_t length,
++    struct munch_touch_report *report);
++
++#endif
+diff --git a/bsd/dev/munch_touch.c b/bsd/dev/munch_touch.c
+new file mode 100644
+--- /dev/null
++++ b/bsd/dev/munch_touch.c
+@@ -0,0 +1,96 @@
++#include "munch_touch.h"
++
++uint16_t
++munch_touch_crc16(const uint8_t *data, size_t length)
++{
++	uint16_t crc = 0xffff;
++
++	if (data == NULL) {
++		return 0;
++	}
++	for (size_t index = 0; index < length; index++) {
++		crc ^= data[index];
++		for (unsigned bit = 0; bit < 8; bit++) {
++			crc = (crc & 1) ? (crc >> 1) ^ 0x8408 : crc >> 1;
++		}
++	}
++	return crc;
++}
++
++int
++munch_touch_parse_frame(const uint8_t *frame, size_t length,
++    struct munch_touch_report *report)
++{
++	struct munch_touch_report parsed = { 0 };
++	const uint8_t *payload;
++	uint16_t expected_crc, actual_crc;
++	unsigned down_count = 0;
++
++	if (frame == NULL || report == NULL) {
++		return MUNCH_TOUCH_INVALID_ARGUMENT;
++	}
++	if (length != MUNCH_TOUCH_FRAME_SIZE) {
++		return MUNCH_TOUCH_INVALID_LENGTH;
++	}
++	if ((frame[3] & 0xa0) != 0) {
++		return MUNCH_TOUCH_INVALID_STATUS;
++	}
++
++	payload = frame + MUNCH_TOUCH_PAYLOAD_OFFSET;
++	expected_crc = munch_touch_crc16(payload, MUNCH_TOUCH_PAYLOAD_SIZE);
++	actual_crc = (uint16_t)((uint16_t)frame[MUNCH_TOUCH_FRAME_SIZE - 2] |
++	    ((uint16_t)frame[MUNCH_TOUCH_FRAME_SIZE - 1] << 8));
++	if (expected_crc != actual_crc) {
++		return MUNCH_TOUCH_INVALID_CRC;
++	}
++
++	parsed.point_count = payload[1] & 0x0f;
++	if (parsed.point_count > MUNCH_TOUCH_MAX_CONTACTS) {
++		return MUNCH_TOUCH_INVALID_REPORT;
++	}
++	for (unsigned slot = 0; slot < MUNCH_TOUCH_MAX_CONTACTS; slot++) {
++		unsigned base = slot * 6;
++		unsigned id = payload[4 + base] >> 4;
++		unsigned event = payload[2 + base] >> 6;
++		uint32_t x, y;
++		uint16_t bit;
++
++		if (id == 0x0f) {
++			break;
++		}
++		if (id >= MUNCH_TOUCH_MAX_CONTACTS || event == 3) {
++			return MUNCH_TOUCH_INVALID_REPORT;
++		}
++		bit = (uint16_t)(1u << id);
++		if (parsed.present_mask & bit) {
++			return MUNCH_TOUCH_INVALID_REPORT;
++		}
++		parsed.present_mask |= bit;
++
++		x = ((payload[6 + base] & 0xf0) >> 4) |
++		    ((uint32_t)payload[3 + base] << 4) |
++		    ((uint32_t)(payload[2 + base] & 0x0f) << 12);
++		y = (payload[6 + base] & 0x0f) |
++		    ((uint32_t)payload[5 + base] << 4) |
++		    ((uint32_t)(payload[4 + base] & 0x0f) << 12);
++		parsed.points[id].id = (uint8_t)id;
++		parsed.points[id].down = event != 1;
++		parsed.points[id].x = (uint16_t)(x / 16);
++		parsed.points[id].y = (uint16_t)(y / 16);
++		if (parsed.points[id].x > MUNCH_TOUCH_WIDTH) {
++			parsed.points[id].x = MUNCH_TOUCH_WIDTH;
++		}
++		if (parsed.points[id].y > MUNCH_TOUCH_HEIGHT) {
++			parsed.points[id].y = MUNCH_TOUCH_HEIGHT;
++		}
++		if (event != 1) {
++			parsed.down_mask |= bit;
++			down_count++;
++		}
++	}
++	if (down_count > parsed.point_count) {
++		return MUNCH_TOUCH_INVALID_REPORT;
++	}
++	*report = parsed;
++	return MUNCH_TOUCH_OK;
++}
