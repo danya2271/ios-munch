@@ -41,9 +41,20 @@
   regular-file guard to the KDK scan; verify it in the next run. The
   `xnu-buildtree` artifact uploaded, but its contents cannot be downloaded
   without GitHub authentication.
-- Next: inspect run `39592383679` logs from the Actions UI, repair the first
-  actual build error and build-tree packaging failure, then rerun and verify
-  the kernel artifact. No device or partition was accessed.
+- Commit `e605723` added the KDK regular-file guard and was pushed. Run
+  `39592897886` completed at 2026-10-21 11:34:21 UTC after 21 seconds with
+  `Build` exit 2. The KDK diagnostic and both artifact-upload steps now pass;
+  `xnu-kernel` is only 136 bytes, so it contains no kernel. Build-tree
+  packaging still exited 1 and produced a 265-byte artifact. The run's check
+  annotations expose only exit codes, not the first build error; it is not yet
+  known whether the MUNCH preflight passed.
+- Build-tree packaging listed generated paths unconditionally. They may not
+  exist when the build exits early, so it now adds only existing paths to tar.
+  This is a diagnostic-only workflow change and needs verification in the
+  next run.
+- Next: obtain the full logs for run `39592897886` from the Actions UI, inspect
+  the first actual build error and patch-application output, then rerun and
+  verify a real kernel artifact. No device or partition was accessed.
 
 ### >>> HANDOFF 2026-10-21: FIRST GITHUB ACTIONS MUNCH BUILD <<<
 

@@ -86,11 +86,17 @@ jobs:
           SDK=$(xcrun --sdk macosx --show-sdk-path)
           mkdir -p sdk-kernel-platform
           cp -R "$SDK/System/Library/Frameworks/Kernel.framework/Versions/A/PrivateHeaders/platform" sdk-kernel-platform/ || true
-          tar czf buildtree.tgz \
-            --exclude='*.o' --exclude='*.cpo' --exclude='*.a' --exclude='*.dSYM' --exclude='*.unstripped' \
-            --exclude='kernel.development.*' --exclude='.git' \
-            -C dxb build/xnu.obj fakeroot/usr/local/include xnu \
-            -C .. sdk-kernel-platform
+          tar_args=(
+            --exclude='*.o' --exclude='*.cpo' --exclude='*.a' --exclude='*.dSYM' --exclude='*.unstripped'
+            --exclude='kernel.development.*' --exclude='.git'
+          )
+          for path in build/xnu.obj fakeroot/usr/local/include xnu; do
+            if [ -e "dxb/$path" ]; then
+              tar_args+=(-C dxb "$path")
+            fi
+          done
+          tar_args+=(-C .. sdk-kernel-platform)
+          tar czf buildtree.tgz "${tar_args[@]}"
           ls -la buildtree.tgz
 
       - uses: actions/upload-artifact@v4
