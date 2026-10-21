@@ -66,12 +66,18 @@
   (`xnu-buildtree`) and 136 bytes (`xnu-kernel`), so no kernel was produced.
   Their sizes suggest failure occurred before the XNU source/build tree was
   staged, but that is not confirmed without the log.
-- The actual `Build` failure and MUNCH preflight result remain unknown. The
-  unauthenticated log/artifact API returns 403/401, no new log archive is
-  present in `~/Загрузки`, and the check-run annotations expose only exit
-  codes. Next: obtain the full logs for run `39593841679` from the Actions UI,
-  inspect the first build error and patch-application output, then fix and
-  rerun. No device or partition was accessed.
+- The user provided the Build-step screenshot for run `39593841679`: Bash
+  reports `build.sh: line 862: syntax error near unexpected token 'venv'`.
+  Since Bash parses the whole script before executing it, no XNU checkout,
+  patch application or MUNCH preflight ran; this also explains the tiny
+  diagnostic artifacts. The previous multiline `sed` insertion produced an
+  invalid script.
+- Replaced the injection with an `awk` transformation and added `bash -n`
+  immediately after rewriting the fetched build script. A local simulation
+  of the generated insertion passes `bash -n`. Next: validate the workflow,
+  push the fix, and confirm the `Fetch build script` step passes syntax check
+  before interpreting the next build result. No device or partition was
+  accessed.
 
 ### >>> HANDOFF 2026-10-21: FIRST GITHUB ACTIONS MUNCH BUILD <<<
 

@@ -50,12 +50,18 @@ jobs:
           git -C dxb checkout -q FETCH_HEAD
           cp xnu/patches/*.patch xnu/patches/*.sh dxb/patches/
           sed -i '' 's/ARCHS="x86_64 arm64e" VALID_ARCHS="x86_64 arm64e"/ARCHS="x86_64 arm64e arm64" VALID_ARCHS="x86_64 arm64e arm64"/' dxb/build.sh
-          # shellcheck disable=SC2016
-          sed -i '' '/^    patches$/a\
-          if [ "$MACHINE_CONFIG" = "MUNCH" ]; then\
-            grep -Eq "^SUPPORTED_ARM64_MACHINE_CONFIGS = .* MUNCH$" "$WORK_DIR/xnu/makedefs/MakeInc.def" || { error "MUNCH machine config patch was not applied"; exit 1; }\
-            test -f "$WORK_DIR/xnu/pexpert/pexpert/arm64/MUNCH.h" || { error "MUNCH board header is missing"; exit 1; }\
-          fi' dxb/build.sh
+          awk '
+            { print }
+            /^    patches$/ {
+              print "    if [ \"$MACHINE_CONFIG\" = \"MUNCH\" ]; then"
+              print "      grep -Eq \"^SUPPORTED_ARM64_MACHINE_CONFIGS = .* MUNCH$\" \"$WORK_DIR/xnu/makedefs/MakeInc.def\" || { error \"MUNCH machine config patch was not applied\"; exit 1; }"
+              print "      test -f \"$WORK_DIR/xnu/pexpert/pexpert/arm64/MUNCH.h\" || { error \"MUNCH board header is missing\"; exit 1; }"
+              print "    fi"
+            }
+          ' dxb/build.sh > dxb/build.sh.tmp
+          grep -q 'MUNCH machine config patch was not applied' dxb/build.sh.tmp
+          mv dxb/build.sh.tmp dxb/build.sh
+          bash -n dxb/build.sh
           grep -c 'VALID_ARCHS="x86_64 arm64e arm64"' dxb/build.sh
           grep -n 'MUNCH machine config patch was not applied' dxb/build.sh
           ls dxb/patches
