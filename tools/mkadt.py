@@ -2,10 +2,11 @@
 """Build the minimal Apple Device Tree used by the XNU bring-up.
 
 The default profile is the inherited SWEET donor profile. ``--munch`` emits
-the POCO F4 SoC/display identity and deliberately omits UFS; its RAM window
-must be supplied explicitly. On the direct fastboot path, the shim validates
-that window against the runtime Android-ABL FDT before loading XNU.
-Usage: mkadt.py OUT.adt [--dump] [--qemu] [--highmem] [--munch]
+the POCO F4 SoC/display identity and omits UFS unless ``--ufs`` is also set;
+its RAM window must be supplied explicitly. On the direct fastboot path, the
+shim validates that window against the runtime Android-ABL FDT before loading
+XNU.
+Usage: mkadt.py OUT.adt [--dump] [--qemu] [--highmem] [--munch] [--ufs]
 """
 import hashlib, os, struct, sys
 
@@ -75,7 +76,7 @@ def node(name, props=(), children=()):
 
 
 def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dram_size=None,
-          ram_only=False):
+          ram_only=False, ufs_enabled=False):
     """Build a SWEET, QEMU, or explicit-memory Munch profile.
 
     Munch memory is intentionally not guessed. Callers must pass an explicit
@@ -85,6 +86,8 @@ def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dra
     """
     if munch and qemu:
         raise ValueError('--munch and --qemu are separate hardware profiles')
+    if ufs_enabled and not munch:
+        raise ValueError('--ufs requires the --munch profile')
     if munch and (dram_base is None or dram_size is None):
         raise ValueError('--munch requires an explicit --dram-base and --dram-size candidate; the shim validates it against the runtime ABL FDT')
     if dram_base is not None or dram_size is not None:
@@ -233,7 +236,7 @@ def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dra
         ('stride', u32(FB_STRIDE)),
     ])
 
-    ufs = node('sweet-ufs', [
+    ufs = node('munch-ufs' if munch else 'sweet-ufs', [
         ph(),
         ('compatible', cstr('qcom,ufshc')),
         ('reg', u64(UFS, UFS_SIZE)),
@@ -260,6 +263,10 @@ def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dra
     # Identity of the iPhone X whose userland runs here: compatible[0] is
     # hw.model/hw.target (D22AP), model is hw.machine/hw.product
     # (iPhone10,3). 'xiaomi,sweet' stays for SweetPlatformExpert matching.
+    children = [chosen, defaults, cpus, arm_io, fbcon, buttons] + product
+    if not qemu and not ram_only and (not munch or ufs_enabled):
+        children.append(ufs)
+
     return node('device-tree', [
         ph(),
         ('compatible', cstr('D22AP') + cstr('iPhone10,3') +
@@ -271,13 +278,12 @@ def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dra
         ('manufacturer', cstr('Apple Inc.')),
         ('#address-cells', u32(2)),
         ('#size-cells', u32(2)),
-    ], [chosen, defaults, cpus, arm_io, fbcon, buttons] + product +
-       ([] if qemu or munch or ram_only else [ufs]))
+    ], children)
 
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        raise SystemExit('usage: mkadt.py OUT.adt [--dump] [--qemu] [--highmem] [--ram-only] [--munch --dram-base N --dram-size N]')
+        raise SystemExit('usage: mkadt.py OUT.adt [--dump] [--qemu] [--highmem] [--ram-only] [--munch [--ufs] --dram-base N --dram-size N]')
     args = set(sys.argv[2:])
 
     def option_value(name):
@@ -293,7 +299,8 @@ if __name__ == '__main__':
 
     root = build(qemu='--qemu' in args, highmem='--highmem' in args,
                  munch='--munch' in args, ram_only='--ram-only' in args,
-                 dram_base=option_value('--dram-base'), dram_size=option_value('--dram-size'))
+                 dram_base=option_value('--dram-base'), dram_size=option_value('--dram-size'),
+                 ufs_enabled='--ufs' in args)
     blob = adt.serialize(root)
     open(sys.argv[1], 'wb').write(blob)
     if '--dump' in sys.argv:

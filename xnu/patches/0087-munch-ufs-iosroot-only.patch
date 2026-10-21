@@ -1,0 +1,85 @@
+--- a/bsd/dev/sweet_ufs.c
++++ b/bsd/dev/sweet_ufs.c
+@@ -18,7 +18,7 @@
+  * against the partition bounds again right before it is issued, so nothing
+  * outside the named partition can be written.
+  */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_MUNCH)
+ #include <sys/param.h>
+ #include <sys/systm.h>
+ #include <sys/buf.h>
+@@ -589,18 +589,28 @@
+ 	DTEntry node;
+ 	uintptr_t const *reg = NULL;
+ 	unsigned int size = 0;
++#if defined(ARM64_BOARD_CONFIG_MUNCH)
++	const char *dt_path = "/munch-ufs";
++	char want[64] = "iosroot";
++#else
++	const char *dt_path = "/sweet-ufs";
+ 	char want[64] = "userdata";
++#endif
+ 	int error;
+ 
+-	if (SecureDTLookupEntry(NULL, "/sweet-ufs", &node) != kSuccess ||
++	if (SecureDTLookupEntry(NULL, dt_path, &node) != kSuccess ||
+ 	    SecureDTGetProperty(node, "reg", (void const **)&reg, &size) != kSuccess ||
+ 	    size < 2 * sizeof(uintptr_t)) {
+-		printf("SWEET UFS: no /sweet-ufs node in the device tree\n");
++		printf("UFS: no %s node in the device tree\n", dt_path);
+ 		return ENXIO;
+ 	}
+-	PE_parse_boot_argn("ufsroot", want, sizeof(want));
+ 	uint32_t rw = 0;
++#if defined(ARM64_BOARD_CONFIG_MUNCH)
++	PE_parse_boot_argn("iosrootrw", &rw, sizeof(rw));
++#else
++	PE_parse_boot_argn("ufsroot", want, sizeof(want));
+ 	PE_parse_boot_argn("ufsrw", &rw, sizeof(rw));
++#endif
+ 	uint32_t cache = 0, wait = 0;
+ 	PE_parse_boot_argn("ufscache", &cache, sizeof(cache));
+ 	PE_parse_boot_argn("ufswait", &wait, sizeof(wait));
+@@ -655,11 +665,13 @@
+ 	    want, su.lun, su.first_block, su.nblocks * UFS_BLOCK >> 20,
+ 	    su.writable ? "read-write" : "read-only", su.dma_pa);
+ 	sweet_log_start();
++#if defined(ARM64_BOARD_CONFIG_SWEET)
+ 	sweet_sample_start();
+ 	/* Input drivers (HID services in iokit/Kernel/arm/hid/SweetHID.cpp). */
+ 	sweet_keys_init();
+ 	sweet_touch_init();
+ 	sweet_usb_probe();
++#endif
+ 	return 0;
+ }
+ 
+@@ -820,4 +832,4 @@
+ 	*dev = su.bdev;
+ 	return 0;
+ }
+-#endif /* ARM64_BOARD_CONFIG_SWEET */
++#endif /* ARM64_BOARD_CONFIG_SWEET || ARM64_BOARD_CONFIG_MUNCH */
+--- a/iokit/bsddev/IOKitBSDInit.cpp
++++ b/iokit/bsddev/IOKitBSDInit.cpp
+@@ -766,16 +766,16 @@
+ 		}
+ 	}
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_MUNCH)
+ //
+-//	SWEET: root on a GPT partition of the internal UFS (bsd/dev/sweet_ufs.c)
++//	SWEET/MUNCH: root on a GPT partition of the internal UFS (bsd/dev/sweet_ufs.c)
+ //
+ 	if (strcmp(rdBootVar, "ufsroot0") == 0) {
+ 		extern int sweet_ufs_rootdev(dev_t *dev);
+ 		OSSafeReleaseNULL(matching);
+ 		int ufs_error = sweet_ufs_rootdev(root);
+ 		if (ufs_error) {
+-			panic("IOFindBSDRoot: SWEET UFS root %s unavailable: %d", rdBootVar, ufs_error);
++			panic("IOFindBSDRoot: internal UFS root %s unavailable: %d", rdBootVar, ufs_error);
+ 		}
+ 		strlcpy(rootName, rdBootVar, rootNameSize);
+ 		IOLog("BSD root: %s, major %d, minor %d\n", rootName, major(*root), minor(*root));

@@ -87,12 +87,12 @@ Download the iPhone X (iPhone10,3) iOS 16.7.16 (20H392) IPSW from Apple. Then, o
 
 ```sh
 # OS, SystemOS and AppOS disk images from the IPSW (see BuildManifest.plist for their names)
-tools/mkiosroot.sh OS.dmg SystemOS.dmg AppOS.dmg ios16-root.img 16G
-sudo fsck.hfsplus -fy ios16-root.img
-sudo mount -t hfsplus -o loop,force ios16-root.img /mnt/iosroot
+tools/mkiosroot.sh OS.dmg SystemOS.dmg AppOS.dmg iosroot.img 28G
+sudo fsck.hfsplus -fy iosroot.img
+sudo mount -t hfsplus -o loop,force iosroot.img /mnt/iosroot
 sudo python3 tools/munch-root-tweaks.py /mnt/iosroot
 sudo umount /mnt/iosroot
-img2simg ios16-root.img ios16-root.simg
+img2simg iosroot.img iosroot.simg
 ```
 
 `mkiosroot.sh` copies the OS volume and both cryptexes into one case-sensitive journaled HFS+ volume. It adds the dyld cache links, the plain system keybag and the log directories the daemons expect. `munch-root-tweaks.py` applies the bring-up changes: it skips Setup, seeds the activation state, removes the baseband daemon, disables the watchdogs that kill slow apps and the crash-looping media paths, and so on. The script's header explains each change.

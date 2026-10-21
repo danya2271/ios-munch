@@ -1,5 +1,32 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: UFS INSTALL IMAGE PREPARED; XNU UFS PATCH VALIDATED
+
+- Prepared the existing iOS 16.7.16 (`20H392`) HFS+ root as a separate local
+  install candidate for the dedicated `iosroot` partition. Raw image:
+  `/home/danya2271/Загрузки/ios-munch-20H392/iosroot-partition-28GiB.img`,
+  exactly `30064766976` bytes (`28 GiB`), SHA-256
+  `b24b363a5940dcdc5a96861989d35fa1e30f39c50863f67d8353807fd26fdeed`.
+  Android sparse image:
+  `/home/danya2271/Загрузки/ios-munch-20H392/iosroot-partition-28GiB.simg`,
+  `12145450280` bytes, SHA-256
+  `2c7e0b92ad88d171bbd319a056b5083610a9cb4b9c7ba92efcdc2394d37eea5d`.
+- The raw container is zero-padded to 28 GiB, but its HFS+ volume header still
+  declares `16384` blocks of `1 MiB` (`16 GiB`). The image is suitable for a
+  first install/read test, but approximately 12 GiB remains outside the HFS+
+  volume until a resize is performed; do not claim the full 28 GiB is usable.
+- Added `mkadt.py --munch --ufs`, emitting `/munch-ufs` at the Munch UFSHCI
+  address while keeping RAM-only Munch ADTs UFS-free. Updated the root builder
+  default and documentation to use a dedicated 28-GiB `iosroot` image.
+- Repaired `xnu/patches/0087-munch-ufs-iosroot-only.patch`. It now applies
+  cleanly after patches 0001-0086: Munch resolves only `/munch-ufs` and GPT
+  partition `iosroot`; writes require `iosrootrw=1`; SWEET-only input hooks are
+  not started for Munch. `python3 tools/validate-repo.py` passes all 87 patches.
+- No ADB/fastboot command, partition access, `userdata` access, flash, erase,
+  or device write occurred in this milestone. CI XNU build is the next step;
+  after it completes, assemble a UFS-enabled temporary boot image and test it
+  only with `fastboot boot` after the user confirms the device is connected.
+
 ### HANDOFF 2026-10-22: TEMPORARY UFS-ENABLED UEFI BOOT
 
 - `fastboot devices` detected one device, serial `7c8c92ae`.
