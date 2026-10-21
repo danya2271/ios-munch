@@ -34,15 +34,24 @@
   boot chain. Do not probe the controller or alter GPIO, clocks, rails, or
   reset until a separately gated Munch-only implementation is reviewed; no
   firmware commands or controller transfers were issued.
-- This is a source audit only: no repository source patch was added, no ADB or
-  fastboot command was run, and no partition, `userdata`, `dtbo`, or persistent
-  firmware was accessed. The existing strict Apple Clang/Xcode/KDK build gate
-  remains unresolved; this Linux host has neither `xcodebuild` nor `xcrun`,
-  and Docker cannot supply the missing Apple toolchain by itself.
-- Next: implement and host-check a standalone Munch report/CRC parser first,
-  then add the SE4 transport behind an explicit opt-in and independent of UFS.
-  Keep phone testing blocked until a strict kernel and valid RAM payload pass
-  the existing build gates.
+- Added `xnu/patches/0085-munch-focaltech-report-parser.patch`: it stages a
+  pure frame/CRC/contact parser as BSD source but performs no MMIO, GPIO,
+  clock, rail, reset, or SPI operation and is not wired to runtime init yet.
+  The patch applies and reverse-checks on the local diagnostic post-0084 XNU
+  staging tree. Clang syntax check passed with `-std=c11 -Wall -Wextra -Werror
+  -Wconversion`. Temporary host vectors passed CRC (`123456789` -> `0x6f91`),
+  contact ID/coordinates, touch-up, invalid length/status/CRC, and null input.
+  The test harness stayed in `/tmp`; the repository has no established test
+  suite to extend.
+- No ADB or fastboot command was run, and no partition, `userdata`, `dtbo`, or
+  persistent firmware was accessed. A strict Apple Clang/Xcode/KDK build is
+  still unavailable on this Linux host (`xcodebuild` and `xcrun` are absent);
+  Docker cannot supply that Apple toolchain by itself.
+- Next: implement Munch's SE4 read transport, independently of UFS and behind
+  explicit opt-in. It must either support DMA for the 99-byte frame (as Linux
+  does when it exceeds computed FIFO capacity) or prove a safe fragmented
+  transaction. Keep phone testing blocked until strict XNU and valid RAM
+  payload gates pass.
 
 ### >>> HANDOFF 2026-10-21: MUNCH SHARED IOKIT PATCH 0084 <<<
 
