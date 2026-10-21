@@ -1,9 +1,9 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
-### HANDOFF 2026-10-22: UFS INSTALL IMAGE PREPARED; XNU UFS PATCH VALIDATED
+### HANDOFF 2026-10-22: UFS ROOT CANDIDATE AND READ-ONLY BOOT IMAGE PREPARED
 
-- Prepared the existing iOS 16.7.16 (`20H392`) HFS+ root as a separate local
-  install candidate for the dedicated `iosroot` partition. Raw image:
+- Prepared the existing iOS 16.7.16 (`20H392`) HFS+ root as a local install
+  candidate for the dedicated `iosroot` partition. Raw image:
   `/home/danya2271/Загрузки/ios-munch-20H392/iosroot-partition-28GiB.img`,
   exactly `30064766976` bytes (`28 GiB`), SHA-256
   `b24b363a5940dcdc5a96861989d35fa1e30f39c50863f67d8353807fd26fdeed`.
@@ -11,10 +11,12 @@
   `/home/danya2271/Загрузки/ios-munch-20H392/iosroot-partition-28GiB.simg`,
   `12145450280` bytes, SHA-256
   `2c7e0b92ad88d171bbd319a056b5083610a9cb4b9c7ba92efcdc2394d37eea5d`.
-- The raw container is zero-padded to 28 GiB, but its HFS+ volume header still
-  declares `16384` blocks of `1 MiB` (`16 GiB`). The image is suitable for a
-  first install/read test, but approximately 12 GiB remains outside the HFS+
-  volume until a resize is performed; do not claim the full 28 GiB is usable.
+- The raw container's first 16 GiB is byte-identical to the original,
+  `fsck.hfsplus`-verified root; the remaining 12 GiB is verified zero padding.
+  The HFS+ header still declares 16 GiB, so only 16 GiB is usable by the
+  filesystem. The allocation bitmap and catalog were parsed offline: all
+  642,638 catalog leaf records and the 184,121 file entries match the volume
+  header. Do not claim a 28-GiB HFS+ filesystem yet.
 - Added `mkadt.py --munch --ufs`, emitting `/munch-ufs` at the Munch UFSHCI
   address while keeping RAM-only Munch ADTs UFS-free. Updated the root builder
   default and documentation to use a dedicated 28-GiB `iosroot` image.
@@ -22,10 +24,35 @@
   cleanly after patches 0001-0086: Munch resolves only `/munch-ufs` and GPT
   partition `iosroot`; writes require `iosrootrw=1`; SWEET-only input hooks are
   not started for Munch. `python3 tools/validate-repo.py` passes all 87 patches.
-- No ADB/fastboot command, partition access, `userdata` access, flash, erase,
-  or device write occurred in this milestone. CI XNU build is the next step;
-  after it completes, assemble a UFS-enabled temporary boot image and test it
-  only with `fastboot boot` after the user confirms the device is connected.
+- CI run `39668666918` (workflow_dispatch, `DEVELOPMENT/MUNCH`, macOS 14) for
+  commit `cc117ceffa3f50eea72cbaa76c424612faefb384` completed successfully on
+  2026-10-21 20:27:56 UTC. Patch 0087 is shown applying in the run log. The
+  `kernel.development.munch` artifact is 17,200,168 bytes, SHA-256
+  `6b6d8f4706814cc2bc73dfebf70ef53a06b80b84c406b1e511282c7d481a6592`.
+- Built a high-memory, UFS-enabled payload with `rd=ufsroot0 iosrootrw=0`;
+  this is deliberately read-only and selects only the GPT partition named
+  `iosroot`. Payload:
+  `/home/danya2271/Загрузки/ios-munch-install-20H392/munch-ufs-payload.bin`,
+  16,575,792 bytes, SHA-256
+  `8be690a933dd2c8bb6cc70465716a20fe4d2f813db131e14f27d1343b4fc5101`.
+- Prepared temporary shim boot image:
+  `/home/danya2271/Загрузки/ios-munch-install-20H392/shim-boot-ufs-iosroot.img`,
+  17,547,264 bytes, SHA-256
+  `e5e429e672f7bd849855c005000ae2b33800f36c0ee77e922e8d06148322147c`.
+  `unpack_bootimg` verified the embedded shim kernel, XNU payload ramdisk,
+  and captured live Android FDT byte-for-byte. The shim's host FDT check accepts
+  XNU memory `[0x100000000,0x1fcc00000)`.
+- The assembled bundle is under
+  `/home/danya2271/Загрузки/ios-munch-install-20H392/`; its `iosroot` sparse
+  image is a symlink to the 12,145,450,280-byte prepared `.simg` to avoid a
+  second 11.3-GiB copy. `SHA256SUMS` is included.
+- The current phone partition is still F2FS; no image has been installed. No
+  ADB/fastboot command, partition access, `userdata` access, flash, erase, or
+  device write occurred. The next step after the user connects the phone is a
+  temporary `fastboot boot` of the read-only probe only; it should confirm
+  UFS/GPT `iosroot` reads, then HFS mount is expected to fail on the current
+  F2FS contents. Installing HFS and enabling `iosrootrw=1` require separate
+  explicit confirmation.
 
 ### HANDOFF 2026-10-22: TEMPORARY UFS-ENABLED UEFI BOOT
 

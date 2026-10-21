@@ -81,8 +81,8 @@ def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dra
 
     Munch memory is intentionally not guessed. Callers must pass an explicit
     ``dram_base`` and ``dram_size`` candidate; on the direct ABL path the shim
-    checks it against the FDT actually supplied at boot. The profile is
-    always RAM-only.
+    checks it against the FDT actually supplied at boot. UFS is opt-in for
+    Munch so RAM-only diagnostic payloads do not touch the controller.
     """
     if munch and qemu:
         raise ValueError('--munch and --qemu are separate hardware profiles')
