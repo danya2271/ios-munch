@@ -1,5 +1,28 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: A77 CPU PROFILE CORRECTED
+
+- Corrected active MUNCH CPU identity in patch 0088 and porting docs:
+  Snapdragon 870 / SM8250-AC, Kryo 585, 4x Cortex-A55 + 4x Cortex-A77
+  (3 big + 1 prime). XNU exposes the prime as P because this AMP scheduler
+  supports only E/P classes. Kryo 470/A76 references remaining in the patch
+  are the removed SWEET donor profile, not active MUNCH code.
+- Patch 0088 applies cleanly with `git apply --whitespace=error --check` to a
+  clean post-0087 XNU tree at `826ab5a3a9bd42258047d1486596ec6c41a539f4`.
+  `python3 tools/validate-repo.py` passes: 88 contiguous patches, eight-CPU
+  Munch ADT, Python and shell checks all pass.
+- Audited the resulting XNU source after applying 0088: no board-specific
+  SWEET identifiers or SWEET-named source files remain. The sole text match is
+  the unrelated English phrase “sweet-spot” in `out_lz4.c`.
+- Commit: `50d0e22d6ee7920d5dddde5ebd216d6dba3047bf`
+  (`Correct Munch CPU topology to Cortex-A77`). It and the prior local docs
+  commit `64bd075` remain unpushed. No CI run exists for this commit.
+  Latest visible XNU Action run `39668666918` succeeded for unrelated commit
+  `cc117ceffa3f50eea72cbaa76c424612faefb384`.
+- No kernel build or device boot was performed; phone and storage were not
+  touched. Remaining: push/dispatch CI for this commit, build/8-CPU RAM boot,
+  then investigate touch and the ~4-pixel SpringBoard artifact.
+
 ### HANDOFF 2026-10-22: 8-CPU A3 RAM BOOT PREPARED
 
 - Verified and unpacked the prior `xnu-kernel.zip` CI artifact; its
