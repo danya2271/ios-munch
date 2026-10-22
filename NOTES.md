@@ -1,5 +1,30 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-23: KONA MPIDR SMP FIX READY
+
+- Observed: the 8-CPU panic came from the older boot image
+  `/tmp/munch-ufs-userspace-a3-8cpu-boot.img`, built before the final MUNCH
+  rebrand. Its kernel strings still identify the donor as `SWEET`; the panic
+  occurs when that image parses Kona's `reg` values `0x0, 0x100, ... 0x700`
+  with the donor cluster assumptions. This is an artifact diagnosis, not a
+  device-side partition failure.
+- Changed: new patch `0089-munch-kona-mpidr-topology.patch` makes the Munch
+  exception path use MPIDR Aff1 directly as the logical CPU index, matching the
+  live Kona FDT and PSCI targets. It also keeps Munch out of XNU's Apple
+  physical-cluster offset branch even if an unrelated build macro leaks in.
+- Changed: `tools/validate-repo.py` now checks all eight generated Munch MPIDRs
+  and their E/P classes. Generated `/tmp/munch-8cpu-0089.adt` contains
+  `0x0..0x300` E cores and `0x400..0x700` P cores, matching the captured FDT.
+- Verified: repository validation, whitespace checks, 0089 dry-run/application
+  against the post-0088 CI build tree, and ADT generation all pass.
+- CI: run `39835665572` for `b628c8d` was cancelled after remaining queued;
+  it produced no kernel artifact. The 0089 commit must trigger a fresh run.
+- Device safety: no ADB/fastboot device is connected; no `fastboot boot`, flash,
+  UFS, userdata, GPT, or partition operation occurred.
+- Next: commit/push 0089, wait for a real kernel artifact, build a fresh
+  MUNCH-only 8-CPU RAM payload, and only then test with temporary
+  `fastboot boot`. Do not reuse the old A3 image.
+
 ### HANDOFF 2026-10-22: KERNEL BUILD REACHED COMPILER; FIXED TABLE STRING
 
 - Observed: CI run `39832968199` applied all 88 numbered project patches and

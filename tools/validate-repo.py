@@ -236,6 +236,8 @@ def validate_munch_adt():
         errors.append(f'expected eight CPU nodes, found {len(cpu_nodes)}')
     else:
         for index, cpu in enumerate(cpu_nodes):
+            if number(cpu, 'reg') != index << 8:
+                errors.append(f'cpu{index} must preserve Kona MPIDR Aff1 identity')
             if number(cpu, 'cluster-type') != expected_types[index]:
                 errors.append(f'cpu{index} has the wrong E/P cluster type')
             if number(cpu, 'qcom,freq-domain') != expected_domains[index]:

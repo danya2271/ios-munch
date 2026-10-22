@@ -1,0 +1,53 @@
+diff --git a/osfmk/arm64/exception_asm.h b/osfmk/arm64/exception_asm.h
+--- a/osfmk/arm64/exception_asm.h
++++ b/osfmk/arm64/exception_asm.h
+@@ -67,6 +67,10 @@
+ .macro LOAD_PMAP_CPU_DATA
+ 	/* Get the CPU ID. */
+ 	mrs		$0, MPIDR_EL1
++#if defined(MUNCH)
++	/* Qualcomm Kona exposes the logical CPU in MPIDR Aff1. */
++	ubfx	$0, $0, MPIDR_AFF1_SHIFT, MPIDR_AFF1_WIDTH
++#else
+ 	ubfx	$1, $0, MPIDR_AFF1_SHIFT, MPIDR_AFF1_WIDTH
+ 	adrp	$2, EXT(cluster_offsets)@page
+ 	add		$2, $2, EXT(cluster_offsets)@pageoff
+ 	ldr		$1, [$2, $1, lsl #3]
+ 
+ 	and		$0, $0, MPIDR_AFF0_MASK
+ 	add		$0, $0, $1
++#endif
+ 
+ 	/* Get the PPL CPU data array. */
+ 	adrp	$1, EXT(pmap_cpu_data_array)@page
+ 	add		$1, $1, EXT(pmap_cpu_data_array)@pageoff
+diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
+--- a/osfmk/arm64/machine_routines.c
++++ b/osfmk/arm64/machine_routines.c
+@@ -1047,7 +1047,7 @@
+ 		 * on the value provided by EDT. Instead, use the MPIDR value to see if we have
+ 		 * seen this exact cluster before. If so, then reuse that cluster ID for this CPU.
+ 		 */
+-#if HAS_CLUSTER
++#if HAS_CLUSTER && !defined(MUNCH)
+ 		uint32_t phys_cluster_id = MPIDR_CLUSTER_ID(cpu->phys_id);
+ #else
+ 		uint32_t phys_cluster_id = (cpu->cluster_type == CLUSTER_TYPE_P);
+@@ -1081,7 +1081,7 @@
+ 			ml_read_reg_range(child, "cpm-impl-reg", &cluster->cpm_IMPL_pa, &cluster->cpm_IMPL_len);
+ 		}
+ 
+-#if HAS_CLUSTER
++#if HAS_CLUSTER && !defined(MUNCH)
+ 		if (MPIDR_CPU_ID(cpu->phys_id) > cluster_max_cpu_phys_id[phys_cluster_id]) {
+ 			cluster_max_cpu_phys_id[phys_cluster_id] = MPIDR_CPU_ID(cpu->phys_id);
+ 		}
+@@ -1107,7 +1107,7 @@
+ 
+ 	}
+ 
+-#if HAS_CLUSTER
++#if HAS_CLUSTER && !defined(MUNCH)
+ 	/*
+ 	 * Build the cluster offset array, ensuring that the region reserved
+ 	 * for each physical cluster contains enough entries to be indexed
