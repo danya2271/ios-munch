@@ -1,5 +1,24 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: UFS ROOT PROBE REACHED HFS MOUNT
+
+- The user's photo of the phone console confirms that XNU completed the UFS
+  path: `SWEET UFS: "iosroot" on LUN 0: first block 0x34037fc, 28671 MiB,
+  read-only`, followed by `BSD root: ufsroot0, major 1, minor 0`.
+- The failure is after block-device registration, in HFS+ detection:
+  `hfs_validateHFSPlusVolumeHeader: unknown Volume Signature : 1020`,
+  `hfs_mountfs returned error=-22`, `cannot mount root, errno = 19`.
+  The repeated mount attempts are therefore consistent with the phone's
+  current `iosroot` contents still being F2FS, not with a missing UFS node or
+  failed UFS enumeration.
+- This is the first on-device confirmation that the Munch UEFI/XNU handoff,
+  UFSHCI takeover, GPT lookup restricted to `iosroot`, and read-only root
+  device registration all work together. No device write occurred.
+- Next action is an explicit, separately confirmed installation of the
+  prepared HFS+ image to the existing `iosroot` partition. Do not write it or
+  enable `iosrootrw=1` until the user confirms that destructive step and the
+  phone is back in a recovery/ADB environment.
+
 ### HANDOFF 2026-10-22 10:28 +05: READ-ONLY UFS PROBE DISPATCHED
 
 - Confirmed the connected device in fastboot: serial `7c8c92ae`, product
