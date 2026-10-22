@@ -1,5 +1,24 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22 10:55 +05: HFS+ IOSROOT INSTALLED; RAM BOOT RETRIED
+
+- After explicit user confirmation, verified from OrangeFox that
+  `/dev/block/by-name/iosroot` resolves to `/dev/block/sda35` and is exactly
+  `30064766976` bytes. No `userdata` path was used.
+- Fastboot independently confirmed `iosroot` as a raw, non-slot partition with
+  size `0x6fffff000` (28 GiB).
+- Wrote only
+  `/home/danya2271/Загрузки/ios-munch-20H392/iosroot-partition-28GiB.simg`
+  to `iosroot` using `fastboot flash iosroot`. All `16/16` sparse chunks and
+  writes returned `OKAY`; total write time was `266.758s`.
+- The first immediate `fastboot boot` attempt lost USB during image transfer,
+  before `Booting`; no conclusion about the installed root can be drawn from
+  that failed transfer. After the user rebooted the phone into fastboot,
+  `product: munch` returned normally and the same shim was dispatched again.
+  The retry returned `Sending OKAY`, `Booting OKAY`, total `0.610s`.
+- The retry is a RAM-only, read-only XNU boot (`iosrootrw=0`). Wait for the
+  screen or user-provided console photo before issuing another device command.
+
 ### HANDOFF 2026-10-22: UFS ROOT PROBE REACHED HFS MOUNT
 
 - The user's photo of the phone console confirms that XNU completed the UFS
