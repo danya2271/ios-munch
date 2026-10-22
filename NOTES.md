@@ -1,5 +1,31 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22 12:42 +05: KEYBAG FILE CHECK NEEDED
+
+- Latest user console logs show `keybagd` failing to open
+  `/private/var/keybags/systembag.kb` (`No such file or directory`) and then
+  reporting `Unable to load keybag with No Crypto: -7`. This is the current
+  userspace blocker after the HFS+ root mounted and launchd started.
+- The captured ADT at
+  `/tmp/ios-munch-ufs-boot-39668666918/adt.dump` contains
+  `/defaults/no-effaceable-storage = 1`. The `Could not get options entry`
+  messages are separate; this setting is under `/defaults`, not `/options`.
+- `tools/mkiosroot.sh` creates the expected root-owned plist
+  (`KeyBagKeys` data `U1dFRVQ=`, directory mode 0700, file mode 0600), but the
+  exact image installed on-device has not yet been inspected on the host, so
+  absence from the image is not yet independently confirmed.
+- Host image paths: raw
+  `/home/danya2271/Загрузки/ios-munch-20H392/iosroot-partition-28GiB.img`
+  (28 GiB logical, 12 GiB allocated) and installed sparse image
+  `/home/danya2271/Загрузки/ios-munch-20H392/iosroot-partition-28GiB.simg`.
+  `fsck.hfsplus` and `img2simg` are installed. There is 37 GiB free on the
+  filesystem, enough for a sparse raw working copy and rebuilt sparse image.
+- Next: user runs the host-side `sudo` commands from the handoff to inspect the
+  original read-only, then, only if the file is absent, copy the raw image and
+  add the plist to that copy. Build a new `.simg` from the copy and report its
+  SHA-256. Do not write to the phone until the image is verified and the user
+  separately confirms flashing. Do not access `userdata`.
+
 ### HANDOFF 2026-10-22 11:15 +05: UFS ROOT REACHED LAUNCHD; NEXT USERSPACE BOOT
 
 - The earlier "UFS writes failing" conclusion was wrong: the latest read-write
