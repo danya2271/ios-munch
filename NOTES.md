@@ -22,10 +22,12 @@
   in `c0f6e15`. The Munch topology comment now also names SM8250/Kona rather
   than the inherited SM7150 donor.
 - CI: run `39835665572` for `b628c8d` was cancelled after remaining queued;
-  it produced no kernel artifact. The 0089 commit must trigger a fresh run.
+  run `39840426951` for `2fcab0d` failed before compilation because a comment
+  edit inside 0088 changed a context line. That context was restored; the
+  SM8250/Kona comment now lives in 0089, and a fresh CI run is required.
 - Device safety: no ADB/fastboot device is connected; no `fastboot boot`, flash,
   UFS, userdata, GPT, or partition operation occurred.
-- Next: commit/push 0089, wait for a real kernel artifact, build a fresh
+- Next: commit/push the corrected patch, wait for a real kernel artifact, build a fresh
   MUNCH-only 8-CPU RAM payload, and only then test with temporary
   `fastboot boot`. Do not reuse the old A3 image.
 
