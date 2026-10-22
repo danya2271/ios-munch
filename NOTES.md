@@ -2,6 +2,28 @@
 
 ### HANDOFF 2026-10-22: A1 REACHED LAUNCHD JOBS; FIX TWO FOLLOW-UPS
 
+- Investigated `danya2271/hackios-xnu-userland` and its companion kernel
+  repository. It is useful mainly as a reference for stock-iOS image assembly:
+  it fetches iOS 16.5 from Apple, selects files, uses its own APFS writer, and
+  keeps `/System/Cryptexes/{OS,App}` plus the shared cache. Our repository uses
+  a direct 20H392 image instead and its `mkiosroot.sh` already applies the same
+  cryptex/root linking logic. It is not a drop-in fix for MUNCH because its
+  scripts, job lists, init and APFS format target HackiOS's loader/kernel and
+  redwood (POCO X5 Pro), not our MUNCH XNU/UEFI flow.
+- Found the likely reason the flashed 20H392 image lacks root-level cryptex
+  hard links: an earlier build created a large temporary workspace on `/tmp`
+  (a 32 GiB tmpfs), so `rsync -aH` was probably run with limited heap and
+  aborted before it reached the cryptex-link loop. Also confirmed from the
+  original mounted OS image that `libobjc-trampolines.dylib` exists only under
+  `private/preboot/Cryptexes/OS/usr/lib/`; without the root-level link, the A1
+  failures are expected.
+- Patched `tools/mkiosroot.sh` to create its workspace in the current
+  filesystem rather than tmpfs, preventing future silent partial builds. A
+  complete image rebuild still requires user-side `sudo`; current access is
+  password-protected. We only need a byte-level rebuild for this next test: the
+  flashed image is sparse and can remain sparse on disk while mounted through
+  `qemu-nbd`.
+
 - User supplied output from two distinct boots. The first was this agent's
   `/tmp/munch-ufs-launch-a1-boot.img`: `launchd_cache_loader` aborted with
   `Unable to find AMFI`. That image accidentally omitted

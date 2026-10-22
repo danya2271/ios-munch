@@ -38,7 +38,7 @@ if [[ ${#missing_tools[@]} -gt 0 ]]; then
 	exit 1
 fi
 
-work=$(mktemp -d)
+work=$(mktemp -d -p "$PWD" ios-munch-XXXXXX)
 mounts=()
 cleanup() {
 	local busy=0
