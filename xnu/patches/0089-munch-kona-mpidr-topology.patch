@@ -29,9 +29,11 @@ diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
  		if (MPIDR_CPU_ID(cpu->phys_id) > cluster_max_cpu_phys_id[phys_cluster_id]) {
  			cluster_max_cpu_phys_id[phys_cluster_id] = MPIDR_CPU_ID(cpu->phys_id);
  		}
-@@ -1091,1 +1091,1 @@
+@@ -1090,3 +1090,3 @@
+ #if defined(MUNCH)
 -		/* Aff1 encodes the core on SM7150, not an Apple cluster ID. */
 +		/* Aff1 encodes the core on SM8250/Kona, not an Apple cluster ID. */
+ 		cpu->die_cluster_id = (int)ml_readprop(child, "die-cluster-id", 0);
 @@ -1107,7 +1107,7 @@
  
  	}
