@@ -1,5 +1,31 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: KEYBAG IMAGE BUILT; AWAIT FLASH CONFIRMATION
+
+- User repaired the separate keybag raw copy with `fsck.hfsplus -f -y` on a
+  loop device limited to the 16-GiB HFSX volume. The tool reported
+  `repaired successfully`; a subsequent read-only `-f -n` still reports
+  `Volume header needs minor repair` and exit 8, a known hfsprogs diagnostic
+  for this journaled volume. The primary and alternate 512-byte volume headers
+  are byte-identical after repair. The reported catalog folder-count repairs
+  were applied successfully.
+- Confirmed keybag content on the copy: root-owned directory mode 0700 and
+  `systembag.kb` mode 0600 with expected `{KeyBagKeys: U1dFRVQ=}` plist.
+- Built Android sparse image
+  `/home/danya2271/Загрузки/ios-munch-20H392/iosroot-partition-28GiB-keybag.simg`
+  (12,145,458,472 bytes). Its sparse header matches the previously installed
+  image exactly: 4096-byte blocks, 7,340,031 blocks, 28,003 chunks. SHA-256:
+  `2f115aa922259985f53bd43f0c376914887b69aed9d200eca4dfaee609a4b994`.
+- Raw repaired copy
+  `/home/danya2271/Загрузки/ios-munch-20H392/iosroot-partition-28GiB-keybag.img`
+  SHA-256: `1669fb44f9f77def71ebb2fa88b335437256dc3fd313b62654cfbcec0785dfef`.
+  The original raw and sparse images were preserved. No phone operation or
+  `userdata` access occurred.
+- Next: do not flash until the user explicitly confirms the destructive write
+  to the dedicated `iosroot` partition. Before any flash, confirm the phone is
+  in fastboot and re-check product `munch` and exact target partition size.
+  Never write `userdata`.
+
 ### HANDOFF 2026-10-22: KEYBAG ADDED; COPY NEEDS HFS HEADER REPAIR
 
 - User created the separate raw copy
