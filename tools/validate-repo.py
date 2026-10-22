@@ -270,6 +270,25 @@ def validate_munch_adt():
         if 'MUNCH EARLY PANIC' not in added_cpu_text:
             errors.append('early panic diagnostics must use the Munch identity')
 
+    topology_source = os.path.join(REPO_ROOT, 'xnu', 'patches',
+                                   '0089-munch-kona-mpidr-topology.patch')
+    try:
+        topology_text = open(topology_source, errors='replace').read()
+    except OSError as exc:
+        errors.append(f'cannot read Kona topology patch ({exc})')
+    else:
+        required_topology = (
+            '@@ -67,6 +67,10 @@\n .macro LOAD_PMAP_CPU_DATA',
+            '+\tubfx\t$0, $0, MPIDR_AFF1_SHIFT, MPIDR_AFF1_WIDTH',
+            '@@ -74,6 +78,7 @@',
+            '@@ -1090,3 +1090,3 @@',
+        )
+        missing = [needle for needle in required_topology if needle not in topology_text]
+        if missing:
+            errors.append('0089 must keep a contextual Kona Aff1 topology patch')
+        if topology_text.count('+#if HAS_CLUSTER && !defined(MUNCH)') != 3:
+            errors.append('0089 must guard all three Apple physical-cluster paths for MUNCH')
+
     if errors:
         print(red('[-] Munch ADT validation failed:'))
         for error in errors:
