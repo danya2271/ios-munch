@@ -20,8 +20,9 @@
   boot-tested. `hackios-xnu-kernel` is redwood-specific HackiOS infrastructure,
   not a direct Munch kernel replacement.
 - User is separately preparing a 16-GiB debug root image with launchd console
-  logging for `bluetoothd`, `fairplayd.H2`, `SpringBoard`, `backboardd`,
-  `mediaserverd`, `medialibraryd` and `assetsd`. A3 can first be RAM-booted
+  logging for `com.apple.bluetoothd`, `com.apple.fairplayd.H2`,
+  `com.apple.SpringBoard`, `com.apple.backboardd`, `com.apple.mediaserverd`,
+  `com.apple.medialibraryd` and `com.apple.assetsd`. A3 can first be RAM-booted
   against the current flashed root to validate 8-core bring-up.
 
 ### HANDOFF 2026-10-22: TRAMPOLINE FIX CONFIRMED; NEXT CONSOLE TRACE
