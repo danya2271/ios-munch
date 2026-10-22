@@ -1,5 +1,29 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-23: KONA AFF1 SMP PATCH CORRECTED, CI QUEUED
+
+- Observed: CI run `39841992478` reached the post-0088 source tree and rejected
+  the old 0089 comment hunk. The following run `39843001146` was not a valid
+  compiler result because it used an intermediate exception patch layout.
+- Changed: commit `3b6cfe0` makes `LOAD_PMAP_CPU_DATA` use Kona MPIDR Aff1
+  directly for MUNCH and keeps the `cluster_offsets` lookup only in the donor
+  branch. It also guards all three Apple physical-cluster paths and uses the
+  SM8250/Kona topology comment. The patch applies cleanly with ordinary
+  `git apply` to the saved post-0088 CI build tree.
+- Changed: commit `66f3336` adds validator checks for the direct Aff1 path and
+  contextual patch shape. `python3 tools/validate-repo.py` passes all 89
+  numbered patches and all script checks.
+- CI: run `39848369447` targets commit `3b6cfe0`; its first attempt waited for a
+  macOS runner for about 15 minutes and was cancelled without job steps or
+  artifacts. It has been rerun and is currently queued again. This is runner
+  capacity state, not a compiler error.
+- Device safety: `fastboot devices` and `adb devices -l` are empty. No
+  `fastboot boot`, flash, UFS, userdata, GPT, or partition operation occurred.
+- Next: obtain a completed kernel artifact for `3b6cfe0`, verify MUNCH strings
+  and the eight-CPU topology, build the fresh RAM-only payload with
+  `/tmp/munch-8cpu-0089.adt`, then test only with temporary `fastboot boot`.
+  Do not reuse the old A3 image.
+
 ### HANDOFF 2026-10-23: KONA MPIDR SMP FIX READY
 
 - Observed: the 8-CPU panic came from the older boot image
