@@ -1,5 +1,21 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: KEYBAG ADDED; COPY NEEDS HFS HEADER REPAIR
+
+- User created the separate raw copy
+  `/home/danya2271/Загрузки/ios-munch-20H392/iosroot-partition-28GiB-keybag.img`
+  and added `/private/var/keybags/systembag.kb` successfully. The file is
+  `root:root`, mode 0600; its parent directory is `root:root`, mode 0700, and
+  its XML contents match the builder's expected `{KeyBagKeys: U1dFRVQ=}` plist.
+- The source image and phone were not modified. The script stopped before
+  creating the sparse result because `fsck.hfsplus -f -n` reported the known
+  minor repair needed by this journaled HFSX image's header.
+- The modified copy is now the only image that may be repaired. Next: attach
+  it with a 16-GiB loop limit, run `fsck.hfsplus -f -y` on that loop, verify
+  with `-n`, detach it, and build
+  `iosroot-partition-28GiB-keybag.simg`. Do not flash until its checksum and
+  contents are verified and the user separately confirms the write.
+
 ### HANDOFF 2026-10-22: READ-ONLY HOST MOUNT CONFIRMED; KEYBAG ABSENT
 
 - User successfully mounted the raw image read-only after limiting the loop
