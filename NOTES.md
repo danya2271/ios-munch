@@ -30,6 +30,14 @@
   Treat M2Scaler as a missing userspace/CoreAnimation dependency for
   surface composition, not as panel power. Keys are a separate SPMI/GPIO
   arbiter bring-up issue.
+- Debug boot without `munchfb_noconsole` confirms the surface path starts:
+  backboardd creates 1080x2400 IOSurfaces, display power on/off works, and
+  backboardd reaches IOMFB selector 79. It repeatedly fails only when
+  CoreAnimation/IOSurfaceAccelerator asks for `AppleM2ScalerCSCDriver`.
+  The Apple shared cache expects that service for color conversion/scaling.
+  Next: publish a minimal kernel-side AppleM2ScalerCSCDriver service with
+  IOSurfaceAccelerator capability properties or bypass scaler selection in
+  the CPU-rendering path.
 
 ### HANDOFF 2026-10-23: 0089 KERNEL PASSED, SWEETLOG REMOVED, CI RERUNNING
 
