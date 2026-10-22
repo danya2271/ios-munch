@@ -2,6 +2,12 @@
 
 ### HANDOFF 2026-10-23: UFS BOOTS TO ACTIVE USERLAND, PRESENTATION FIX CANDIDATE
 
+- CI run `39871863545` for commit `f40db3a` failed because 0088 still expects
+  `SweetHIDButtons` at line 123, while the staged post-0087 tree already has the
+  AppleM2Scaler personality inserted before it. The next commit must move the
+  final 0088 config-table hunk to match that staged location and keep the
+  MunchBattery addition. Everything else in 0088 applies cleanly.
+
 - Device observation: UFS RW boot with 8 CPUs reached active iOS userland.
   The panel power state works (the display can be turned off and back on by
   power button), but no Apple logo/lock screen frame appears. This is not a
