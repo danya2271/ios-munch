@@ -2,7 +2,7 @@ diff --git a/bsd/conf/Makefile.template b/bsd/conf/Makefile.template
 index f01c82acd3138be6cf1c5526a823ec56bd8811e9..e63f2696ceec7e6101d87c292c08dccece6d0b80 100644
 --- a/bsd/conf/Makefile.template
 +++ b/bsd/conf/Makefile.template
-@@ -44,19 +44,19 @@ CFLAGS+= -include meta_features.h -DDRIVER_PRIVATE \
+@@ -44,19 +44,19 @@
          -Warray-bounds-pointer-arithmetic
  SFLAGS+= -include meta_features.h
  
@@ -38,7 +38,7 @@ diff --git a/bsd/conf/files b/bsd/conf/files
 index 5a604ad77484e69953e43e3bc4930b465c22a301..47413be43c2f8fbb2f546e8d4720b6a5e0488cfd 100644
 --- a/bsd/conf/files
 +++ b/bsd/conf/files
-@@ -104,14 +104,14 @@ bsd/dev/dtrace/fasttrap.c		optional config_dtrace
+@@ -104,14 +104,14 @@
  bsd/dev/random/randomdev.c		standard
  
  bsd/dev/memdev.c			standard
@@ -60,7 +60,7 @@ index 5a604ad77484e69953e43e3bc4930b465c22a301..47413be43c2f8fbb2f546e8d4720b6a5
  bsd/dev/mem.c				standard
  bsd/dev/munge.c 			optional config_requires_u32_munging
  bsd/dev/unix_startup.c			standard
-@@ -369,9 +369,9 @@ bsd/security/audit/audit_syscalls.c		standard
+@@ -369,9 +369,9 @@
  bsd/security/audit/audit_worker.c		optional config_audit
  
  bsd/pthread/pthread_shims.c		standard
@@ -73,7 +73,7 @@ index 5a604ad77484e69953e43e3bc4930b465c22a301..47413be43c2f8fbb2f546e8d4720b6a5
  bsd/pthread/pthread_priority.c		standard
  bsd/pthread/pthread_workqueue.c		standard
  
-@@ -389,49 +389,49 @@ bsd/kern/kern_core.c			optional config_coredump
+@@ -389,49 +389,49 @@
  bsd/kern/kern_credential.c		standard
  bsd/kern/kern_crossarch.c		standard
  bsd/kern/kern_cs.c			standard
@@ -168,7 +168,7 @@ diff --git a/bsd/dev/dtrace/fasttrap.c b/bsd/dev/dtrace/fasttrap.c
 index 8d4fbb91d65ffea39c804f9d39ff4cbf86facb2b..ac1ce67fd4241fbc2e2d89ce7bb466f6c22921fb 100644
 --- a/bsd/dev/dtrace/fasttrap.c
 +++ b/bsd/dev/dtrace/fasttrap.c
-@@ -216,7 +216,7 @@ ZONE_DEFINE(fasttrap_tracepoint_t_zone, "dtrace.fasttrap_tracepoint_t",
+@@ -216,7 +216,7 @@
  
  /*
   * APPLE NOTE: fasttrap_probe_t's are variable in size. Some quick profiling has shown
@@ -181,7 +181,7 @@ diff --git a/bsd/dev/mem.c b/bsd/dev/mem.c
 index 291a546cc375e76cb820da792c2be0e3205273b1..f7cea164f33f79606c05a9d952da35073e1b35a1 100644
 --- a/bsd/dev/mem.c
 +++ b/bsd/dev/mem.c
-@@ -153,30 +153,30 @@ mmioctl(dev_t dev, u_long cmd, __unused caddr_t data,
+@@ -153,30 +153,30 @@
  	return 0;
  }
  
@@ -224,7 +224,7 @@ index 291a546cc375e76cb820da792c2be0e3205273b1..f7cea164f33f79606c05a9d952da3507
  		const char *end = strchr(t, ',');
  		size_t tl = end ? (size_t)(end - t) : strlen(t);
  		if (tl == n && n > 0 && strncmp(t, name, n) == 0) {
-@@ -254,10 +254,10 @@ mmrw(dev_t dev, struct uio *uio, enum uio_rw rw)
+@@ -254,10 +254,10 @@
  			if (rw == UIO_READ) {
  				return 0;
  			}
@@ -268,7 +268,7 @@ index a1486081ba2885ec6d4cbb98453315dec7b60d0e..5d0b763bcce23fb97d1056e4d673c727
  
  #define KEYS_CORE_PA     0x0c440000u
  #define KEYS_OBS_PA      0x0e600000u
-@@ -104,7 +104,7 @@ keys_thread(void *arg, wait_result_t result)
+@@ -104,7 +104,7 @@
  		int now[3] = {!!(pon & 1u), !(gpio & 1u), !!(pon & 2u)};
  		if (!pok || !gok) {
  			if ((errors++ % 250u) == 0) {
@@ -277,7 +277,7 @@ index a1486081ba2885ec6d4cbb98453315dec7b60d0e..5d0b763bcce23fb97d1056e4d673c727
  				    pok, gok, keys_last_status);
  			}
  		} else {
-@@ -113,9 +113,9 @@ keys_thread(void *arg, wait_result_t result)
+@@ -113,9 +113,9 @@
  		for (int k = 0; k < 3; ++k) {
  			if ((k == 1 ? gok : pok) && now[k] != state[k]) {
  				state[k] = now[k];
@@ -289,7 +289,7 @@ index a1486081ba2885ec6d4cbb98453315dec7b60d0e..5d0b763bcce23fb97d1056e4d673c727
  			}
  		}
  		keys_wait();
-@@ -123,7 +123,7 @@ keys_thread(void *arg, wait_result_t result)
+@@ -123,7 +123,7 @@
  }
  
  void
@@ -298,7 +298,7 @@ index a1486081ba2885ec6d4cbb98453315dec7b60d0e..5d0b763bcce23fb97d1056e4d673c727
  {
  	int enabled = 1;
  	thread_t thread;
-@@ -131,23 +131,23 @@ sweet_keys_init(void)
+@@ -131,23 +131,23 @@
  		return;
  	}
  	keys_started = true;
@@ -326,7 +326,7 @@ index a1486081ba2885ec6d4cbb98453315dec7b60d0e..5d0b763bcce23fb97d1056e4d673c727
  		    keys_version, count);
  		return;
  	}
-@@ -159,24 +159,24 @@ sweet_keys_init(void)
+@@ -159,24 +159,24 @@
  	bool mok = keys_read(keys_gpio_apid, 0xc140, &mode);
  	bool eok = keys_read(keys_gpio_apid, 0xc146, &en);
  	bool sok = keys_read(keys_gpio_apid, 0xc105, &subtype);
@@ -384,7 +384,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  
  /* Live downstream DT has two positional reg entries, no reg-names. */
  #define RH_RSC_PA       0x18220000u
-@@ -78,7 +78,7 @@ rh_sync(uint32_t off, uint32_t value)
+@@ -78,7 +78,7 @@
  		}
  		delay(1);
  	}
@@ -393,7 +393,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  	    off, value, rh_read(rh_tcs, off));
  	return false;
  }
-@@ -110,7 +110,7 @@ rh_map(void)
+@@ -110,7 +110,7 @@
  		rh_dict = ml_io_map(RH_DICT_PA, 8);
  	}
  	if (!rh_rsc || !rh_tcs || !rh_dict) {
@@ -402,7 +402,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  		return ENOMEM;
  	}
  	uint32_t id = rh_read(rh_rsc, 0);
-@@ -119,24 +119,24 @@ rh_map(void)
+@@ -119,24 +119,24 @@
  	unsigned major = (id >> 16) & 0xffu;
  	unsigned count = (config >> (6u * RH_DRV)) & 0x3fu;
  	rh_ncpt = (config >> 27) & 0x1fu;
@@ -431,7 +431,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  			return EINVAL;
  		}
  		rh_db = ml_io_map(pa, size);
-@@ -148,11 +148,11 @@ rh_map(void)
+@@ -148,11 +148,11 @@
  	uint32_t db_version = rh_read(rh_db, 0);
  	uint32_t magic = rh_read(rh_db, 4);
  	uint32_t flags = rh_read(rh_db, 140);
@@ -445,7 +445,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  		return EINVAL;
  	}
  	return 0;
-@@ -177,7 +177,7 @@ rh_lookup(const char *res, uint32_t *address)
+@@ -177,7 +177,7 @@
  		unsigned count = rh_db16(h + 6);
  		if (slave < 3 || slave > 5 || (entries & 3u) ||
  		    !rh_range(entries, count * RH_DB_ENTRY) || !rh_range(aux, 0)) {
@@ -454,7 +454,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  			return EINVAL;
  		}
  		for (unsigned j = 0; j < count; ++j) {
-@@ -188,18 +188,18 @@ rh_lookup(const char *res, uint32_t *address)
+@@ -188,18 +188,18 @@
  			uint32_t addr = rh_read(rh_db, e + 16);
  			if (slave != RH_VRM || (addr >> 16) != RH_VRM || (addr & 15u) ||
  			    !rh_range(aux + rh_db16(e + 22), rh_db16(e + 20))) {
@@ -476,7 +476,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  		return ENODEV;
  	}
  	return 0;
-@@ -225,7 +225,7 @@ rh_send(uint32_t address, unsigned mv)
+@@ -225,7 +225,7 @@
  	for (unsigned t = 0; t < RH_ACTIVE_N; ++t) {
  		uint32_t b = t * RH_TCS_STRIDE;
  		uint32_t enabled = rh_read(rh_tcs, b + RH_ENABLE);
@@ -485,7 +485,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  		    t, rh_read(rh_tcs, b + RH_STATUS), rh_read(rh_tcs, b + RH_CONTROL),
  		    enabled, rh_read(rh_tcs, b + RH_WAIT));
  		if (enabled & ~((1u << rh_ncpt) - 1u)) {
-@@ -234,7 +234,7 @@ rh_send(uint32_t address, unsigned mv)
+@@ -234,7 +234,7 @@
  		for (unsigned c = 0; c < rh_ncpt; ++c) {
  			if ((enabled & (1u << c)) &&
  			    (rh_read(rh_tcs, b + RH_ADDR + c * RH_CMD_STRIDE) & ~15u) == address) {
@@ -494,7 +494,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  				return EBUSY;
  			}
  		}
-@@ -243,7 +243,7 @@ rh_send(uint32_t address, unsigned mv)
+@@ -243,7 +243,7 @@
  		}
  	}
  	if (chosen < 0) {
@@ -503,7 +503,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  		return EBUSY;
  	}
  	unsigned t = (unsigned)chosen;
-@@ -269,7 +269,7 @@ rh_send(uint32_t address, unsigned mv)
+@@ -269,7 +269,7 @@
  	/* HPM (raw 7) is supported by this PMIC5 LDO; enable comes last. */
  	const uint32_t offsets[3] = {0, 8, 4};
  	const uint32_t values[3] = {mv, 7, 1};
@@ -512,7 +512,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  	for (unsigned c = 0; c < 3; ++c) {
  		uint32_t cmd = b + c * RH_CMD_STRIDE;
  		if (!rh_sync(cmd + RH_MSGID, RH_WRITE_ACK) ||
-@@ -303,10 +303,10 @@ rh_send(uint32_t address, unsigned mv)
+@@ -303,10 +303,10 @@
  		}
  		delay(1);
  	}
@@ -525,7 +525,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  		return ETIMEDOUT;
  	}
  	/* Proven completion: clear trigger before mode, then free only our commands. */
-@@ -320,16 +320,16 @@ rh_send(uint32_t address, unsigned mv)
+@@ -320,16 +320,16 @@
  		return EIO;
  	}
  	rh_poisoned = false;
@@ -545,7 +545,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  		return EINVAL;
  	}
  	if (__atomic_exchange_n(&rh_lock, 1, __ATOMIC_ACQUIRE)) {
-@@ -338,7 +338,7 @@ sweet_rpmh_vreg_enable(const char *res, unsigned mv)
+@@ -338,7 +338,7 @@
  	int error = EIO;
  	uint32_t address = 0;
  	if (rh_poisoned) {
@@ -554,7 +554,7 @@ index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5
  		goto out;
  	}
  	error = rh_map();
-@@ -350,9 +350,9 @@ sweet_rpmh_vreg_enable(const char *res, unsigned mv)
+@@ -350,9 +350,9 @@
  	}
  out:
  	if (error) {
@@ -610,7 +610,7 @@ index b40eccd288216b121f4835e6705bc4666d85f46c..be97f1184e67cf657d43fe719e0aa615
  		const char *end = strchr(t, ',');
  		size_t tl = end ? (size_t)(end - t) : strlen(t);
  		if (tl == n && n > 0 && strncmp(t, name, n) == 0) {
-@@ -44,45 +44,45 @@ sweet_sample_wanted(const char *name)
+@@ -44,45 +44,45 @@
  	return false;
  }
  
@@ -697,7 +697,7 @@ index 1981490ad6506cf2701939dea82b3420dc4f4d34..58c2ee4b834fde20f316f912f42fc54c
  
  extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
  
-@@ -52,7 +52,7 @@ sp_find_apid(unsigned ppid)
+@@ -52,7 +52,7 @@
  }
  
  int
@@ -706,7 +706,7 @@ index 1981490ad6506cf2701939dea82b3420dc4f4d34..58c2ee4b834fde20f316f912f42fc54c
  {
  	if (sp_attempted) {
  		return sp_ready ? 0 : -1;
-@@ -66,25 +66,25 @@ sweet_spmi_init(void)
+@@ -66,25 +66,25 @@
  	sp_cfg = ml_io_map(SP_CFG_PA, 0x1000);
  	sp_obs = ml_io_map(SP_OBS_PA, 0x10000); /* EE 0, 512 * 0x80 */
  	if (!sp_core || !sp_cfg || !sp_obs) {
@@ -736,7 +736,7 @@ index 1981490ad6506cf2701939dea82b3420dc4f4d34..58c2ee4b834fde20f316f912f42fc54c
  {
  	/* Restrict access to the battery blocks; keys retain their own lanes. */
  	unsigned peripheral = addr >> 8;
-@@ -118,9 +118,9 @@ sweet_spmi_read(unsigned sid, unsigned addr, uint8_t *out)
+@@ -118,9 +118,9 @@
  		delay(1);
  	}
  	sp_poisoned[apid] = true;
@@ -803,7 +803,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  
  #define TOUCH_SE_PA      0x00a84000u
  #define TOUCH_GCC_PA     0x00100000u
-@@ -32,7 +32,7 @@ void sweet_touch_init(void);
+@@ -32,7 +32,7 @@
  #define TOUCH_MAX        10u
  #define TOUCH_GOODIX     1
  #define TOUCH_FTS        2
@@ -812,7 +812,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  #define GOODIX_PID_REG   0x4022u
  #define GOODIX_EVENT_REG 0x4180u
  #define GOODIX_HEAD_LEN  8u
-@@ -141,13 +141,13 @@ touch_clocks(void)
+@@ -141,13 +141,13 @@
  	touch_wr(st.gcc, TOUCH_GCC_VOTE, touch_rd(st.gcc, TOUCH_GCC_VOTE) | mask);
  	uint32_t dfs = touch_rd(st.gcc, TOUCH_RCG + 0x14u);
  	uint32_t cfg = touch_rd(st.gcc, TOUCH_RCG + 4u);
@@ -828,7 +828,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  			return false;
  		}
  	} else {
-@@ -156,14 +156,14 @@ touch_clocks(void)
+@@ -156,14 +156,14 @@
  		touch_wr(st.gcc, TOUCH_RCG + 4u, cfg);
  		touch_wr(st.gcc, TOUCH_RCG, touch_rd(st.gcc, TOUCH_RCG) | 1u);
  		if (!touch_wait_clear(st.gcc, TOUCH_RCG, 1u)) {
@@ -845,7 +845,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  			    touch_rd(st.gcc, branches[i]));
  			return false;
  		}
-@@ -186,7 +186,7 @@ touch_abort(void)
+@@ -186,7 +186,7 @@
  	}
  	if (!done || !touch_wait_clear(st.se, SE_STATUS, 1u)) {
  		st.dead = true;
@@ -854,7 +854,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  		    touch_rd(st.se, SE_STATUS), touch_rd(st.se, SE_IRQ));
  	}
  	/* Bound drain even if the hardware reports an impossible FIFO count. */
-@@ -196,7 +196,7 @@ touch_abort(void)
+@@ -196,7 +196,7 @@
  	touch_wr(st.se, SE_IRQ_CLR, 0xffffffffu);
  	if (touch_rd(st.se, SE_TX_COUNT) & 0xfffffffu) {
  		st.dead = true;
@@ -863,7 +863,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  	}
  }
  
-@@ -296,7 +296,7 @@ touch_msg(uint8_t addr, const uint8_t *tx, unsigned nt, uint8_t *rx,
+@@ -296,7 +296,7 @@
  	st.sent = st.got = 0;
  	int err = touch_msg_run(addr, tx, nt, rx, nr, stretch);
  	if (st.probing) {
@@ -872,7 +872,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  		    addr, nr ? "read" : "write", nr ? nr : nt, stretch ? 1u : 0u,
  		    err, st.irq_last, st.irq_status, st.sent, st.got,
  		    touch_rd(st.se, SE_STATUS));
-@@ -332,7 +332,7 @@ touch_probe_info(uint16_t reg, uint8_t *buf)
+@@ -332,7 +332,7 @@
  {
  	memset(buf, 0xa5, 32);
  	int err = touch_read(0x5d, reg, true, buf, 32);
@@ -881,7 +881,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  	    reg, err, st.irq_last, st.irq_status);
  	if (!err) {
  		for (unsigned off = 0; off < 32; off += 16) {
-@@ -340,7 +340,7 @@ touch_probe_info(uint16_t reg, uint8_t *buf)
+@@ -340,7 +340,7 @@
  			for (unsigned j = 0; j < 16; ++j) {
  				(void)snprintf(line + j * 3u, 4, "%02x ", buf[off + j]);
  			}
@@ -890,7 +890,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  		}
  	}
  	return err;
-@@ -372,12 +372,12 @@ touch_report(uint32_t mask, const int *x, const int *y)
+@@ -372,12 +372,12 @@
  		uint32_t bit = 1u << id;
  		if (mask & bit) {
  			if (!(st.active & bit) || x[id] != st.x[id] || y[id] != st.y[id]) {
@@ -905,7 +905,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  		}
  	}
  	st.active = mask;
-@@ -492,17 +492,17 @@ touch_se_init(void)
+@@ -492,17 +492,17 @@
  {
  	uint32_t fw = touch_rd(st.se, SE_FW);
  	uint32_t tx = touch_rd(st.se, SE_HW_TX), rx = touch_rd(st.se, SE_HW_RX);
@@ -926,7 +926,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  		return false;
  	}
  	touch_wr(st.se, 0xe18, 0); /* no GSI events */
-@@ -528,18 +528,18 @@ touch_se_init(void)
+@@ -528,18 +528,18 @@
  	touch_wr(st.se, 0x810, 0);
  	touch_wr(st.se, 0x814, ((rx >> 16) & 0x3fu) - 1u);
  	touch_wr(st.se, SE_IRQ_EN, SE_EVENTS);
@@ -948,7 +948,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  		return false;
  	}
  	return true;
-@@ -552,32 +552,32 @@ touch_thread(void *arg, wait_result_t result)
+@@ -552,32 +552,32 @@
  	(void)arg;
  	(void)result;
  	/*
@@ -989,7 +989,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  		goto out;
  	}
  	touch_gpio(90, 0, 0, 0, true, true); /* board digital power enable */
-@@ -592,23 +592,23 @@ touch_thread(void *arg, wait_result_t result)
+@@ -592,23 +592,23 @@
  	uint8_t gid[32], legacy[32], fid1 = 0, fid2 = 0;
  	st.probing = true;
  	int ge = touch_probe_info(GOODIX_PID_REG, gid);
@@ -1017,7 +1017,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  	    goodix ? "GT9896 Yellowstone" : "Focaltech 54:52", st.irq_hint);
  	unsigned errors = 0, ticks = 0;
  	while (!st.dead) {
-@@ -618,7 +618,7 @@ touch_thread(void *arg, wait_result_t result)
+@@ -618,7 +618,7 @@
  			int err = st.kind == TOUCH_GOODIX ? touch_goodix() : touch_focaltech();
  			if (err) {
  				if ((errors++ % 100u) == 0) {
@@ -1026,7 +1026,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  				}
  				if (errors == 10) {
  					touch_report(0, st.x, st.y); /* release after persistent bad reads */
-@@ -636,7 +636,7 @@ out:
+@@ -636,7 +636,7 @@
  }
  
  void
@@ -1035,7 +1035,7 @@ index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306
  {
  	int enabled = 1;
  	thread_t thread;
-@@ -644,17 +644,17 @@ sweet_touch_init(void)
+@@ -644,17 +644,17 @@
  		return;
  	}
  	st.started = true;
@@ -1081,7 +1081,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  #include <sys/param.h>
  #include <sys/systm.h>
  #include <sys/buf.h>
-@@ -48,11 +48,11 @@ extern int get_preemption_level(void);
+@@ -48,11 +48,11 @@
  extern kern_return_t kernel_thread_start(thread_continue_t, void *, thread_t *);
  extern void thread_deallocate(thread_t);
  extern int hz;
@@ -1098,7 +1098,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  
  #define REG_CAP         0x00
  #define REG_IS          0x20
-@@ -114,8 +114,8 @@ static struct {
+@@ -114,8 +114,8 @@
  	bool ready;
  } su;
  
@@ -1109,7 +1109,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  
  static inline uint32_t
  ufs_rd(uint32_t off)
-@@ -220,7 +220,7 @@ ufs_scsi(const uint8_t *cdb, unsigned cdb_len, uint32_t len, bool write)
+@@ -220,7 +220,7 @@
  		uint64_t now = mach_absolute_time();
  		if (now > deadline) {
  			ufs_wr(REG_UTRLCLR, ~1u);
@@ -1118,7 +1118,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  			return ETIMEDOUT;
  		}
  		if (sleepable && now >= spin_until) {
-@@ -249,7 +249,7 @@ ufs_scsi(const uint8_t *cdb, unsigned cdb_len, uint32_t len, bool write)
+@@ -249,7 +249,7 @@
  
  	uint32_t ocs = utrd->dw2 & 0xff;
  	if (ocs || ucd->resp[0] != 0x21 || ucd->resp[6] || ucd->resp[7]) {
@@ -1127,7 +1127,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  		    cdb[0], ocs, ucd->resp[0], ucd->resp[6], ucd->resp[7]);
  		return EIO;
  	}
-@@ -281,7 +281,7 @@ ufs_write_blocks(uint64_t lba, uint32_t count)
+@@ -281,7 +281,7 @@
  	if (!su.writable || !su.nblocks || count == 0 || count > BOUNCE_SIZE / UFS_BLOCK ||
  	    lba < su.first_block || lba - su.first_block >= su.nblocks ||
  	    count > su.nblocks - (lba - su.first_block) || lba + count - 1 > UINT32_MAX) {
@@ -1136,7 +1136,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  		return EPERM;
  	}
  	uint8_t cdb[10] = {
-@@ -308,7 +308,7 @@ ufs_find_partition(const char *want)
+@@ -308,7 +308,7 @@
  		return error;
  	}
  	if (memcmp(b, "EFI PART", 8) != 0) {
@@ -1145,7 +1145,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  		return ENXIO;
  	}
  	uint64_t entry_lba;
-@@ -317,7 +317,7 @@ ufs_find_partition(const char *want)
+@@ -317,7 +317,7 @@
  	memcpy(&nent, b + 80, 4);
  	memcpy(&esz, b + 84, 4);
  	if (esz != 128 || nent == 0 || nent * esz > BOUNCE_SIZE) {
@@ -1154,7 +1154,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  		return ENXIO;
  	}
  	error = ufs_read_blocks(entry_lba, (nent * esz + UFS_BLOCK - 1) / UFS_BLOCK);
-@@ -349,7 +349,7 @@ ufs_find_partition(const char *want)
+@@ -349,7 +349,7 @@
  		su.nblocks = last - first + 1;
  		return 0;
  	}
@@ -1163,7 +1163,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  	return ENOENT;
  }
  
-@@ -358,16 +358,16 @@ ufs_take_over_host(void)
+@@ -358,16 +358,16 @@
  {
  	uint32_t hce = ufs_rd(REG_HCE), hcs = ufs_rd(REG_HCS);
  	if (!(hce & 1) || !(hcs & HCS_DP) || !(hcs & HCS_UTRLRDY)) {
@@ -1183,7 +1183,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  		    su.dma_pa);
  		return ENXIO;
  	}
-@@ -381,14 +381,14 @@ ufs_take_over_host(void)
+@@ -381,14 +381,14 @@
  	/* Never ring a doorbell unless the host uses our list. */
  	if (ufs_rd(REG_UTRLBA) != (uint32_t)list || ufs_rd(REG_UTRLBAU) != (uint32_t)(list >> 32) ||
  	    !(ufs_rd(REG_UTRLRSR) & 1)) {
@@ -1200,7 +1200,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  {
  	if (!su.ready) {
  		return ENXIO;
-@@ -397,13 +397,13 @@ sweet_ufs_open(__unused dev_t dev, int flags, __unused int devtype, __unused str
+@@ -397,13 +397,13 @@
  }
  
  static int
@@ -1216,7 +1216,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  {
  	int error = 0;
  	caddr_t vaddr = NULL;
-@@ -430,7 +430,7 @@ sweet_ufs_strategy(buf_t bp)
+@@ -430,7 +430,7 @@
  		goto done;
  	}
  
@@ -1225,7 +1225,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  	for (uint32_t done = 0; done < count;) {
  		uint64_t pos = off + done;
  		uint64_t lba = pos / UFS_BLOCK;
-@@ -459,7 +459,7 @@ sweet_ufs_strategy(buf_t bp)
+@@ -459,7 +459,7 @@
  		done += want;
  		buf_setresid(bp, count - done);
  	}
@@ -1234,7 +1234,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  	buf_unmap(bp);
  
  done:
-@@ -470,7 +470,7 @@ done:
+@@ -470,7 +470,7 @@
  }
  
  static int
@@ -1243,7 +1243,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
      __unused struct proc *p, int is_char)
  {
  	uint32_t *f = (uint32_t *)data;
-@@ -503,9 +503,9 @@ sweet_ufs_ioctl(__unused dev_t dev, u_long cmd, caddr_t data, __unused int flag,
+@@ -503,9 +503,9 @@
  		if (!su.writable) {
  			return 0;
  		}
@@ -1255,7 +1255,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  		return error;
  	}
  	case DKIOCGETMAXBLOCKCOUNTREAD:
-@@ -524,54 +524,54 @@ sweet_ufs_ioctl(__unused dev_t dev, u_long cmd, caddr_t data, __unused int flag,
+@@ -524,54 +524,54 @@
  }
  
  static int
@@ -1331,7 +1331,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  	.d_stop       = eno_stop,
  	.d_reset      = eno_reset,
  	.d_ttys       = NULL,
-@@ -584,7 +584,7 @@ static const struct cdevsw sweet_ufs_cdevsw = {
+@@ -584,7 +584,7 @@
  };
  
  static int
@@ -1340,7 +1340,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  {
  	DTEntry node;
  	uintptr_t const *reg = NULL;
-@@ -593,7 +593,7 @@ sweet_ufs_init(void)
+@@ -593,7 +593,7 @@
  	const char *dt_path = "/munch-ufs";
  	char want[64] = "iosroot";
  #else
@@ -1349,7 +1349,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  	char want[64] = "userdata";
  #endif
  	int error;
-@@ -620,7 +620,7 @@ sweet_ufs_init(void)
+@@ -620,7 +620,7 @@
  	su.regs = ml_io_map(reg[0], reg[1]);
  	if (kmem_alloc_contig(kernel_map, &su.dma, DMA_SIZE, PAGE_MASK, 0, 0,
  	    KMA_DATA | KMA_ZERO | KMA_PERMANENT, VM_KERN_MEMORY_IOKIT) != KERN_SUCCESS) {
@@ -1358,7 +1358,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  		return ENOMEM;
  	}
  	ppnum_t pn = pmap_find_phys(kernel_pmap, (addr64_t)su.dma);
-@@ -631,7 +631,7 @@ sweet_ufs_init(void)
+@@ -631,7 +631,7 @@
  	su.lun = 0;
  	su.secsize = DEV_BSIZE;
  
@@ -1367,7 +1367,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  	error = ufs_take_over_host();
  	if (!error) {
  		static const uint8_t tur[6] = { 0x00 };
-@@ -642,16 +642,16 @@ sweet_ufs_init(void)
+@@ -642,16 +642,16 @@
  	if (!error) {
  		error = ufs_find_partition(want);
  	}
@@ -1387,7 +1387,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  	if (su.cmajor < 0) {
  		return ENXIO;
  	}
-@@ -661,126 +661,126 @@ sweet_ufs_init(void)
+@@ -661,126 +661,126 @@
  	/* Only now, with the partition bounds known, can writes be allowed. */
  	su.writable = (rw != 0);
  	su.ready = true;
@@ -1561,7 +1561,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  			};
  			bzero(bounce, UFS_BLOCK);
  			memcpy(bounce, &h, sizeof(h));
-@@ -789,9 +789,9 @@ sweet_log_thread(__unused void *arg, __unused wait_result_t wr)
+@@ -789,9 +789,9 @@
  		if (!error) {
  			error = ufs_sync_cache();
  		}
@@ -1573,7 +1573,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  			return;
  		}
  		flushed = total;
-@@ -799,32 +799,32 @@ sweet_log_thread(__unused void *arg, __unused wait_result_t wr)
+@@ -799,32 +799,32 @@
  }
  
  static void
@@ -1616,7 +1616,7 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  		if (error) {
  			return error;
  		}
-@@ -832,4 +832,4 @@ sweet_ufs_rootdev(dev_t *dev)
+@@ -832,4 +832,4 @@
  	*dev = su.bdev;
  	return 0;
  }
@@ -1656,7 +1656,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  extern ppnum_t pmap_find_phys(pmap_t pmap, addr64_t va);
  
  #define GCC_PA                  0x00100000
-@@ -74,53 +74,53 @@ usb_rd(vm_offset_t base, uint32_t off)
+@@ -74,53 +74,53 @@
  }
  
  void
@@ -1723,7 +1723,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  		return;
  	}
  	vm_offset_t phy = ml_io_map(QUSB2_PA, QUSB2_SIZE);
-@@ -130,13 +130,13 @@ sweet_usb_probe(void)
+@@ -130,13 +130,13 @@
  	/* DT qcom,qusb-phy-reg-offset order (Linux phy-msm-qusb-v2.c): PORT_TUNE1 0x240,
  	 * PLL_COMMON_STATUS_ONE 0x1a0, PWR_CTRL1 0x210, INTR_CTRL 0x230,
  	 * PLL_CORE_INPUT_OVERRIDE 0x0a8, TEST1 0x254. */
@@ -1739,7 +1739,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
   * the DWC3 powered, clocked, in device mode and halted, with the PHY set
   * up, so only the device controller is restarted: soft reset, an event
   * buffer in our memory, endpoint 0, run. Events are polled from a kernel
-@@ -278,14 +278,14 @@ ud_epcmd(unsigned ep, uint32_t cmd, uint32_t p0, uint32_t p1, uint32_t p2)
+@@ -278,14 +278,14 @@
  		if (!(v & DEPCMD_CMDACT)) {
  			uint32_t status = (v >> 12) & 0xf;
  			if (status) {
@@ -1756,7 +1756,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  	return -1;
  }
  
-@@ -351,7 +351,7 @@ static const uint8_t ud_cfg_desc[80] = {
+@@ -351,7 +351,7 @@
  };
  /* The host side's MAC (ECM iMACAddress); the phone's own is ..:02 */
  static const char *const ud_strings[] = {
@@ -1765,7 +1765,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  };
  static const uint8_t ud_phone_mac[ETHER_ADDR_LEN] = { 0x02, 0x00, 0x5e, 0x77, 0xee, 0x02 };
  
-@@ -407,13 +407,13 @@ ud_configure(void)
+@@ -407,13 +407,13 @@
  	    ud_epcmd(EP_INT, DEPCMD_SETEPCONFIG, (3u << 1) | (16u << 3) | (2u << 17),
  	    (1u << 8) | (8u << 16) | ((uint32_t)EP_INT << 25), 0) ||
  	    ud_epcmd(EP_INT, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0)) {
@@ -1781,7 +1781,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  }
  
  static void
-@@ -428,7 +428,7 @@ ud_setup(void)
+@@ -428,7 +428,7 @@
  	uint32_t n = 0;
  	bool ok = true;
  
@@ -1790,7 +1790,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  	ud.data_in = (type & 0x80) != 0;
  	if ((type & 0x60) == 0x20) {    /* class request (e.g. SET_ETHERNET_PACKET_FILTER) */
  		ok = (length == 0);
-@@ -444,12 +444,12 @@ ud_setup(void)
+@@ -444,12 +444,12 @@
  	} else if (req == 5) {          /* SET_ADDRESS: takes effect now (DWC3 handles the timing) */
  		uint32_t dcfg = dwc_rd(DCFG) & ~(0x7fu << 3);
  		dwc_wr(DCFG, dcfg | ((uint32_t)(value & 0x7f) << 3));
@@ -1805,7 +1805,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  	} else if (req == 8) {          /* GET_CONFIGURATION */
  		data[0] = ud.configured ? 1 : 0; n = 1;
  	} else if (req == 0) {          /* GET_STATUS */
-@@ -636,15 +636,15 @@ ud_if_create(void)
+@@ -636,15 +636,15 @@
  	struct ifnet_init_eparams init;
  	static lck_grp_t *grp;
  
@@ -1824,7 +1824,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  	init.name = "ue";
  	init.unit = 0;
  	init.family = IFNET_FAMILY_ETHERNET;
-@@ -660,7 +660,7 @@ ud_if_create(void)
+@@ -660,7 +660,7 @@
  	init.broadcast_addr = etherbroadcastaddr;
  	init.broadcast_len = ETHER_ADDR_LEN;
  	if (ifnet_allocate_extended(&init, &ud.ifp) != 0) {
@@ -1833,7 +1833,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  		ud.ifp = NULL;
  		return;
  	}
-@@ -670,7 +670,7 @@ ud_if_create(void)
+@@ -670,7 +670,7 @@
  	ifnet_set_baudrate(ud.ifp, 480000000);
  	ifnet_set_flags(ud.ifp, IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST, 0xffff);
  	if (ifnet_attach(ud.ifp, NULL) != 0) {
@@ -1842,7 +1842,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  		ud.ifp = NULL;
  		return;
  	}
-@@ -701,7 +701,7 @@ ud_if_create(void)
+@@ -701,7 +701,7 @@
  		sock_close(so);
  	}
  	ifnet_set_flags(ud.ifp, IFF_UP | IFF_RUNNING, IFF_UP | IFF_RUNNING);
@@ -1851,7 +1851,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  }
  
  static void
-@@ -711,7 +711,7 @@ ud_event(uint32_t ev)
+@@ -711,7 +711,7 @@
  		uint32_t type = (ev >> 8) & 0xf;
  		if (type == 1) {        /* USB reset */
  			dwc_wr(DCFG, dwc_rd(DCFG) & ~(0x7fu << 3));
@@ -1860,7 +1860,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  		} else if (type == 2) { /* connect done */
  			uint32_t speed = dwc_rd(DSTS) & 7;
  			/* ep0 max packet: 64 at high/full speed (modify action) */
-@@ -719,9 +719,9 @@ ud_event(uint32_t ev)
+@@ -719,9 +719,9 @@
  			    (1u << 8) | (1u << 10) | (0u << 25), 0);
  			ud_epcmd(1, DEPCMD_SETEPCONFIG, (0u << 1) | (64u << 3) | (2u << 30),
  			    (1u << 8) | (1u << 10) | (1u << 25), 0);
@@ -1872,7 +1872,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  		}
  		return;
  	}
-@@ -787,14 +787,14 @@ ud_thread(void *arg __unused, wait_result_t wr __unused)
+@@ -787,14 +787,14 @@
  				uint32_t ev = *(volatile uint32_t *)(ud.dma + UD_EVT + ud.evt_pos);
  				ud.evt_pos = (ud.evt_pos + 4) % UD_EVT_SIZE;
  				if (ud.events++ < 200) {
@@ -1889,7 +1889,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  		}
  		ud_sleep_ms(1);
  	}
-@@ -802,13 +802,13 @@ ud_thread(void *arg __unused, wait_result_t wr __unused)
+@@ -802,13 +802,13 @@
  
  /*
   * Live console log over USB Ethernet: every 100 ms the new bytes of the
@@ -1907,7 +1907,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  
  static void
  ud_log_thread(void *arg __unused, wait_result_t wr __unused)
-@@ -816,7 +816,7 @@ ud_log_thread(void *arg __unused, wait_result_t wr __unused)
+@@ -816,7 +816,7 @@
  	static char chunk[1400];
  	socket_t so = NULL;
  	struct sockaddr_in to;
@@ -1916,7 +1916,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  
  	pos = pos > 65536 ? pos - 65536 : 0;
  	bzero(&to, sizeof(to));
-@@ -834,7 +834,7 @@ ud_log_thread(void *arg __unused, wait_result_t wr __unused)
+@@ -834,7 +834,7 @@
  			continue;
  		}
  		uint32_t n;
@@ -1925,7 +1925,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  			struct iovec iov = { .iov_base = chunk, .iov_len = n };
  			struct msghdr msg = {
  				.msg_name = &to, .msg_namelen = sizeof(to),
-@@ -849,14 +849,14 @@ ud_log_thread(void *arg __unused, wait_result_t wr __unused)
+@@ -849,14 +849,14 @@
  }
  
  static void
@@ -1942,7 +1942,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  		return;
  	}
  	ppnum_t pn = pmap_find_phys(kernel_pmap, (addr64_t)ud.dma);
-@@ -872,7 +872,7 @@ sweet_usb_gadget_start(vm_offset_t dwc)
+@@ -872,7 +872,7 @@
  	for (i = 0; i < 500 && (dwc_rd(DCTL) & DCTL_CSFTRST); i++) {
  		delay(1000);
  	}
@@ -1951,7 +1951,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  	    (dwc_rd(DCTL) & DCTL_CSFTRST) ? "STUCK" : "done", i, dwc_rd(GCTL), dwc_rd(DCFG));
  	if (dwc_rd(DCTL) & DCTL_CSFTRST) {
  		return;
-@@ -896,7 +896,7 @@ sweet_usb_gadget_start(vm_offset_t dwc)
+@@ -896,7 +896,7 @@
  	    ud_epcmd(0, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
  	    ud_epcmd(1, DEPCMD_SETEPCONFIG, (0u << 1) | (512u << 3), (1u << 8) | (1u << 10) | (1u << 25), 0) ||
  	    ud_epcmd(1, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0)) {
@@ -1960,7 +1960,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  		return;
  	}
  	dwc_wr(DALEPENA, 0x3);
-@@ -905,12 +905,12 @@ sweet_usb_gadget_start(vm_offset_t dwc)
+@@ -905,12 +905,12 @@
  	vm_offset_t qs = ml_io_map(QSCRATCH_PA, 0x100);
  	if (qs != 0) {
  		uint32_t hs = usb_rd(qs, QSCRATCH_HS_PHY_CTRL), ss = usb_rd(qs, QSCRATCH_SS_PHY_CTRL);
@@ -1975,7 +1975,7 @@ index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d
  		    usb_rd(qs, QSCRATCH_HS_PHY_CTRL), usb_rd(qs, QSCRATCH_SS_PHY_CTRL));
  	}
  
-@@ -918,14 +918,14 @@ sweet_usb_gadget_start(vm_offset_t dwc)
+@@ -918,14 +918,14 @@
  	for (i = 0; i < 500 && (dwc_rd(DSTS) & DSTS_DEVCTRLHLT); i++) {
  		delay(1000);
  	}
@@ -2017,7 +2017,7 @@ diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
 index 71428547b98ae96c2acd77c5cc0a168783164f34..ca59911ebbc7584cba42492bcaf376308b931741 100644
 --- a/bsd/kern/bsd_init.c
 +++ b/bsd/kern/bsd_init.c
-@@ -691,16 +691,16 @@ bsd_init(void)
+@@ -691,16 +691,16 @@
  	bsd_init_kprintf("calling vfsinit\n");
  	vfsinit();
  
@@ -2042,7 +2042,7 @@ index 71428547b98ae96c2acd77c5cc0a168783164f34..ca59911ebbc7584cba42492bcaf37630
  #endif
  
  #if CONFIG_PROC_UUID_POLICY
-@@ -933,14 +933,14 @@ bsd_init(void)
+@@ -933,14 +933,14 @@
  		if (require_rootauth) {
  			/* enforce sealedness */
  			int autherr = VNOP_IOCTL(rootvnode, FSIOC_KERNEL_ROOTAUTH, NULL, 0, vfs_context_kernel());
@@ -2064,7 +2064,7 @@ diff --git a/bsd/kern/kern_core.c b/bsd/kern/kern_core.c
 index e9e6bfa16927cb548c6237e4b991b40682526476..b80caafffe763c3c966dead6e70ccb770bb6804b 100644
 --- a/bsd/kern/kern_core.c
 +++ b/bsd/kern/kern_core.c
-@@ -117,9 +117,9 @@ kern_return_t thread_getstatus(thread_t act, int flavor,
+@@ -117,9 +117,9 @@
      thread_state_t tstate, mach_msg_type_number_t *count);
  void task_act_iterate_wth_args(task_t, void (*)(thread_t, void *), void *);
  
@@ -2080,7 +2080,7 @@ diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
 index a6247072323f67145a6c172c8ae60395e9b89aca..33223951170c2fef16f089eb85615754b5d627b1 100644
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
-@@ -7411,8 +7411,8 @@ process_signature(proc_t p, struct image_params *imgp)
+@@ -7411,8 +7411,8 @@
  				error = EACCES;
  				goto done;
  			}
@@ -2095,7 +2095,7 @@ diff --git a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
 index 3cc8fdeb9afa299cf0087adaef4c9c0ae7ab13d2..4cb8759ed27649d541c918c8ce89f506a46fda48 100644
 --- a/bsd/kern/kern_exit.c
 +++ b/bsd/kern/kern_exit.c
-@@ -1884,10 +1884,10 @@ proc_prepareexit(proc_t p, int rv, boolean_t perf_notify)
+@@ -1884,10 +1884,10 @@
  		subcode = ut->uu_subcode;
  		etype = ut->uu_exception;
  
@@ -2113,7 +2113,7 @@ diff --git a/bsd/kern/kern_mib.c b/bsd/kern/kern_mib.c
 index 4643c475dbd76a74b4d549904a51802a1d2d41ae..ed7700a3321a38502725aa4617e4be319b318dd8 100644
 --- a/bsd/kern/kern_mib.c
 +++ b/bsd/kern/kern_mib.c
-@@ -518,8 +518,8 @@ sysctl_hw_generic(__unused struct sysctl_oid *oidp, void *arg1,
+@@ -518,8 +518,8 @@
  		 * Deprecated variables.  We still support these for
  		 * backwards compatibility purposes only.
  		 */
@@ -2128,7 +2128,7 @@ diff --git a/bsd/kern/kern_trustcache.c b/bsd/kern/kern_trustcache.c
 index 9ebfd55b3086cb77c7ed0cbbf1ffe8bdcfa208d0..282456dbe96b058725fad4abcdb9899100b3aeb5 100644
 --- a/bsd/kern/kern_trustcache.c
 +++ b/bsd/kern/kern_trustcache.c
-@@ -248,9 +248,9 @@ trust_cache_runtime_init(void)
+@@ -248,9 +248,9 @@
  	allow_legacy_caches = true;
  #endif
  
@@ -2140,7 +2140,7 @@ index 9ebfd55b3086cb77c7ed0cbbf1ffe8bdcfa208d0..282456dbe96b058725fad4abcdb98991
  	 * the missing service explicitly: no caches can be loaded or matched.
  	 * Keep a NULL runtime through lockdown rather than a partially
  	 * initialized runtime that would later dereference absent callbacks.
-@@ -258,7 +258,7 @@ trust_cache_runtime_init(void)
+@@ -258,7 +258,7 @@
  	if (img4if == NULL || amfi == NULL) {
  		trust_cache_rt = NULL;
  		trust_cache_mut_rt = NULL;
@@ -2149,7 +2149,7 @@ index 9ebfd55b3086cb77c7ed0cbbf1ffe8bdcfa208d0..282456dbe96b058725fad4abcdb98991
  		return;
  	}
  #endif
-@@ -493,7 +493,7 @@ check_trust_cache_runtime_for_uuid(
+@@ -493,7 +493,7 @@
  		return KERN_INVALID_ARGUMENT;
  	}
  
@@ -2158,7 +2158,7 @@ index 9ebfd55b3086cb77c7ed0cbbf1ffe8bdcfa208d0..282456dbe96b058725fad4abcdb98991
  	if (trust_cache_rt == NULL) {
  		return KERN_NOT_FOUND;
  	}
-@@ -583,7 +583,7 @@ load_trust_cache_with_type(
+@@ -583,7 +583,7 @@
  		}
  	}
  
@@ -2167,7 +2167,7 @@ index 9ebfd55b3086cb77c7ed0cbbf1ffe8bdcfa208d0..282456dbe96b058725fad4abcdb98991
  	if (trust_cache_rt == NULL) {
  		return KERN_NOT_SUPPORTED;
  	}
-@@ -695,7 +695,7 @@ load_legacy_trust_cache(
+@@ -695,7 +695,7 @@
  		panic("overflow on the module: %p | %lu", module_data, module_size);
  	}
  
@@ -2176,7 +2176,7 @@ index 9ebfd55b3086cb77c7ed0cbbf1ffe8bdcfa208d0..282456dbe96b058725fad4abcdb98991
  	if (trust_cache_rt == NULL) {
  		return KERN_NOT_SUPPORTED;
  	}
-@@ -729,7 +729,7 @@ query_trust_cache(
+@@ -729,7 +729,7 @@
  		return KERN_INVALID_ARGUMENT;
  	}
  
@@ -2185,7 +2185,7 @@ index 9ebfd55b3086cb77c7ed0cbbf1ffe8bdcfa208d0..282456dbe96b058725fad4abcdb98991
  	if (trust_cache_rt == NULL) {
  		if (query_type >= kTCQueryTypeTotal) {
  			return KERN_INVALID_ARGUMENT;
-@@ -946,7 +946,7 @@ static_trust_cache_capabilities(
+@@ -946,7 +946,7 @@
  	*capabilities0_ret = kTCCapabilityNone;
  	*capabilities1_ret = kTCCapabilityNone;
  
@@ -2347,7 +2347,7 @@ index dcb33817966ab53bad39f19441ba50e18d4ee49a..524ab441bb6c354cf0e6f9b99d018ac3
  	return KERN_NOT_SUPPORTED;
  }
  
-@@ -126,78 +126,78 @@ sweet_amfi_adjust_with_monitor(__unused void *os_entitlements,
+@@ -126,78 +126,78 @@
   * its code directory hash.
   */
  static void
@@ -2448,7 +2448,7 @@ index dcb33817966ab53bad39f19441ba50e18d4ee49a..524ab441bb6c354cf0e6f9b99d018ac3
  	if (entitlement_object) {
  		*entitlement_object = obj;
  	} else if (obj) {
-@@ -207,45 +207,45 @@ sweet_amfi_copy_object(const void *os_entitlements,
+@@ -207,45 +207,45 @@
  }
  
  static kern_return_t
@@ -2517,7 +2517,7 @@ index dcb33817966ab53bad39f19441ba50e18d4ee49a..524ab441bb6c354cf0e6f9b99d018ac3
  
  /*
   * The signature reached this hook validated, so mark it CS_SIGNED like AMFI
-@@ -256,7 +256,7 @@ STARTUP(EARLY_BOOT, STARTUP_RANK_MIDDLE, sweet_amfi_register);
+@@ -256,7 +256,7 @@
   * revalidation passes the read-only blob itself) get their entitlements here.
   */
  static int
@@ -2526,7 +2526,7 @@ index dcb33817966ab53bad39f19441ba50e18d4ee49a..524ab441bb6c354cf0e6f9b99d018ac3
      __unused cpu_type_t cpu_type, struct cs_blob *cs_blob,
      unsigned int *cs_flags, __unused unsigned int *signer_type,
      __unused int flags, __unused unsigned int platform,
-@@ -268,7 +268,7 @@ sweet_amfi_vnode_check_signature(struct vnode *vp, __unused struct label *label,
+@@ -268,7 +268,7 @@
  		*cs_flags |= CS_PLATFORM_BINARY;
  	}
  	if (cs_blob != cs_blob->csb_ro_addr && cs_blob->csb_entitlements == NULL) {
@@ -2535,7 +2535,7 @@ index dcb33817966ab53bad39f19441ba50e18d4ee49a..524ab441bb6c354cf0e6f9b99d018ac3
  	}
  	return 0;
  }
-@@ -278,21 +278,21 @@ sweet_amfi_vnode_check_signature(struct vnode *vp, __unused struct label *label,
+@@ -278,21 +278,21 @@
   * arg). Without a policy of that name every call fails with ENOPOLICY and
   * launchd reports mach lookups as "error = 159: Sandbox restriction"
   * (backboardd cannot reach mobilegestalt or iohideventsystem; tccd:
@@ -2563,7 +2563,7 @@ index dcb33817966ab53bad39f19441ba50e18d4ee49a..524ab441bb6c354cf0e6f9b99d018ac3
  	}
  	switch (call) {
  	case 4:         /* container path (audit token / pid) */
-@@ -305,8 +305,8 @@ sweet_sandbox_syscall(struct proc *p, int call, __unused user_addr_t arg)
+@@ -305,8 +305,8 @@
  	}
  }
  
@@ -2574,7 +2574,7 @@ index dcb33817966ab53bad39f19441ba50e18d4ee49a..524ab441bb6c354cf0e6f9b99d018ac3
  };
  
  /*
-@@ -316,68 +316,68 @@ static const struct mac_policy_ops sweet_amfi_mac_ops = {
+@@ -316,68 +316,68 @@
   * PRIV_WORK_INTERVAL ("Failed to create work interval", SpringBoard).
   * Grant that one; log the first denial of each other privilege per process.
   */
@@ -2806,7 +2806,7 @@ rename to bsd/munch_hfs/core/hfs_catalog.c
 index aa03e9bd5328c4f9c042986919f8663bbb921356..ef1dcc07d57a080106888e9dd6407328308cf47b 100644
 --- a/bsd/sweet_hfs/core/hfs_catalog.c
 +++ b/bsd/munch_hfs/core/hfs_catalog.c
-@@ -757,20 +757,20 @@ falsematch:
+@@ -757,20 +757,20 @@
  }
  
  
@@ -2831,7 +2831,7 @@ index aa03e9bd5328c4f9c042986919f8663bbb921356..ef1dcc07d57a080106888e9dd6407328
  #endif
  
  /*
-@@ -881,7 +881,7 @@ cat_lookupbykey(struct hfsmount *hfsmp, CatalogKey *keyp, int flags, u_int32_t h
+@@ -881,7 +881,7 @@
  		if (ilink) {
  			/* This is a hard link and the link count bit was not set */
  			if (!(attrp->ca_recflags & kHFSHasLinkChainMask)) {
@@ -2840,7 +2840,7 @@ index aa03e9bd5328c4f9c042986919f8663bbb921356..ef1dcc07d57a080106888e9dd6407328
  					printf ("hfs: set hardlink bit on vol=%s cnid=%u inoid=%u\n", hfsmp->vcbVN, cnid, ilink);
  				}
  				attrp->ca_recflags |= kHFSHasLinkChainMask;
-@@ -895,14 +895,14 @@ cat_lookupbykey(struct hfsmount *hfsmp, CatalogKey *keyp, int flags, u_int32_t h
+@@ -895,14 +895,14 @@
  				(parentid != hfsmp->hfs_private_desc[DIR_HARDLINKS].cd_cnid)) {
  				/* This is not a hard link or inode and the link count bit was set */
  				if (attrp->ca_recflags & kHFSHasLinkChainMask) {
@@ -2996,7 +2996,7 @@ rename to bsd/munch_hfs/core/hfs_vfsutils.c
 index 7da2a894f6c3f867b47f50058d7d2a7c80cd5802..75abe451bb2dee48a4877225d83f2a030930fb61 100644
 --- a/bsd/sweet_hfs/core/hfs_vfsutils.c
 +++ b/bsd/munch_hfs/core/hfs_vfsutils.c
-@@ -202,20 +202,20 @@ OSErr hfs_MountHFSPlusVolume(struct hfsmount *hfsmp, HFSPlusVolumeHeader *vhp,
+@@ -202,20 +202,20 @@
  	/* don't mount a writable volume if its dirty, it must be cleaned by fsck_hfs */
  	if ((hfsmp->hfs_flags & HFS_READ_ONLY) == 0 && hfsmp->jnl == NULL &&
  	    (SWAP_BE32(vhp->attributes) & kHFSVolumeUnmountedMask) == 0) {
@@ -3149,7 +3149,7 @@ index 9d7f2e187d20d715681b2826d8668e409e705a01..a3816d1996ff75e9229bdba2b496c100
   */
  #include <libkern/OSKextLib.h>
  #include <pexpert/pexpert.h>
-@@ -37,12 +37,12 @@ extern struct vnodeopv_desc hfs_specop_opv_desc;
+@@ -37,12 +37,12 @@
  extern struct vnodeopv_desc hfs_fifoop_opv_desc;
  extern struct vfsops hfs_vfsops;
  
@@ -3165,7 +3165,7 @@ index 9d7f2e187d20d715681b2826d8668e409e705a01..a3816d1996ff75e9229bdba2b496c100
  {
  #ifndef panic_on_assert
  	panic_on_assert = PE_i_can_has_kernel_configuration() & kPEICanHasAssertions;
-@@ -78,9 +78,9 @@ sweet_hfs_register(void)
+@@ -78,9 +78,9 @@
  		    | VFS_TBLNATIVEXATTR)
  	};
  
@@ -3177,7 +3177,7 @@ index 9d7f2e187d20d715681b2826d8668e409e705a01..a3816d1996ff75e9229bdba2b496c100
  	}
  
  	hfs_init_zones();
-@@ -98,12 +98,12 @@ sweet_hfs_register(void)
+@@ -98,12 +98,12 @@
  		}
  	}
  
@@ -3196,7 +3196,7 @@ diff --git a/bsd/net/rtsock.c b/bsd/net/rtsock.c
 index e13d4812d4439855803a8f482cc7ba1e002c425f..c333aa1836cf9029039f642d01b9c821026de370 100644
 --- a/bsd/net/rtsock.c
 +++ b/bsd/net/rtsock.c
-@@ -510,19 +510,19 @@ route_output(struct mbuf *m, struct socket *so)
+@@ -510,19 +510,19 @@
  		SIN6(info.rti_info[RTAX_DST])->sin6_addr.s6_addr16[1] = 0;
  	}
  
@@ -3225,7 +3225,7 @@ diff --git a/bsd/netinet/in.c b/bsd/netinet/in.c
 index 76f7057db652bfe2f3c3b05c225750c5009f280c..1b50b03d26cd9e110c4bf2cd3bdeef04989fbdb4 100644
 --- a/bsd/netinet/in.c
 +++ b/bsd/netinet/in.c
-@@ -1210,15 +1210,15 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
+@@ -1210,15 +1210,15 @@
  	/* In case it's NULL, make sure it came from the kernel */
  	VERIFY(so != NULL || p == kernproc);
  
@@ -3576,7 +3576,7 @@ diff --git a/bsd/vfs/kpi_vfs.c b/bsd/vfs/kpi_vfs.c
 index d03e3da956a1f513defd55ffd70cf2f861107f44..788c3278e929265f7f1596b01ea37ac46bd3151b 100644
 --- a/bsd/vfs/kpi_vfs.c
 +++ b/bsd/vfs/kpi_vfs.c
-@@ -4459,9 +4459,9 @@ vn_rename(struct vnode *fdvp, struct vnode **fvpp, struct componentname *fcnp, s
+@@ -4459,9 +4459,9 @@
  					_err = VNOP_RENAME(fdvp, *fvpp, fcnp, tdvp, *tvpp, tcnp, ctx);
  				}
  			}
@@ -3592,7 +3592,7 @@ diff --git a/bsd/vfs/vfs_subr.c b/bsd/vfs/vfs_subr.c
 index 047801812b9039f54f83a3d118be022d22ec79fc..437cc881b6dfa4b57253c8b3202416e59c4b9b1a 100644
 --- a/bsd/vfs/vfs_subr.c
 +++ b/bsd/vfs/vfs_subr.c
-@@ -1257,9 +1257,9 @@ vfs_mountroot(void)
+@@ -1257,9 +1257,9 @@
  
  		mp = vfs_rootmountalloc_internal(vfsp, "root_device");
  		mp->mnt_devvp = rootvp;
@@ -3608,7 +3608,7 @@ diff --git a/bsd/vm/vm_unix.c b/bsd/vm/vm_unix.c
 index 6ef79c7c74f43eadb4c81c92af2d28d09baf5aa2..c189ffcd7b7548b5b24fd6f705fe3544472cdc68 100644
 --- a/bsd/vm/vm_unix.c
 +++ b/bsd/vm/vm_unix.c
-@@ -1755,9 +1755,9 @@ out:
+@@ -1755,9 +1755,9 @@
  	return error;
  }
  
@@ -3620,7 +3620,7 @@ index 6ef79c7c74f43eadb4c81c92af2d28d09baf5aa2..c189ffcd7b7548b5b24fd6f705fe3544
   * pid_hibernate when an app leaves the foreground, and nosys (SIGSYS)
   * killed it. Without CONFIG_FREEZE this returns 0, as on iOS.
   */
-@@ -1822,7 +1822,7 @@ out:
+@@ -1822,7 +1822,7 @@
  	*ret = error;
  	return error;
  }
@@ -3633,7 +3633,7 @@ diff --git a/config/MASTER b/config/MASTER
 index 4fde79478e50b648b39645d3ea1e8ca03e9f0edf..dcf4a3cd7b0920bbda0df35be5b14d857084cfb2 100644
 --- a/config/MASTER
 +++ b/config/MASTER
-@@ -113,7 +113,7 @@ options		CONFIG_WORKLOOP_DEBUG	# <config_workloop_debug>
+@@ -113,7 +113,7 @@
  #	4.4 filesystems
  #
  options		MOCKFS		# Boot from an executable	# <mockfs>
@@ -3780,7 +3780,7 @@ diff --git a/iokit/Kernel/IOService.cpp b/iokit/Kernel/IOService.cpp
 index e276b1598c2adca3eeca09be5f8efa3e5d448227..52633a97ac7bfb4146ea4beb4a564ab34046ac3d 100644
 --- a/iokit/Kernel/IOService.cpp
 +++ b/iokit/Kernel/IOService.cpp
-@@ -5126,7 +5126,7 @@ IOService::publishHiddenMedia(IOService * parent)
+@@ -5126,7 +5126,7 @@
  	bool                wasHiding;
  
  	iomediaClass = OSMetaClass::getMetaClassWithName(gIOMediaKey);
@@ -3789,7 +3789,7 @@ index e276b1598c2adca3eeca09be5f8efa3e5d448227..52633a97ac7bfb4146ea4beb4a564ab3
  	assert(iomediaClass);
  #endif
  
-@@ -5137,8 +5137,8 @@ IOService::publishHiddenMedia(IOService * parent)
+@@ -5137,8 +5137,8 @@
  	}
  	UNLOCKNOTIFY();
  
@@ -3800,7 +3800,7 @@ index e276b1598c2adca3eeca09be5f8efa3e5d448227..52633a97ac7bfb4146ea4beb4a564ab3
  	if (!iomediaClass) {
  		wasHiding = false;
  	}
-@@ -5188,9 +5188,9 @@ IOService::setRootMedia(IOService * root)
+@@ -5188,9 +5188,9 @@
  	bool unhide;
  
  	ioblockstoragedriverClass = OSMetaClass::getMetaClassWithName(gIOBlockStorageDriverKey);
@@ -3816,7 +3816,7 @@ diff --git a/iokit/Kernel/IOUserClient.cpp b/iokit/Kernel/IOUserClient.cpp
 index 4a47b6087f3d0bca441403da22ea00b9488d73cf..dcc8fbf148430616908a5c489f51bb20a298369c 100644
 --- a/iokit/Kernel/IOUserClient.cpp
 +++ b/iokit/Kernel/IOUserClient.cpp
-@@ -2599,36 +2599,36 @@ is_io_service_match_property_table_bin(
+@@ -2599,36 +2599,36 @@
  	return internal_io_service_match_property_table(service, matching, matchingCnt, matches);
  }
  
@@ -3867,7 +3867,7 @@ index 4a47b6087f3d0bca441403da22ea00b9488d73cf..dcc8fbf148430616908a5c489f51bb20
  			return true;
  		}
  		if (!end) {
-@@ -2641,7 +2641,7 @@ sweet_iolog(char *name, size_t len)
+@@ -2641,7 +2641,7 @@
  
  /* Compact XML of a matching dictionary, at most 240 characters. */
  static void
@@ -3876,7 +3876,7 @@ index 4a47b6087f3d0bca441403da22ea00b9488d73cf..dcc8fbf148430616908a5c489f51bb20
  {
  	OSSerialize *ser = OSSerialize::withCapacity(256);
  	const char *text = "?";
-@@ -2674,9 +2674,9 @@ internal_io_service_get_matching_services(
+@@ -2674,9 +2674,9 @@
  	if ((dict = OSDynamicCast( OSDictionary, obj))) {
  		IOTaskRegistryCompatibilityMatching(current_task(), dict);
  		OSIterator *found = IOService::getMatchingServices( dict );
@@ -3888,7 +3888,7 @@ index 4a47b6087f3d0bca441403da22ea00b9488d73cf..dcc8fbf148430616908a5c489f51bb20
  			unsigned int count = 0;
  			if (found != NULL) {
  				while (found->getNextObject() != NULL) {
-@@ -2686,7 +2686,7 @@ internal_io_service_get_matching_services(
+@@ -2686,7 +2686,7 @@
  			}
  			char res[16];
  			snprintf(res, sizeof(res), "%u found", count);
@@ -3897,7 +3897,7 @@ index 4a47b6087f3d0bca441403da22ea00b9488d73cf..dcc8fbf148430616908a5c489f51bb20
  		}
  #endif
  		*existing = IOUserIterator::withIterator(found);
-@@ -2774,10 +2774,10 @@ internal_io_service_get_matching_service(
+@@ -2774,10 +2774,10 @@
  		IOTaskRegistryCompatibilityMatching(current_task(), dict);
  		*service = IOService::copyMatchingService( dict );
  		kr = *service ? kIOReturnSuccess : kIOReturnNotFound;
@@ -3911,7 +3911,7 @@ index 4a47b6087f3d0bca441403da22ea00b9488d73cf..dcc8fbf148430616908a5c489f51bb20
  			    *service ? (*service)->getMetaClass()->getClassName() : "none");
  		}
  #endif
-@@ -2884,11 +2884,11 @@ internal_io_service_add_notification(
+@@ -2884,11 +2884,11 @@
  			continue;
  		}
  		IOTaskRegistryCompatibilityMatching(current_task(), dict);
@@ -3926,7 +3926,7 @@ index 4a47b6087f3d0bca441403da22ea00b9488d73cf..dcc8fbf148430616908a5c489f51bb20
  			}
  		}
  #endif
-@@ -3359,10 +3359,10 @@ is_io_registry_entry_from_path(
+@@ -3359,10 +3359,10 @@
  	}
  
  	entry = IORegistryEntry::fromPath( path );
@@ -3939,7 +3939,7 @@ index 4a47b6087f3d0bca441403da22ea00b9488d73cf..dcc8fbf148430616908a5c489f51bb20
  			IOLog("IOK %s: path %.200s -> %s\n", sname, path,
  			    entry ? entry->getMetaClass()->getClassName() : "none");
  		}
-@@ -4177,10 +4177,10 @@ is_io_registry_entry_get_child_iterator(
+@@ -4177,10 +4177,10 @@
  
  	*iterator = IOUserIterator::withIterator(entry->getChildIterator(
  		    IORegistryEntry::getPlane( plane )));
@@ -3952,7 +3952,7 @@ index 4a47b6087f3d0bca441403da22ea00b9488d73cf..dcc8fbf148430616908a5c489f51bb20
  			IOLog("IOK %s: children of %s in %.32s\n", sname, entry->getName(), plane);
  		}
  	}
-@@ -4400,10 +4400,10 @@ is_io_service_open_extended(
+@@ -4400,10 +4400,10 @@
  #endif
  		res = service->newUserClient( owningTask, (void *) owningTask,
  		    connect_type, propertiesDict, &client );
@@ -4003,7 +4003,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  public:
  	bool init(OSDictionary *dictionary = NULL) APPLE_KEXT_OVERRIDE;
  	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
-@@ -38,10 +38,10 @@ private:
+@@ -38,10 +38,10 @@
  	static bool readWord(unsigned address, uint16_t *value);
  	static unsigned estimatePercent(unsigned mv);
  };
@@ -4016,7 +4016,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  {
  	/* IOCatalogue calls init(dictionary). This XNU's IOPMPowerSource only
  	 * overrides init(void): explicitly run it to allocate its PS dictionary
-@@ -76,7 +76,7 @@ SweetBattery::init(OSDictionary *dictionary)
+@@ -76,7 +76,7 @@
  }
  
  void
@@ -4025,7 +4025,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  {
  	const OSSymbol *symbol = OSSymbol::withCString(key);
  	OSNumber *number = OSNumber::withNumber(value, 32);
-@@ -88,7 +88,7 @@ SweetBattery::putNumber(const char *key, UInt32 value)
+@@ -88,7 +88,7 @@
  }
  
  void
@@ -4034,7 +4034,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  {
  	const OSSymbol *symbol = OSSymbol::withCString(key);
  	if (symbol) {
-@@ -98,7 +98,7 @@ SweetBattery::putBool(const char *key, bool value)
+@@ -98,7 +98,7 @@
  }
  
  void
@@ -4043,7 +4043,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
      bool capable, bool charging, bool full, bool measured, bool currentValid)
  {
  	/* Use consistent mAh units (DT nominal=5020). powerd computes C*100/M. */
-@@ -124,12 +124,12 @@ SweetBattery::publish(unsigned percent, unsigned mv, int ma, bool external,
+@@ -124,12 +124,12 @@
  	putNumber("InstantAmperage", (UInt32)ma);
  	/* iOS battery convention: centidegrees C; fixed 25 C, NOT measured. */
  	putNumber("Temperature", 2500);
@@ -4062,7 +4062,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  
  	/* IOPMCopyBatteryInfo's per-source compatibility dictionary. */
  	OSDictionary *legacy = OSDictionary::withCapacity(7);
-@@ -153,7 +153,7 @@ SweetBattery::publish(unsigned percent, unsigned mv, int ma, bool external,
+@@ -153,7 +153,7 @@
  	updateStatus(); /* Flush PS properties and send 0xe0024100 on change. */
  	int mode = measured ? 1 : 0;
  	if (mode != fLastMode) {
@@ -4071,7 +4071,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  		    measured ? "PM6150 / estimated SOC" : "static fallback",
  		    percent, mv, external, charging);
  		fLastMode = mode;
-@@ -164,13 +164,13 @@ SweetBattery::publish(unsigned percent, unsigned mv, int ma, bool external,
+@@ -164,13 +164,13 @@
   * words to reject most torn ADC samples without writing the QG HOLD bit.
   * This is a bounded consistency check, not a hardware snapshot guarantee. */
  bool
@@ -4088,7 +4088,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  			return false;
  		}
  		uint16_t next = (uint16_t)((unsigned)lo | ((unsigned)hi << 8));
-@@ -184,7 +184,7 @@ SweetBattery::readWord(unsigned address, uint16_t *value)
+@@ -184,7 +184,7 @@
  }
  
  unsigned
@@ -4097,7 +4097,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  {
  	/* Generic single-cell curve, intentionally NOT advertised as QG SOC.
  	 * Load sag, temperature, aging and charging introduce large errors. */
-@@ -204,19 +204,19 @@ SweetBattery::estimatePercent(unsigned mv)
+@@ -204,19 +204,19 @@
  }
  
  void
@@ -4125,7 +4125,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  	unsigned mv = valid ? (unsigned)(((uint64_t)rawVoltage * 194637u) / 1000000u) : 0;
  	/* Zero, reset, floating, or implausible data cannot become 0% battery. */
  	valid = valid && mv >= 2800 && mv <= 4600;
-@@ -234,7 +234,7 @@ SweetBattery::poll(void)
+@@ -234,7 +234,7 @@
  	int ma = 0;
  	uint8_t subtype;
  	uint16_t rawCurrent;
@@ -4134,7 +4134,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  	    (subtype == 3 || subtype == 4) && readWord(0x48c2, &rawCurrent) &&
  	    rawCurrent != 0x8000;
  	if (currentValid) {
-@@ -247,9 +247,9 @@ SweetBattery::poll(void)
+@@ -247,9 +247,9 @@
  }
  
  void
@@ -4146,7 +4146,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  	if (self && self->fRunning) {
  		self->poll();
  		sender->setTimeoutMS(30000);
-@@ -257,19 +257,19 @@ SweetBattery::timerFired(OSObject *owner, IOTimerEventSource *sender)
+@@ -257,19 +257,19 @@
  }
  
  bool
@@ -4170,7 +4170,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  		if (fLoop && fTimer && fLoop->addEventSource(fTimer) == kIOReturnSuccess) {
  			fTimerAdded = true;
  			fRunning = true;
-@@ -277,7 +277,7 @@ SweetBattery::start(IOService *provider)
+@@ -277,7 +277,7 @@
  		} else {
  			fReal = false;
  			poll();
@@ -4179,7 +4179,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  		}
  	}
  	registerService();
-@@ -285,11 +285,11 @@ SweetBattery::start(IOService *provider)
+@@ -285,11 +285,11 @@
  }
  
  void
@@ -4193,7 +4193,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  		fLoop->removeEventSource(fTimer);
  		fTimerAdded = false;
  	}
-@@ -297,9 +297,9 @@ SweetBattery::stop(IOService *provider)
+@@ -297,9 +297,9 @@
  }
  
  IOReturn
@@ -4205,7 +4205,7 @@ index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b32
  	if (!self) {
  		return kIOReturnBadArgument;
  	}
-@@ -310,10 +310,10 @@ SweetBattery::stopPolling(OSObject *owner, void *, void *, void *, void *)
+@@ -310,10 +310,10 @@
  }
  
  void
@@ -4264,7 +4264,7 @@ index 0835d142ffd26ddadbecc6b177f681568aad6f9a..de186de4c1d47e302c750d667c46defa
  {
  	register uint64_t x0 __asm__("x0") = 0xC4000003ULL;
  	register uint64_t x1 __asm__("x1") = target;
-@@ -40,8 +39,8 @@ sweet_psci_cpu_on(uint64_t target, uint64_t entry, uint64_t context)
+@@ -40,8 +39,8 @@
  	return (int32_t)x0;
  }
  
@@ -4275,7 +4275,7 @@ index 0835d142ffd26ddadbecc6b177f681568aad6f9a..de186de4c1d47e302c750d667c46defa
  	const OSSymbol *cpuName = NULL;
  	uint32_t initialized = 0; /* release/acquire publication after initCPU sends SGI */
  
-@@ -57,10 +56,10 @@ public:
+@@ -57,10 +56,10 @@
  	const OSSymbol *getCPUName(void) APPLE_KEXT_OVERRIDE;
  };
  
@@ -4288,7 +4288,7 @@ index 0835d142ffd26ddadbecc6b177f681568aad6f9a..de186de4c1d47e302c750d667c46defa
  {
  	const ml_topology_info_t *topology = ml_get_topology_info();
  	OSNumber *logical = OSDynamicCast(OSNumber, provider->getProperty("logical-cpu-id"));
-@@ -74,29 +73,16 @@ SweetCPU::start(IOService *provider)
+@@ -74,29 +73,16 @@
  	if (*(const uint32_t *)reg->getBytesNoCopy() != cpu->phys_id) {
  		return false;
  	}
@@ -4320,7 +4320,7 @@ index 0835d142ffd26ddadbecc6b177f681568aad6f9a..de186de4c1d47e302c750d667c46defa
  	if (cpuName == NULL) {
  		return false;
  	}
-@@ -115,20 +101,20 @@ SweetCPU::start(IOService *provider)
+@@ -115,20 +101,20 @@
  	perfmon_interrupt_handler_func pmi_handler = NULL;
  	kern_return_t result = ml_processor_register(&info, &machProcessor, &ipi_handler, &pmi_handler);
  	if (result != KERN_SUCCESS) {
@@ -4347,7 +4347,7 @@ index 0835d142ffd26ddadbecc6b177f681568aad6f9a..de186de4c1d47e302c750d667c46defa
  		}
  		thread_deallocate(thread);
  	}
-@@ -137,77 +123,74 @@ SweetCPU::start(IOService *provider)
+@@ -137,77 +123,74 @@
  
  /* Do not wait in a nub's start(): matching can be asynchronous or serialized. */
  void
@@ -4443,7 +4443,7 @@ index 0835d142ffd26ddadbecc6b177f681568aad6f9a..de186de4c1d47e302c750d667c46defa
  	}
  	assert(cpu_number() == (int)getCPUNumber());
  
-@@ -218,25 +201,25 @@ SweetCPU::initCPU(bool boot)
+@@ -218,25 +201,25 @@
  	 * Waiting here with DAIF.I set would deadlock every secondary. */
  	signalCPU(this);
  	setCPUState(kIOCPUStateRunning);
@@ -4473,7 +4473,7 @@ index 0835d142ffd26ddadbecc6b177f681568aad6f9a..de186de4c1d47e302c750d667c46defa
  	}
  	uint64_t sgi = (((mpidr >> 32) & 0xff) << 48) |
  	    (((mpidr >> 16) & 0xff) << 32) |
-@@ -248,42 +231,42 @@ SweetCPU::signalCPU(IOCPU *target)
+@@ -248,42 +231,42 @@
  }
  
  kern_return_t
@@ -4567,7 +4567,7 @@ index 9be7a305560bf91c0ad69371b5a45b0ce446c13f..54f78b5f8a71d84f16fb20fe4e22963c
  
  public:
  	OSDictionary *dict;
-@@ -31,16 +31,16 @@ public:
+@@ -31,16 +31,16 @@
  	void free(void) APPLE_KEXT_OVERRIDE;
  };
  
@@ -4587,7 +4587,7 @@ index 9be7a305560bf91c0ad69371b5a45b0ce446c13f..54f78b5f8a71d84f16fb20fe4e22963c
  {
  	OSSafeReleaseNULL(dict);
  	if (xml) {
-@@ -50,16 +50,16 @@ SweetEntitlements::free(void)
+@@ -50,16 +50,16 @@
  	OSObject::free();
  }
  
@@ -4608,7 +4608,7 @@ index 9be7a305560bf91c0ad69371b5a45b0ce446c13f..54f78b5f8a71d84f16fb20fe4e22963c
  {
  	if (blob == NULL || blob_len <= sizeof(CS_GenericBlob) ||
  	    ntohl(blob->magic) != CSMAGIC_EMBEDDED_ENTITLEMENTS ||
-@@ -84,7 +84,7 @@ sweet_entitlements_create(const CS_GenericBlob *blob, size_t blob_len)
+@@ -84,7 +84,7 @@
  		return NULL;
  	}
  
@@ -4617,7 +4617,7 @@ index 9be7a305560bf91c0ad69371b5a45b0ce446c13f..54f78b5f8a71d84f16fb20fe4e22963c
  	CS_GenericBlob *xml = (CS_GenericBlob *)kalloc_data(blob_len, Z_WAITOK);
  	if (ent == NULL || !ent->init() || xml == NULL) {
  		OSSafeReleaseNULL(ent);
-@@ -103,9 +103,9 @@ sweet_entitlements_create(const CS_GenericBlob *blob, size_t blob_len)
+@@ -103,9 +103,9 @@
  
  /* The entitlements as an OSDictionary. Retained. */
  void *
@@ -4629,7 +4629,7 @@ index 9be7a305560bf91c0ad69371b5a45b0ce446c13f..54f78b5f8a71d84f16fb20fe4e22963c
  	if (ent == NULL) {
  		return NULL;
  	}
-@@ -115,9 +115,9 @@ sweet_entitlements_copy_dict(const void *obj)
+@@ -115,9 +115,9 @@
  
  /* A kalloc_data copy of the XML blob; the caller frees it (blob length). */
  bool
@@ -4641,7 +4641,7 @@ index 9be7a305560bf91c0ad69371b5a45b0ce446c13f..54f78b5f8a71d84f16fb20fe4e22963c
  	if (ent == NULL) {
  		return false;
  	}
-@@ -132,17 +132,17 @@ sweet_entitlements_copy_xml(const void *obj, CS_GenericBlob **out)
+@@ -132,17 +132,17 @@
  
  /* name is true (a boolean entitlement). */
  bool
@@ -4663,7 +4663,7 @@ index 9be7a305560bf91c0ad69371b5a45b0ce446c13f..54f78b5f8a71d84f16fb20fe4e22963c
  	if (ent == NULL || value == NULL) {
  		return false;
  	}
-@@ -163,17 +163,17 @@ sweet_entitlements_string(const void *obj, const char *name, const char *value)
+@@ -163,17 +163,17 @@
  
  /* Number of entitlements. */
  unsigned int
@@ -4685,7 +4685,7 @@ index 9be7a305560bf91c0ad69371b5a45b0ce446c13f..54f78b5f8a71d84f16fb20fe4e22963c
  	OSObject *v = ent != NULL ? ent->dict->getObject(name) : NULL;
  	if (v != NULL) {
  		v->retain();
-@@ -181,4 +181,4 @@ sweet_entitlements_copy_object(const void *obj, const char *name)
+@@ -181,4 +181,4 @@
  	return v;
  }
  }
@@ -4724,7 +4724,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  #include <IOKit/IOService.h>
  #include <IOKit/IOUserClient.h>
  #include <IOKit/IOKitKeys.h>
-@@ -52,35 +52,35 @@ extern "C" int sweet_console_muted;     /* osfmk/console/serial_console.c */
+@@ -52,35 +52,35 @@
  #include <sys/proc.h>
  
  enum {
@@ -4780,7 +4780,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  
  class IOMobileFramebuffer : public IOService {
  	OSDeclareDefaultStructors(IOMobileFramebuffer);
-@@ -106,12 +106,12 @@ public:
+@@ -106,12 +106,12 @@
  	int32_t       fOffX, fOffY;             /* logical origin of the panel */
  	uintptr_t     fPixels;          /* kernel mapping of the panel memory */
  	IOMemoryMap  *fMap;
@@ -4795,7 +4795,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  	bool          fDirty;
  	uint32_t      fFlushTicks;    /* vsync ticks between panel copies */
  	bool          fPowerOff;      /* RequestPowerChange(0) */
-@@ -133,8 +133,8 @@ public:
+@@ -133,8 +133,8 @@
  	AppleCLCD          *fFB;
  	task_t              fTask;
  	mach_port_t         fPort;
@@ -4806,7 +4806,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  
  	bool initWithTask(task_t owningTask, void *securityID, UInt32 type) APPLE_KEXT_OVERRIDE;
  	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
-@@ -163,45 +163,45 @@ AppleCLCD::start(IOService *provider)
+@@ -163,45 +163,45 @@
  	fHeight = (uint32_t)video.v_height;
  	fRowBytes = (uint32_t)video.v_rowBytes;
  	if (fPhys == 0 || fWidth == 0 || fHeight == 0 || fRowBytes < fWidth * 4) {
@@ -4863,7 +4863,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  	    fWidth, fHeight, fRowBytes, fPhys, fSurface->id, fLogicalW, fLogicalH);
  	return true;
  }
-@@ -222,7 +222,7 @@ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+@@ -222,7 +222,7 @@
  	for (unsigned int i = 0; i < fb->fClients->getCount(); i++) {
  		IOMobileFramebufferUserClient *client =
  		    (IOMobileFramebufferUserClient *)fb->fClients->getObject(i);
@@ -4872,7 +4872,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  	}
  	if (fb->fPowerOff) {
  		/* Fade out: halve every channel each vsync, then black, then idle. */
-@@ -239,24 +239,24 @@ AppleCLCD::vsyncFired(OSObject *owner, IOTimerEventSource *sender)
+@@ -239,24 +239,24 @@
  				}
  			}
  		}
@@ -4902,7 +4902,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  }
  
  void
-@@ -286,25 +286,25 @@ get32(const uint8_t *p, uint32_t off)
+@@ -286,25 +286,25 @@
  	return v;
  }
  
@@ -4934,7 +4934,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  	}
  }
  
-@@ -317,14 +317,14 @@ AppleCLCD::present(const uint8_t *rec)
+@@ -317,14 +317,14 @@
  	if (!fConsolePaused) {
  		int quiet = 0;
  		fConsolePaused = true;
@@ -4952,7 +4952,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  		uint32_t id = get32(rec, 0x54 + 4 * layer);
  		const uint8_t *a = rec + 0x64 + 16 * layer;
  		const uint8_t *b = rec + 0xc4 + 16 * layer;
-@@ -335,10 +335,10 @@ AppleCLCD::present(const uint8_t *rec)
+@@ -335,10 +335,10 @@
  		if (!(mask & (1u << layer)) || id == 0) {
  			continue;
  		}
@@ -4967,7 +4967,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  			    get32(rec, 0x50), layer, id, s ? s->width : 0, s ? s->height : 0,
  			    s ? s->pixelFormat : 0, s ? s->bytesPerRow : 0, sx, sy, get32(a, 8),
  			    get32(a, 12), dx, dy, w, h);
-@@ -460,7 +460,7 @@ IOMobileFramebufferUserClient::notify(uint32_t type, const uint64_t *values, uin
+@@ -460,7 +460,7 @@
  {
  	OSAsyncReference64 ref;
  
@@ -4976,7 +4976,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  		return;
  	}
  	bzero(ref, sizeof(ref));
-@@ -469,7 +469,7 @@ IOMobileFramebufferUserClient::notify(uint32_t type, const uint64_t *values, uin
+@@ -469,7 +469,7 @@
  	    kIOUserNotifyOptionCanDrop);
  }
  
@@ -4985,7 +4985,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  
  IOReturn
  IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
-@@ -481,20 +481,20 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
+@@ -481,20 +481,20 @@
  	uint32_t outCount = 0;
  
  	switch (selector) {
@@ -5012,7 +5012,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  			ret = kIOReturnBadArgument;
  			break;
  		}
-@@ -502,25 +502,25 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
+@@ -502,25 +502,25 @@
  		fFB->swap(rec);
  		break;
  	}
@@ -5045,7 +5045,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  			uint32_t type = (uint32_t)args->scalarInput[2];
  			IOLockLock(fFB->fLock);
  			fFunc[type] = args->scalarInput[0];
-@@ -528,11 +528,11 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
+@@ -528,11 +528,11 @@
  			IOLockUnlock(fFB->fLock);
  			char name[32];
  			proc_selfname(name, sizeof(name));
@@ -5059,7 +5059,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  		if (args->scalarInputCount >= 1) {
  			bool off = args->scalarInput[0] == 0;
  			IOLockLock(fFB->fLock);
-@@ -542,10 +542,10 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
+@@ -542,10 +542,10 @@
  				fFB->fDirty = true;     /* on: redraw the latest frame */
  			}
  			IOLockUnlock(fFB->fLock);
@@ -5072,7 +5072,7 @@ index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d
  	default:
  		break;
  	}
-@@ -556,16 +556,16 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
+@@ -556,16 +556,16 @@
  	if (args->structureOutputDescriptor == NULL && args->structureOutput != NULL) {
  		bzero(args->structureOutput, args->structureOutputSize);
  	}
@@ -5116,7 +5116,7 @@ index 2c38fc8d61c39be628cfaaeb2a42d24176a1a245..f3e40bfaffedc693d567287c90708e1d
  #include <IOKit/IOService.h>
  #include <IOKit/IOUserClient.h>
  #include <IOKit/IOKitKeys.h>
-@@ -51,13 +51,13 @@ enum {
+@@ -51,13 +51,13 @@
  };
  
  /* The system (device) bag handle. */
@@ -5132,7 +5132,7 @@ index 2c38fc8d61c39be628cfaaeb2a42d24176a1a245..f3e40bfaffedc693d567287c90708e1d
  
  class AppleKeyStore : public IOService {
  	OSDeclareDefaultStructors(AppleKeyStore);
-@@ -76,7 +76,7 @@ AppleKeyStore::start(IOService *provider)
+@@ -76,7 +76,7 @@
  	}
  	setProperty(kIOUserClientClassKey, "AppleKeyStoreUserClient");
  	registerService();
@@ -5141,7 +5141,7 @@ index 2c38fc8d61c39be628cfaaeb2a42d24176a1a245..f3e40bfaffedc693d567287c90708e1d
  	return true;
  }
  
-@@ -101,7 +101,7 @@ AppleKeyStoreUserClient::clientClose(void)
+@@ -101,7 +101,7 @@
  
  /* Copy len bytes to the caller's output structure (inband or descriptor). */
  static IOReturn
@@ -5150,7 +5150,7 @@ index 2c38fc8d61c39be628cfaaeb2a42d24176a1a245..f3e40bfaffedc693d567287c90708e1d
  {
  	if (args->structureOutputDescriptor != NULL) {
  		if (len > args->structureOutputDescriptor->getLength()) {
-@@ -121,7 +121,7 @@ sweet_aks_struct_out(IOExternalMethodArguments *args, const void *buf, uint32_t
+@@ -121,7 +121,7 @@
  
  /* Append SEQUENCE { UTF8String key, INTEGER value } (short forms only). */
  static uint32_t
@@ -5159,7 +5159,7 @@ index 2c38fc8d61c39be628cfaaeb2a42d24176a1a245..f3e40bfaffedc693d567287c90708e1d
  {
  	uint32_t klen = (uint32_t)strlen(key);
  	uint32_t n = 0;
-@@ -144,27 +144,27 @@ sweet_aks_der_pair(uint8_t *p, const char *key, uint8_t value)
+@@ -144,27 +144,27 @@
   * assertions, sgpe grace period, srcd recovery countdown.
   */
  static IOReturn
@@ -5192,7 +5192,7 @@ index 2c38fc8d61c39be628cfaaeb2a42d24176a1a245..f3e40bfaffedc693d567287c90708e1d
  {
  	return args->structureOutputDescriptor != NULL ?
  	       (uint32_t)args->structureOutputDescriptor->getLength() : args->structureOutputSize;
-@@ -180,7 +180,7 @@ AppleKeyStoreUserClient::externalMethod(uint32_t selector, IOExternalMethodArgum
+@@ -180,7 +180,7 @@
  	uint32_t in_struct = args->structureInputDescriptor != NULL ?
  	    (uint32_t)args->structureInputDescriptor->getLength() : args->structureInputSize;
  	uint32_t out_scalars = args->scalarOutputCount;
@@ -5201,7 +5201,7 @@ index 2c38fc8d61c39be628cfaaeb2a42d24176a1a245..f3e40bfaffedc693d567287c90708e1d
  	uint64_t arg0 = in_scalars > 0 ? args->scalarInput[0] : 0;
  
  	switch (selector) {
-@@ -202,7 +202,7 @@ AppleKeyStoreUserClient::externalMethod(uint32_t selector, IOExternalMethodArgum
+@@ -202,7 +202,7 @@
  			ret = kIOReturnBadArgument;
  			break;
  		}
@@ -5210,7 +5210,7 @@ index 2c38fc8d61c39be628cfaaeb2a42d24176a1a245..f3e40bfaffedc693d567287c90708e1d
  		args->scalarOutputCount = 1;
  		break;
  	case kAKSGetLockState:
-@@ -210,7 +210,7 @@ AppleKeyStoreUserClient::externalMethod(uint32_t selector, IOExternalMethodArgum
+@@ -210,7 +210,7 @@
  			ret = kIOReturnBadArgument;
  			break;
  		}
@@ -5219,7 +5219,7 @@ index 2c38fc8d61c39be628cfaaeb2a42d24176a1a245..f3e40bfaffedc693d567287c90708e1d
  		args->scalarOutputCount = 1;
  		break;
  	case kAKSNotifyStateIsSet:
-@@ -225,7 +225,7 @@ AppleKeyStoreUserClient::externalMethod(uint32_t selector, IOExternalMethodArgum
+@@ -225,7 +225,7 @@
  	case kAKSGetDeviceState:
  	case kAKSGetExtDeviceState:
  		args->scalarOutputCount = 0;
@@ -5228,7 +5228,7 @@ index 2c38fc8d61c39be628cfaaeb2a42d24176a1a245..f3e40bfaffedc693d567287c90708e1d
  		break;
  	default:
  		ret = kIOReturnUnsupported;
-@@ -234,8 +234,8 @@ AppleKeyStoreUserClient::externalMethod(uint32_t selector, IOExternalMethodArgum
+@@ -234,8 +234,8 @@
  
  	char name[32];
  	proc_selfname(name, sizeof(name));
@@ -5268,7 +5268,7 @@ index ccd250a60bd9e3e7ee2be0845df45a7bf2287e8f..5fd6244ddab4e88e50d9b6a5987d8ddc
  
  public:
  	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
-@@ -20,38 +20,38 @@ public:
+@@ -20,38 +20,38 @@
  	const char *excludeList(void) APPLE_KEXT_OVERRIDE;
  };
  
@@ -5315,7 +5315,7 @@ index ccd250a60bd9e3e7ee2be0845df45a7bf2287e8f..5fd6244ddab4e88e50d9b6a5987d8ddc
  	 * inventing one. createNubs adds the topology's logical CPU/cluster IDs.
  	 */
  	IORegistryEntry *cpus = root->childFromPath("cpus", gIODTPlane);
-@@ -79,4 +79,4 @@ SweetPlatformExpert::processTopLevel(IORegistryEntry *root)
+@@ -79,4 +79,4 @@
   * "compatible" string and "model" (D22AP / iPhone10,3 in the ADT), which
   * is what the iPhone userland (MobileGestalt) expects.
   */
@@ -5432,7 +5432,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	}
  	OSSafeReleaseNULL(kernelMap);
  	OSSafeReleaseNULL(memory);
-@@ -90,24 +90,24 @@ SweetSurface::free()
+@@ -90,24 +90,24 @@
  }
  
  uintptr_t
@@ -5462,7 +5462,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  }
  
  /*
-@@ -115,16 +115,16 @@ sweet_surface_seed(SweetSurface *s)
+@@ -115,16 +115,16 @@
   * user count (creators, client mappings, kernel holders). Lock held.
   */
  static bool
@@ -5486,7 +5486,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  			*(uint64_t *)s->state->getBytesNoCopy() = id;   /* registry id */
  			return true;
  		}
-@@ -134,72 +134,72 @@ sweet_surface_insert_locked(SweetSurface *s)
+@@ -134,72 +134,72 @@
  
  /* Add a user to a surface that may have left the table (port lookups). */
  static bool
@@ -5586,7 +5586,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	if (s == NULL || !s->init()) {
  		OSSafeReleaseNULL(s);
  		return NULL;
-@@ -215,20 +215,20 @@ sweet_surface_alloc(void)
+@@ -215,20 +215,20 @@
  }
  
  static bool
@@ -5614,7 +5614,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	if (s == NULL) {
  		return NULL;
  	}
-@@ -241,7 +241,7 @@ sweet_surface_create_physical(uint64_t phys, uint32_t width, uint32_t height,
+@@ -241,7 +241,7 @@
  	s->allocSize = (uint32_t)round_page(bytesPerRow * height);
  	s->memory = IOMemoryDescriptor::withPhysicalAddress(phys, s->allocSize, kIODirectionInOut);
  	s->mapCache = kIOMapWriteCombineCache;
@@ -5623,7 +5623,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  		s->release();
  		return NULL;
  	}
-@@ -249,7 +249,7 @@ sweet_surface_create_physical(uint64_t phys, uint32_t width, uint32_t height,
+@@ -249,7 +249,7 @@
  }
  
  mach_port_name_t
@@ -5632,7 +5632,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  {
  	mach_port_name_t name = 0;
  	IOUserClient::copyPortNameForObjectInTask(task, s, &name);
-@@ -257,77 +257,77 @@ sweet_surface_port_in_task(SweetSurface *s, task_t task)
+@@ -257,77 +257,77 @@
  }
  
  static uint32_t
@@ -5742,7 +5742,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  			next = round_page((uint64_t)p->offset + p->size);
  			if ((uint64_t)p->offset + p->size > end) {
  				end = (uint64_t)p->offset + p->size;
-@@ -336,12 +336,12 @@ sweet_surface_layout(SweetSurface *s, OSDictionary *props)
+@@ -336,12 +336,12 @@
  		s->planeCount = planes->getCount();
  	}
  
@@ -5757,7 +5757,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  		return kIOReturnNoMemory;
  	}
  	s->allocSize = (uint32_t)alloc;
-@@ -349,11 +349,11 @@ sweet_surface_layout(SweetSurface *s, OSDictionary *props)
+@@ -349,11 +349,11 @@
  }
  
  /* Per-client mapping of one surface. */
@@ -5772,7 +5772,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	IOMemoryMap  *data;
  	IOMemoryMap  *state;
  	uint32_t      count;
-@@ -362,15 +362,15 @@ public:
+@@ -362,15 +362,15 @@
  	void free() APPLE_KEXT_OVERRIDE;
  };
  
@@ -5791,7 +5791,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  		surface->release();
  		surface = NULL;
  	}
-@@ -392,10 +392,10 @@ IOCoreSurfaceRoot::start(IOService *provider)
+@@ -392,10 +392,10 @@
  	if (!IOService::start(provider)) {
  		return false;
  	}
@@ -5804,7 +5804,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	return true;
  }
  
-@@ -406,9 +406,9 @@ class IOSurfaceRootUserClient : public IOUserClient {
+@@ -406,9 +406,9 @@
  	IOLock  *fLock;
  	OSArray *fRefs;
  
@@ -5817,7 +5817,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	IOReturn create(IOExternalMethodArguments *args);
  
  public:
-@@ -428,19 +428,19 @@ public:
+@@ -428,19 +428,19 @@
  
  OSDefineMetaClassAndStructors(IOSurfaceRootUserClient, IOUserClient);
  
@@ -5842,7 +5842,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  }
  
  bool
-@@ -477,11 +477,11 @@ IOSurfaceRootUserClient::clientClose(void)
+@@ -477,11 +477,11 @@
  }
  
  /* Lock held. */
@@ -5856,7 +5856,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  		if (ref->surface->id == id) {
  			if (index != NULL) {
  				*index = i;
-@@ -504,24 +504,24 @@ IOSurfaceRootUserClient::findRef(uint32_t id, unsigned int *index)
+@@ -504,24 +504,24 @@
   * snapshot crash in CGDataProviderCreateWithData).
   */
  IOReturn
@@ -5886,7 +5886,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  		return kIOReturnNoMemory;
  	}
  	s->retain();
-@@ -534,7 +534,7 @@ IOSurfaceRootUserClient::addRef(SweetSurface *s, SweetSurfaceRef **refOut, bool
+@@ -534,7 +534,7 @@
  		return kIOReturnVMError;
  	}
  	IOLockLock(fLock);
@@ -5895,7 +5895,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	if (raced != NULL && raced->surface == s) {
  		/* Another thread mapped it meanwhile: count there, drop ours. */
  		raced->count++;
-@@ -564,12 +564,12 @@ put64(uint8_t *p, uint32_t off, uint64_t v)
+@@ -564,12 +564,12 @@
  
  /* IOSurface.framework's lock result (copied to IOSurfaceClient + 0x68). */
  static void
@@ -5911,7 +5911,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	put32(out, 0x18, s->id);
  	put32(out, 0x1c, s->allocSize);
  	put32(out, 0x20, s->width);
-@@ -587,7 +587,7 @@ sweet_surface_fill_result(SweetSurface *s, SweetSurfaceRef *ref, uint8_t *out)
+@@ -587,7 +587,7 @@
  	put32(out, 0x54, 1);
  	for (uint32_t i = 0; i < s->planeCount; i++) {
  		uint8_t *p = out + 0x68 + i * 0x80;
@@ -5920,7 +5920,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  		put32(p, 0x00, pl->width);
  		put32(p, 0x04, pl->height);
  		put32(p, 0x08, pl->bytesPerRow);
-@@ -600,7 +600,7 @@ sweet_surface_fill_result(SweetSurface *s, SweetSurfaceRef *ref, uint8_t *out)
+@@ -600,7 +600,7 @@
  }
  
  static IOReturn
@@ -5929,7 +5929,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  {
  	if (args->structureOutputDescriptor != NULL) {
  		if (len > args->structureOutputDescriptor->getLength()) {
-@@ -620,24 +620,24 @@ sweet_struct_out(IOExternalMethodArguments *args, const void *buf, uint32_t len)
+@@ -620,24 +620,24 @@
  
  /* Map s for this client and answer with its lock result. Takes s's user count. */
  IOReturn
@@ -5960,7 +5960,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	}
  	if (ret != kIOReturnSuccess && !existing) {
  		/* The caller never learns the id: undo this create/lookup. */
-@@ -656,7 +656,7 @@ IOSurfaceRootUserClient::create(IOExternalMethodArguments *args)
+@@ -656,7 +656,7 @@
  
  	if (args->structureInputDescriptor != NULL) {
  		len = (uint32_t)args->structureInputDescriptor->getLength();
@@ -5969,7 +5969,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  			return kIOReturnBadArgument;
  		}
  		copy = (char *)IOMallocData(len);
-@@ -673,41 +673,41 @@ IOSurfaceRootUserClient::create(IOExternalMethodArguments *args)
+@@ -673,41 +673,41 @@
  	OSDictionary *props = OSDynamicCast(OSDictionary, obj);
  	if (props == NULL) {
  		OSSafeReleaseNULL(obj);
@@ -6021,7 +6021,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  		    name, s->id, s->width, s->height, s->pixelFormat, s->bytesPerElement,
  		    s->bytesPerRow, s->planeCount, s->allocSize, props->getCount(), ret);
  	}
-@@ -729,47 +729,47 @@ IOSurfaceRootUserClient::externalMethod(uint32_t selector, IOExternalMethodArgum
+@@ -729,47 +729,47 @@
  	uint64_t arg0 = args->scalarInputCount > 0 ? args->scalarInput[0] : 0;
  
  	switch (selector) {
@@ -6087,7 +6087,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  		return kIOReturnSuccess;
  	}
  	default:
-@@ -780,7 +780,7 @@ IOSurfaceRootUserClient::externalMethod(uint32_t selector, IOExternalMethodArgum
+@@ -780,7 +780,7 @@
  		if (args->structureOutput != NULL) {
  			bzero(args->structureOutput, args->structureOutputSize);
  		}
@@ -6096,7 +6096,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  		return kIOReturnSuccess;
  	}
  }
-@@ -793,10 +793,10 @@ IOSurfaceRootUserClient::trapUseCount(__unused void *id, __unused void *category
+@@ -793,10 +793,10 @@
  }
  
  static IOReturn
@@ -6110,7 +6110,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	if (seedOut != NULL && copyout(&seed, (user_addr_t)seedOut, sizeof(seed)) != 0) {
  		return kIOReturnBadArgument;
  	}
-@@ -804,13 +804,13 @@ sweet_surface_seed_out(SweetSurface *s, void *seedOut, bool bump)
+@@ -804,13 +804,13 @@
  }
  
  /* Retained surface this client created or looked up, or NULL. */
@@ -6128,7 +6128,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  		if (ref->surface->id == id) {
  			s = ref->surface;
  			s->retain();
-@@ -825,11 +825,11 @@ IOReturn
+@@ -825,11 +825,11 @@
  IOSurfaceRootUserClient::trapLock(void *id, __unused void *options, void *seedOut,
      void *, void *, void *)
  {
@@ -6142,7 +6142,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	s->release();
  	return ret;
  }
-@@ -838,11 +838,11 @@ IOReturn
+@@ -838,11 +838,11 @@
  IOSurfaceRootUserClient::trapUnlock(void *id, void *options, void *seedOut,
      void *, void *, void *)
  {
@@ -6156,7 +6156,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	    !((uintptr_t)options & kIOSurfaceLockReadOnly));
  	s->release();
  	return ret;
-@@ -853,7 +853,7 @@ IOSurfaceRootUserClient::trapRelease(void *id, void *, void *, void *, void *, v
+@@ -853,7 +853,7 @@
  {
  	unsigned int index;
  	IOLockLock(fLock);
@@ -6165,7 +6165,7 @@ index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9e
  	if (ref != NULL && --ref->count == 0) {
  		fRefs->removeObject(index);     /* unmaps and drops the user count */
  	}
-@@ -861,24 +861,24 @@ IOSurfaceRootUserClient::trapRelease(void *id, void *, void *, void *, void *, v
+@@ -861,24 +861,24 @@
  	return ref != NULL ? kIOReturnSuccess : kIOReturnNotFound;
  }
  
@@ -6250,7 +6250,7 @@ index dae3e8f739a1fcbdc63f4712d735d05cab623e67..3dd5eb69d9256f3dce7e4f817c57e471
  
  public:
  	uint32_t id;
-@@ -33,7 +33,7 @@ public:
+@@ -33,7 +33,7 @@
  	uint16_t bytesPerElement;
  	uint8_t  elementWidth, elementHeight;
  	uint32_t cacheMode, planeCount, parentID;
@@ -6259,7 +6259,7 @@ index dae3e8f739a1fcbdc63f4712d735d05cab623e67..3dd5eb69d9256f3dce7e4f817c57e471
  
  	IOMemoryDescriptor       *memory;       /* pixels (buffer or physical) */
  	IOOptionBits              mapCache;     /* cache mode for user mappings */
-@@ -48,18 +48,18 @@ public:
+@@ -48,18 +48,18 @@
  };
  
  /* Retained surface for an id, or NULL. */
@@ -6317,7 +6317,7 @@ index 8755881b821f01b7abb217c964b592632676e276..b3e11f5a3dc6d1f11db0ec6fd0c03b32
  #include <IOKit/IOService.h>
  #include <IOKit/IOUserClient.h>
  #include <IOKit/IOKitKeys.h>
-@@ -49,7 +49,7 @@ IOWatchdog::start(IOService *provider)
+@@ -49,7 +49,7 @@
  	setProperty(kIOUserClientClassKey, "IOWatchdogUserClient");
  	setProperty("IOPMUPrimary", 1ULL, 32);
  	registerService();
@@ -6326,7 +6326,7 @@ index 8755881b821f01b7abb217c964b592632676e276..b3e11f5a3dc6d1f11db0ec6fd0c03b32
  	return true;
  }
  
-@@ -72,7 +72,7 @@ IOWatchdogUserClient::clientClose(void)
+@@ -72,7 +72,7 @@
  	return kIOReturnSuccess;
  }
  
@@ -6335,7 +6335,7 @@ index 8755881b821f01b7abb217c964b592632676e276..b3e11f5a3dc6d1f11db0ec6fd0c03b32
  
  IOReturn
  IOWatchdogUserClient::externalMethod(uint32_t selector, IOExternalMethodArguments *args,
-@@ -92,16 +92,16 @@ IOWatchdogUserClient::externalMethod(uint32_t selector, IOExternalMethodArgument
+@@ -92,16 +92,16 @@
  		bzero(args->structureOutput, args->structureOutputSize);
  	}
  
@@ -6473,7 +6473,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
   * every N seconds, to test the event path without input hardware.
   */
  #include <IOKit/IOLib.h>
-@@ -67,7 +67,7 @@ IOHIDEventService::start(IOService *provider)
+@@ -67,7 +67,7 @@
  	OSString *product = getProduct();
  	setProperty(kIOHIDTransportKey, transport);
  	setProperty(kIOHIDProductKey, product);
@@ -6482,7 +6482,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  	setProperty(kIOHIDVendorIDKey, getVendorID(), 32);
  	setProperty(kIOHIDProductIDKey, getProductID(), 32);
  	setProperty(kIOHIDLocationIDKey, (unsigned long long)getProductID(), 32);
-@@ -128,7 +128,7 @@ IOHIDEventService::open(IOService *client, IOOptionBits options, void *context,
+@@ -128,7 +128,7 @@
  		ok = super::open(client, options, data);
  	}
  	OSSafeReleaseNULL(data);
@@ -6491,7 +6491,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  	return ok;
  }
  
-@@ -296,7 +296,7 @@ IOHIDEventService::newUserClient(task_t owningTask, void *securityID, UInt32 typ
+@@ -296,7 +296,7 @@
  	IOUserClient *client;
  
  	if (type != kIOHIDEventServiceUserClientType) {
@@ -6500,7 +6500,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  		return super::newUserClient(owningTask, securityID, type, properties, handler);
  	}
  	client = OSTypeAlloc(IOHIDEventServiceUserClient);
-@@ -305,7 +305,7 @@ IOHIDEventService::newUserClient(task_t owningTask, void *securityID, UInt32 typ
+@@ -305,7 +305,7 @@
  	}
  	if (!client->initWithTask(owningTask, securityID, type)) {
  		client->release();
@@ -6509,7 +6509,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  		return kIOReturnBadArgument;
  	}
  	if (!client->attach(this)) {
-@@ -325,8 +325,8 @@ IOHIDEventService::newUserClient(task_t owningTask, void *securityID, UInt32 typ
+@@ -325,8 +325,8 @@
   * Buttons. iOS takes the side/volume/home buttons as consumer-control
   * keyboard events (AppleM68Buttons publishes the same usage pair).
   */
@@ -6520,7 +6520,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  public:
  	virtual bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
  	void key(UInt32 usage, bool down);
-@@ -340,14 +340,14 @@ private:
+@@ -340,14 +340,14 @@
  	UInt32 fTestSecs;
  	UInt32 fTestCount;
  };
@@ -6537,7 +6537,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  /*
   * Contacts that start this close to a panel edge (pixels, ~3 mm) carry
   * kIOHIDDigitizerEventFromEdgeTip for their whole life, as Apple's touch
-@@ -355,9 +355,9 @@ OSDefineMetaClassAndStructors(SweetHIDButtons, IOHIDEventService);
+@@ -355,9 +355,9 @@
   * (_UIEventHIDTouchEdgeTypeForHIDEvent); without it there is no home or
   * app-switcher gesture.
   */
@@ -6550,7 +6550,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  public:
  	virtual bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
  	void touch(int finger, bool down, int x, int y);
-@@ -368,41 +368,41 @@ protected:
+@@ -368,41 +368,41 @@
  private:
  	IOLock *fLock;
  	int fLogicalW, fLogicalH, fOffX, fOffY;
@@ -6606,7 +6606,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  		    _clients ? _clients->getCount() : 0);
  		dispatchEvent(event);
  		event->release();
-@@ -410,9 +410,9 @@ SweetHIDButtons::key(UInt32 usage, bool down)
+@@ -410,9 +410,9 @@
  }
  
  void
@@ -6618,7 +6618,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  
  	/*
  	 * Home (Menu) press, then the release 100 ms later; Setup's "Hello"
-@@ -426,14 +426,14 @@ SweetHIDButtons::testFired(OSObject *owner, IOTimerEventSource *sender)
+@@ -426,14 +426,14 @@
  }
  
  bool
@@ -6635,7 +6635,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  	fLogicalW = native ? 1080 : 1125;
  	fLogicalH = native ? 2400 : 2436;
  	fOffX = (fLogicalW - 1080) / 2;
-@@ -442,20 +442,20 @@ SweetHIDTouch::start(IOService *provider)
+@@ -442,20 +442,20 @@
  	setProperty("DisplayIntegrated", kOSBooleanTrue);
  	setProperty("SurfaceWidth", (unsigned long long)(68 << 16), 32);	/* mm, 16.16 */
  	setProperty("SurfaceHeight", (unsigned long long)(151 << 16), 32);
@@ -6660,7 +6660,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  		return;
  	}
  	x = x < 0 ? 0 : (x > 1079 ? 1079 : x);
-@@ -463,7 +463,7 @@ SweetHIDTouch::touch(int finger, bool down, int x, int y)
+@@ -463,7 +463,7 @@
  
  	IOLockLock(fLock);
  	bool was = fDown[finger];
@@ -6669,7 +6669,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  	IOFixed nx = (IOFixed)(((int64_t)(x + fOffX) << 16) / fLogicalW);
  	IOFixed ny = (IOFixed)(((int64_t)(y + fOffY) << 16) / fLogicalH);
  	bool moved = down && (nx != fX[finger] || ny != fY[finger]);
-@@ -472,8 +472,8 @@ SweetHIDTouch::touch(int finger, bool down, int x, int y)
+@@ -472,8 +472,8 @@
  		return;
  	}
  	if (!was && down) {
@@ -6680,7 +6680,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  	}
  
  	collection = IOHIDEvent::digitizerEvent(now, 0, kIOHIDDigitizerTransducerTypeHand, false, 0, 0, 0);
-@@ -484,7 +484,7 @@ SweetHIDTouch::touch(int finger, bool down, int x, int y)
+@@ -484,7 +484,7 @@
  	collection->setIntegerValue(kIOHIDEventFieldDigitizerCollection, TRUE);
  
  	UInt32 cmask = 0;
@@ -6689,7 +6689,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  		bool d = (i == finger) ? down : fDown[i];
  		if (i != finger && !d) {
  			continue;
-@@ -531,7 +531,7 @@ SweetHIDTouch::touch(int finger, bool down, int x, int y)
+@@ -531,7 +531,7 @@
  	IOLockUnlock(fLock);
  
  	if (was != down) {
@@ -6698,7 +6698,7 @@ index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e981113457
  		    fEdge[finger] ? " edge" : "");
  	}
  	dispatchEvent(collection);
-@@ -540,22 +540,22 @@ SweetHIDTouch::touch(int finger, bool down, int x, int y)
+@@ -540,22 +540,22 @@
  
  /* key: 0 power (side button), 1 volume up, 2 volume down, 3 home */
  extern "C" void
@@ -6805,7 +6805,7 @@ index 9d269d70dbee1987bb86f70966db244f6f4b3593..82f23a928f109e0ca7207ccbd0dee6ee
      "     'IOProviderClass' = IOPlatformDevice;"
      "     'IONameMatch'     = 'qcom,kryo';"
      "     'IOProbeScore'    = 10000:32;"
-@@ -123,15 +68,20 @@ const char * gIOKernelConfigTables =
+@@ -123,15 +68,39 @@
      "     'IONameMatch'     = 'munch,display';"
      "   },"
      "   {"
@@ -6827,6 +6827,25 @@ index 9d269d70dbee1987bb86f70966db244f6f4b3593..82f23a928f109e0ca7207ccbd0dee6ee
 +    "     'IOProviderClass' = IOResources;"
 +    "     'IOMatchCategory' = MunchBattery;"
 +    "   },"
++    "   {"
++    "     'IOClass'         = AppleM2ScalerCSCDriver;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = AppleM2ScalerCSCDriver;"
++    "     'IOSurfaceAcceleratorCapabilitiesDict' = {"
++    "       'IOSurfaceAcceleratorCapabilitiesColorManager' = 1:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesIdentityCSC' = 1:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesHDR' = 1:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxSourceWidth' = 4096:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxSourceHeight' = 4096:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxDestWidth' = 4096:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxDestHeight' = 4096:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxHUpscale' = 16:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxHDownscale' = 16:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxVUpscale' = 16:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxVDownscale' = 16:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesScalerVersion' = 2:32;"
++    "     };"
++    "   },"
  #endif
      "   {"
      "     'IOClass'         = IOPanicPlatform;"
@@ -6834,7 +6853,7 @@ diff --git a/iokit/bsddev/IOKitBSDInit.cpp b/iokit/bsddev/IOKitBSDInit.cpp
 index de6e37f266aee296f4e610b5f9dc939e50473096..3edbada49acc0a447e771d12eaf5b7b05371c6ab 100644
 --- a/iokit/bsddev/IOKitBSDInit.cpp
 +++ b/iokit/bsddev/IOKitBSDInit.cpp
-@@ -766,14 +766,14 @@ IOFindBSDRoot( char * rootName, unsigned int rootNameSize,
+@@ -766,14 +766,14 @@
  		}
  	}
  
@@ -6857,7 +6876,7 @@ diff --git a/iokit/conf/files.arm64 b/iokit/conf/files.arm64
 index acc9ae0264818a7ef3235c827530c459efd3b67d..03a44bbcc98a772eef6b43783b0f7a758f603ab5 100644
 --- a/iokit/conf/files.arm64
 +++ b/iokit/conf/files.arm64
-@@ -6,17 +6,17 @@ iokit/Kernel/IOPMrootDomain.cpp    					optional iokitcpp
+@@ -6,17 +6,17 @@
  # SMP
  iokit/Kernel/arm/AppleARMSMP.cpp    					optional iokitcpp
  
@@ -6889,7 +6908,7 @@ diff --git a/libkern/conf/Makefile.template b/libkern/conf/Makefile.template
 index 404e88a931033a2833f9493e5d8e4e589d4fed21..8b60cf1aeef4faaa025588877e992d7c7bdaba18 100644
 --- a/libkern/conf/Makefile.template
 +++ b/libkern/conf/Makefile.template
-@@ -19,48 +19,48 @@ include $(MakeInc_def)
+@@ -19,48 +19,48 @@
  CFLAGS+= -include meta_features.h -DLIBKERN_KERNEL_PRIVATE -DOSALLOCDEBUG=1
  SFLAGS+= -include meta_features.h
  
@@ -6978,7 +6997,7 @@ diff --git a/libkern/conf/files b/libkern/conf/files
 index b9d424f9f9f710b438977ce4aa947efbb2bd6468..547057c0f52c43a71ad9067b66119e71fbe43fba 100644
 --- a/libkern/conf/files
 +++ b/libkern/conf/files
-@@ -97,21 +97,21 @@ libkern/crypto/corecrypto_sha1.c		optional crypto
+@@ -97,21 +97,21 @@
  libkern/crypto/corecrypto_md5.c			optional crypto
  libkern/crypto/corecrypto_des.c			optional crypto
  libkern/crypto/corecrypto_aes.c			optional crypto
@@ -7042,7 +7061,7 @@ diff --git a/libkern/crypto/corecrypto_md5.c b/libkern/crypto/corecrypto_md5.c
 index 601b0b6e9ecbc2b0d768e8d6b07645c14ee640d5..fe54a29ed688ddab3fc9549a95151009bb0b3a71 100644
 --- a/libkern/crypto/corecrypto_md5.c
 +++ b/libkern/crypto/corecrypto_md5.c
-@@ -17,14 +17,14 @@ setCount(MD5_CTX *ctx, uint64_t count)
+@@ -17,14 +17,14 @@
  }
  
  /* Copy a ccdigest ctx into a legacy MD5 context */
@@ -7061,7 +7080,7 @@ index 601b0b6e9ecbc2b0d768e8d6b07645c14ee640d5..fe54a29ed688ddab3fc9549a95151009
  
  static void
  MD5ToBr(MD5_CTX *md5_ctx, br_md5_context *br_ctx)
-@@ -71,7 +71,7 @@ MD5Final(unsigned char digest[MD5_DIGEST_LENGTH], MD5_CTX *ctx)
+@@ -71,7 +71,7 @@
  	br_md5_out(&br_ctx, digest);
  }
  
@@ -7070,7 +7089,7 @@ index 601b0b6e9ecbc2b0d768e8d6b07645c14ee640d5..fe54a29ed688ddab3fc9549a95151009
  
  static void
  DiToMD5(const struct ccdigest_info *di, struct ccdigest_ctx *di_ctx, MD5_CTX *md5_ctx)
-@@ -125,4 +125,4 @@ MD5Final(unsigned char digest[MD5_DIGEST_LENGTH], MD5_CTX *ctx)
+@@ -125,4 +125,4 @@
  	ccdigest_final(di, di_ctx, digest);
  }
  
@@ -7080,7 +7099,7 @@ diff --git a/libkern/crypto/corecrypto_sha1.c b/libkern/crypto/corecrypto_sha1.c
 index 59688014f1f1265af8bacbbff12c31de246a9756..3701d027b7498abcb9eb86b05645539ba5c3a594 100644
 --- a/libkern/crypto/corecrypto_sha1.c
 +++ b/libkern/crypto/corecrypto_sha1.c
-@@ -16,14 +16,14 @@ setCount(SHA1_CTX *ctx, uint64_t count)
+@@ -16,14 +16,14 @@
  	ctx->c.b64[0] = count;
  }
  
@@ -7099,7 +7118,7 @@ index 59688014f1f1265af8bacbbff12c31de246a9756..3701d027b7498abcb9eb86b05645539b
  
  static void
  SHA1ToBr(SHA1_CTX *sha1_ctx, br_sha1_context *br_ctx)
-@@ -70,7 +70,7 @@ SHA1Final(void *digest, SHA1_CTX *ctx)
+@@ -70,7 +70,7 @@
  	br_sha1_out(&br_ctx, digest);
  }
  
@@ -7108,7 +7127,7 @@ index 59688014f1f1265af8bacbbff12c31de246a9756..3701d027b7498abcb9eb86b05645539b
  
  /* Copy a ccdigest ctx into a legacy SHA1 context */
  static void
-@@ -125,7 +125,7 @@ SHA1Final(void *digest, SHA1_CTX *ctx)
+@@ -125,7 +125,7 @@
  	ccdigest_final(di, di_ctx, digest);
  }
  
@@ -7138,7 +7157,7 @@ index b70996a90178bd473d6be373bbe7822e5a5b7623..4d54e50458642c5f372b493de4aaf268
   * the caller's SHA384_CTX/SHA512_CTX.
   */
  #include <corecrypto/ccsha2.h>
-@@ -84,8 +84,8 @@ SHA256_Final(void *digest, SHA256_CTX *ctx)
+@@ -84,8 +84,8 @@
  	ccdigest_final(di, ctx->ctx, digest);
  }
  
@@ -7149,7 +7168,7 @@ index b70996a90178bd473d6be373bbe7822e5a5b7623..4d54e50458642c5f372b493de4aaf268
  
  _Static_assert(sizeof(br_sha384_context) <= sizeof(SHA512_CTX),
      "BearSSL SHA-384/512 context must fit in SHA512_CTX");
-@@ -127,7 +127,7 @@ SHA512_Final(void *digest, SHA512_CTX *ctx)
+@@ -127,7 +127,7 @@
  	br_sha512_out(BR_CTX(ctx), digest);
  }
  
@@ -7158,7 +7177,7 @@ index b70996a90178bd473d6be373bbe7822e5a5b7623..4d54e50458642c5f372b493de4aaf268
  
  void
  SHA384_Init(SHA384_CTX *ctx)
-@@ -194,7 +194,7 @@ SHA512_Final(void *digest, SHA512_CTX *ctx)
+@@ -194,7 +194,7 @@
  	ccdigest_final(di, ctx->ctx, digest);
  }
  
@@ -7193,7 +7212,7 @@ index 28ac4d2f7eea101cf013e39823a0ab19c6ec8cc0..aa6e373b9972d3cddfaec07deeabc1b7
  
  _Static_assert(sizeof(br_aes_ct_cbcenc_keys) <= sizeof(aes_encrypt_ctx),
      "BearSSL encryption context does not fit the XNU AES ABI");
-@@ -17,7 +17,7 @@ _Static_assert(sizeof(br_aes_ct_cbcdec_keys) <= sizeof(aes_decrypt_ctx),
+@@ -17,7 +17,7 @@
      "BearSSL decryption context does not fit the XNU AES ABI");
  
  static int
@@ -7202,7 +7221,7 @@ index 28ac4d2f7eea101cf013e39823a0ab19c6ec8cc0..aa6e373b9972d3cddfaec07deeabc1b7
      size_t key_len, const void *key)
  {
      (void)mode;
-@@ -33,7 +33,7 @@ sweet_aes_encrypt_init(const struct ccmode_cbc *mode, cccbc_ctx *ctx,
+@@ -33,7 +33,7 @@
  }
  
  static int
@@ -7211,7 +7230,7 @@ index 28ac4d2f7eea101cf013e39823a0ab19c6ec8cc0..aa6e373b9972d3cddfaec07deeabc1b7
      size_t key_len, const void *key)
  {
      (void)mode;
-@@ -49,7 +49,7 @@ sweet_aes_decrypt_init(const struct ccmode_cbc *mode, cccbc_ctx *ctx,
+@@ -49,7 +49,7 @@
  }
  
  static int
@@ -7220,7 +7239,7 @@ index 28ac4d2f7eea101cf013e39823a0ab19c6ec8cc0..aa6e373b9972d3cddfaec07deeabc1b7
      const void *in, void *out, unsigned rounds)
  {
      if (ctx == NULL || iv == NULL ||
-@@ -66,11 +66,11 @@ sweet_aes_check(const void *ctx, const void *iv, size_t nblocks,
+@@ -66,11 +66,11 @@
  }
  
  static int
@@ -7234,7 +7253,7 @@ index 28ac4d2f7eea101cf013e39823a0ab19c6ec8cc0..aa6e373b9972d3cddfaec07deeabc1b7
          key == NULL ? 0 : key->num_rounds);
      if (error != CCERR_OK || nblocks == 0) {
          return error;
-@@ -82,11 +82,11 @@ sweet_aes_encrypt_cbc(const cccbc_ctx *ctx, cccbc_iv *iv, size_t nblocks,
+@@ -82,11 +82,11 @@
  }
  
  static int
@@ -7248,7 +7267,7 @@ index 28ac4d2f7eea101cf013e39823a0ab19c6ec8cc0..aa6e373b9972d3cddfaec07deeabc1b7
          key == NULL ? 0 : key->num_rounds);
      if (error != CCERR_OK || nblocks == 0) {
          return error;
-@@ -96,16 +96,16 @@ sweet_aes_decrypt_cbc(const cccbc_ctx *ctx, cccbc_iv *iv, size_t nblocks,
+@@ -96,16 +96,16 @@
      return CCERR_OK;
  }
  
@@ -7676,7 +7695,7 @@ diff --git a/makedefs/MakeInc.def b/makedefs/MakeInc.def
 index de118e4a1008769726b782d4b1dc9ba8d9a2f434..4f28a876ea560a812f6f4d22fd54eb21a7c8cc0e 100644
 --- a/makedefs/MakeInc.def
 +++ b/makedefs/MakeInc.def
-@@ -29,7 +29,7 @@ SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
+@@ -29,7 +29,7 @@
  else ifneq ($(findstring _host,$(RC_ProjectName)),)
  SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
  else
@@ -7685,7 +7704,7 @@ index de118e4a1008769726b782d4b1dc9ba8d9a2f434..4f28a876ea560a812f6f4d22fd54eb21
  
  endif
  
-@@ -61,7 +61,6 @@ MACHINE_FLAGS_ARM64_T8103 = -DARM64_BOARD_CONFIG_T8103                  -mcpu=ap
+@@ -61,7 +61,6 @@
  MACHINE_FLAGS_ARM64_T6000 = -DARM64_BOARD_CONFIG_T6000 		-mcpu=apple-a14
  MACHINE_FLAGS_ARM64_VMAPPLE = -DARM64_BOARD_CONFIG_VMAPPLE              -march=armv8.5a
  MACHINE_FLAGS_ARM64_BCM2837 = -DARM64_BOARD_CONFIG_BCM2837
@@ -7693,7 +7712,7 @@ index de118e4a1008769726b782d4b1dc9ba8d9a2f434..4f28a876ea560a812f6f4d22fd54eb21
  MACHINE_FLAGS_ARM64_MUNCH = -DARM64_BOARD_CONFIG_MUNCH                 -march=armv8.2-a+crypto
  
  
-@@ -261,8 +260,8 @@ ifeq ($(ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG),)
+@@ -261,8 +260,8 @@
  # Without embdedded device map, use a default arch string
  export ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG := $(shell echo $(CURRENT_ARCH_CONFIG) | tr A-Z a-z)
  ifneq ($(filter arm64,$(ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG)),)
@@ -7717,7 +7736,7 @@ index 42362c5eafc32afc0bfd163773f39b2c30a996ab..700a8aa7916cdc8370776002fe512a8e
  #include <arm/pmap.h>
  #include <arm/caches_internal.h>
  #include <arm/cpu_internal.h>
-@@ -347,7 +347,7 @@ arm_init(
+@@ -347,7 +347,7 @@
  	DTEntry chosen = NULL;
  	unsigned int dt_entry_size = 0;
  
@@ -7726,7 +7745,7 @@ index 42362c5eafc32afc0bfd163773f39b2c30a996ab..700a8aa7916cdc8370776002fe512a8e
  
  	arm_setup_pre_sign();
  
-@@ -365,7 +365,7 @@ arm_init(
+@@ -365,7 +365,7 @@
  #endif /* defined(HAS_APPLE_PAC) */
  
  	PE_init_platform(FALSE, args); /* Get platform expert set up */
@@ -7735,7 +7754,7 @@ index 42362c5eafc32afc0bfd163773f39b2c30a996ab..700a8aa7916cdc8370776002fe512a8e
  
  #if __arm64__
  	configure_timer_apple_regs();
-@@ -427,7 +427,7 @@ arm_init(
+@@ -427,7 +427,7 @@
  #endif
  
  	ml_parse_cpu_topology();
@@ -7744,7 +7763,7 @@ index 42362c5eafc32afc0bfd163773f39b2c30a996ab..700a8aa7916cdc8370776002fe512a8e
  
  
  	master_cpu = ml_get_boot_cpu_number();
-@@ -458,13 +458,13 @@ arm_init(
+@@ -458,13 +458,13 @@
  	 */
  	thread->machine.preemption_count = 0;
  	cpu_bootstrap();
@@ -7760,7 +7779,7 @@ index 42362c5eafc32afc0bfd163773f39b2c30a996ab..700a8aa7916cdc8370776002fe512a8e
  
  	/*
  	 * Initialize the timer callout world
-@@ -473,7 +473,7 @@ arm_init(
+@@ -473,7 +473,7 @@
  
  	cpu_init();
  
@@ -7769,7 +7788,7 @@ index 42362c5eafc32afc0bfd163773f39b2c30a996ab..700a8aa7916cdc8370776002fe512a8e
  	processor_bootstrap();
  
  	if (PE_parse_boot_argn("maxmem", &maxmem, sizeof(maxmem))) {
-@@ -521,9 +521,9 @@ arm_init(
+@@ -521,9 +521,9 @@
  	__builtin_arm_wsr("pan", 1);
  #endif  /* __ARM_PAN_AVAILABLE__ */
  
@@ -7781,7 +7800,7 @@ index 42362c5eafc32afc0bfd163773f39b2c30a996ab..700a8aa7916cdc8370776002fe512a8e
  
  	if (debug_boot_arg) {
  		patch_low_glo();
-@@ -536,14 +536,14 @@ arm_init(
+@@ -536,14 +536,14 @@
  	PE_consistent_debug_inherit();
  
  	/* Setup debugging output. */
@@ -7817,7 +7836,7 @@ diff --git a/osfmk/arm64/Makefile b/osfmk/arm64/Makefile
 index d75b285f26b9744868bcf7c04edb34edaaa6020e..7bd074178da8c8057b78491b3aea69e78c1496a8 100644
 --- a/osfmk/arm64/Makefile
 +++ b/osfmk/arm64/Makefile
-@@ -40,7 +40,7 @@ EXPORT_MD_LIST = \
+@@ -40,7 +40,7 @@
  	monotonic.h \
  	perfmon_arm64_regs.h \
  	proc_reg.h \
@@ -7873,7 +7892,7 @@ index 644b46e1aaffeb9bdc79636764a18a78964f6870..a07c2da5fbbbf93ce2fd56e77f1479ac
  #include <arm/cpu_data_internal.h>
  #include <arm/misc_protos.h>
  #include <pexpert/arm64/boot.h>
-@@ -1820,23 +1820,23 @@ init_ptpages(tt_entry_t *tt, vm_map_address_t start, vm_map_address_t end, bool
+@@ -1820,23 +1820,23 @@
   * arm_vm_physmap_slide() preserves each PA's block offset. Each PTOV entry
   * can therefore consume up to one extra twig of VA space. Reserve that
   * space in both the aperture bound and its L1 allocation, including the
@@ -7902,7 +7921,7 @@ index 644b46e1aaffeb9bdc79636764a18a78964f6870..a07c2da5fbbbf93ce2fd56e77f1479ac
  	assert(va + ARM_TT_L2_SIZE <= gVirtBase);
  	tt_entry_t l1 = cpu_tte[(va & ARM_TT_L1_INDEX_MASK) >> ARM_TT_L1_SHIFT];
  	assert((l1 & (ARM_TTE_VALID | ARM_TTE_TYPE_MASK)) == (ARM_TTE_VALID | ARM_TTE_TYPE_TABLE));
-@@ -2179,28 +2179,28 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -2179,28 +2179,28 @@
  
  	arm_set_user_tbi();
  
@@ -7937,7 +7956,7 @@ index 644b46e1aaffeb9bdc79636764a18a78964f6870..a07c2da5fbbbf93ce2fd56e77f1479ac
  
  	// From here on out, we're off the bootstrap translation tables.
  
-@@ -2293,9 +2293,9 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -2293,9 +2293,9 @@
      }
  #endif
  #endif
@@ -7949,7 +7968,7 @@ index 644b46e1aaffeb9bdc79636764a18a78964f6870..a07c2da5fbbbf93ce2fd56e77f1479ac
  
  	disable_preemption();
  
-@@ -2346,7 +2346,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -2346,7 +2346,7 @@
  		va_l1 = va_l2_end;
  		cpu_l1_tte++;
  	}
@@ -7962,7 +7981,7 @@ diff --git a/osfmk/arm64/caches_asm.s b/osfmk/arm64/caches_asm.s
 index e777b771fa9c3082fdcd22797bc3d3710f5d80b6..ea46d6dc38064ca3eb03f1731084075601a9f625 100644
 --- a/osfmk/arm64/caches_asm.s
 +++ b/osfmk/arm64/caches_asm.s
-@@ -212,7 +212,7 @@ L_ipui_loop:
+@@ -212,7 +212,7 @@
  	.globl EXT(CleanPoC_Dcache)
  	.globl EXT(clean_mmu_dcache)
  LEXT(CleanPoC_Dcache)
@@ -7971,7 +7990,7 @@ index e777b771fa9c3082fdcd22797bc3d3710f5d80b6..ea46d6dc38064ca3eb03f17310840756
  #if  defined(APPLE_ARM64_ARCH_FAMILY)
  	dsb		sy
  	ret
-@@ -348,7 +348,7 @@ LEXT(CleanPoC_DcacheRegion_Force)
+@@ -348,7 +348,7 @@
   *	void CleanPoC_DcacheRegion_Force_nopreempt(vm_offset_t va, size_t length)
   *	void CleanPoC_DcacheRegion_Force_nopreempt_nohid(vm_offset_t va, size_t length)
   *
@@ -7984,7 +8003,7 @@ diff --git a/osfmk/arm64/cpu.c b/osfmk/arm64/cpu.c
 index 1af58ffae5dd12297cbde446e238d32bb947ecf0..a73b0df579b3f0d98f74795e0540791e4af5429b 100644
 --- a/osfmk/arm64/cpu.c
 +++ b/osfmk/arm64/cpu.c
-@@ -922,7 +922,7 @@ cpu_start(int cpu)
+@@ -922,7 +922,7 @@
  
  		flush_dcache((vm_offset_t)&CpuDataEntries[cpu], sizeof(cpu_data_entry_t), FALSE);
  		flush_dcache((vm_offset_t)cpu_data_ptr, sizeof(cpu_data_t), FALSE);
@@ -7993,7 +8012,7 @@ index 1af58ffae5dd12297cbde446e238d32bb947ecf0..a73b0df579b3f0d98f74795e0540791e
  		/* The reset stub loads these through physical addresses with caches off.
  		 * Use VA range cleans to PoC, including on coherent-I/O builds. */
  		extern uint8_t bootstrap_pagetables[BOOTSTRAP_TABLE_SIZE];
-@@ -963,11 +963,11 @@ cpu_start(int cpu)
+@@ -963,11 +963,11 @@
  }
  
  
@@ -8023,7 +8042,7 @@ diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
 index 4e031152ddbdee5cb8633980d5e62d20287fac4d..8754502b9b6b3ce1ea3a42fcb271cbbe660cdfc7 100644
 --- a/osfmk/arm64/machine_routines.c
 +++ b/osfmk/arm64/machine_routines.c
-@@ -954,8 +954,8 @@ ml_parse_cpu_topology(void)
+@@ -954,8 +954,8 @@
  	const boolean_t cpus_boot_arg_present = PE_parse_boot_argn("cpus", &cpu_boot_arg, sizeof(cpu_boot_arg));
  	const boolean_t cpumask_boot_arg_present = PE_parse_boot_argn("cpumask", &cpumask_boot_arg, sizeof(cpumask_boot_arg));
  
@@ -8034,7 +8053,7 @@ index 4e031152ddbdee5cb8633980d5e62d20287fac4d..8754502b9b6b3ce1ea3a42fcb271cbbe
  	if (!cpus_boot_arg_present || cpu_boot_arg == 0) {
  		cpu_boot_arg = 1;
  	}
-@@ -1087,7 +1087,7 @@ ml_parse_cpu_topology(void)
+@@ -1087,7 +1087,7 @@
  		}
  #endif
  
@@ -8043,7 +8062,7 @@ index 4e031152ddbdee5cb8633980d5e62d20287fac4d..8754502b9b6b3ce1ea3a42fcb271cbbe
  		/* Aff1 encodes the core on SM7150, not an Apple cluster ID. */
  		cpu->die_cluster_id = (int)ml_readprop(child, "die-cluster-id", 0);
  		cpu->cluster_core_id = (int)ml_readprop(child, "cluster-core-id", cpu->phys_id >> 8);
-@@ -2180,17 +2180,17 @@ ml_get_decrementer(void)
+@@ -2180,17 +2180,17 @@
  	return dec;
  }
  
@@ -8084,7 +8103,7 @@ index 5b3efbfb158881c3f57cfd060ebb614536b73d45..7f851035ced25903648e31e182c4cbe7
  #include <stdint.h>
  #include <kern/misc_protos.h>
  
-@@ -29,7 +29,7 @@ static unsigned int early_row, early_col;
+@@ -29,7 +29,7 @@
  static unsigned int early_started, early_disabled, early_panicking;
  
  static void
@@ -8093,7 +8112,7 @@ index 5b3efbfb158881c3f57cfd060ebb614536b73d45..7f851035ced25903648e31e182c4cbe7
  {
  	for (unsigned int y = 0; y < EARLY_CELL_H; y++) {
  		volatile uint32_t *line = EARLY_FB + (early_row * EARLY_CELL_H + y) * EARLY_STRIDE;
-@@ -40,14 +40,14 @@ sweet_early_clear_row(void)
+@@ -40,14 +40,14 @@
  }
  
  void
@@ -8110,7 +8129,7 @@ index 5b3efbfb158881c3f57cfd060ebb614536b73d45..7f851035ced25903648e31e182c4cbe7
  	}
  	if (c == '\r') {
  		early_col = 0;
-@@ -56,7 +56,7 @@ sweet_early_putc(char c)
+@@ -56,7 +56,7 @@
  	if (c == '\n' || early_col == EARLY_COLS) {
  		early_col = 0;
  		early_row = (early_row + 1) % EARLY_ROWS;
@@ -8119,7 +8138,7 @@ index 5b3efbfb158881c3f57cfd060ebb614536b73d45..7f851035ced25903648e31e182c4cbe7
  		if (c == '\n') {
  			return;
  		}
-@@ -79,15 +79,15 @@ sweet_early_putc(char c)
+@@ -79,15 +79,15 @@
  }
  
  static void
@@ -8138,7 +8157,7 @@ index 5b3efbfb158881c3f57cfd060ebb614536b73d45..7f851035ced25903648e31e182c4cbe7
  {
  	if (early_disabled || stage > 20) {
  		return;
-@@ -99,45 +99,45 @@ sweet_early_mark(unsigned int stage, const char *label)
+@@ -99,45 +99,45 @@
  		}
  	}
  	__asm__ volatile("dsb sy" ::: "memory");
@@ -8268,7 +8287,7 @@ diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
 index fdaadf0126f5f6a8938cef659a4c7772ae8c2f39..1c27b84525d3b168dab6f464cc243b26f5b5d896 100644
 --- a/osfmk/arm64/sleh.c
 +++ b/osfmk/arm64/sleh.c
-@@ -1856,9 +1856,9 @@ sleh_irq(arm_saved_state_t *state)
+@@ -1856,9 +1856,9 @@
  #endif
  
  
@@ -8280,7 +8299,7 @@ index fdaadf0126f5f6a8938cef659a4c7772ae8c2f39..1c27b84525d3b168dab6f464cc243b26
  	 * ARM64 targets take as FIQs arrive here as Group 1 IRQs.
  	 */
  	uint64_t iar = __builtin_arm_rsr64("ICC_IAR1_EL1");
-@@ -1867,7 +1867,7 @@ sleh_irq(arm_saved_state_t *state)
+@@ -1867,7 +1867,7 @@
  	if (intid >= 1020 && intid <= 1023) {
  		return; /* spurious */
  	}
@@ -8289,7 +8308,7 @@ index fdaadf0126f5f6a8938cef659a4c7772ae8c2f39..1c27b84525d3b168dab6f464cc243b26
  		sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_TIMER);
  		cdp->cpu_decrementer = -1; /* Large */
  		INTERRUPT_MASKED_DEBUG_START(rtclock_intr, DBG_INTR_TYPE_TIMER);
-@@ -1903,7 +1903,7 @@ sleh_irq(arm_saved_state_t *state)
+@@ -1903,7 +1903,7 @@
  	    cdp->interrupt_nub,
  	    cdp->interrupt_source);
  #endif
@@ -8302,7 +8321,7 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
 index 9a848111b9f315d07f1ff53f925ea718c92d351d..62585cef831146ee2724b36e7ca01c3d11f2214b 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -143,8 +143,8 @@ LEXT(reset_vector)
+@@ -143,8 +143,8 @@
  	adrp	x19, EXT(ResetHandlerData)@page			// Get address of the reset handler data
  	add		x19, x19, EXT(ResetHandlerData)@pageoff
  	mrs		x15, MPIDR_EL1						// Load MPIDR to get CPU number
@@ -8313,7 +8332,7 @@ index 9a848111b9f315d07f1ff53f925ea718c92d351d..62585cef831146ee2724b36e7ca01c3d
  #else
  	and		x0, x15, #0xFF						// CPU number is in MPIDR Affinity Level 0
  #endif
-@@ -279,21 +279,21 @@ LEXT(LowExceptionVectorBase)
+@@ -279,21 +279,21 @@
  LEXT(bootstrap_instructions)
  
  #endif /* defined(KERNEL_INTEGRITY_KTRR) || defined(KERNEL_INTEGRITY_CTRR) */
@@ -8340,7 +8359,7 @@ index 9a848111b9f315d07f1ff53f925ea718c92d351d..62585cef831146ee2724b36e7ca01c3d
  	adrp	x1, EXT(LowExceptionVectorBase)@page
  	add		x1, x1, EXT(LowExceptionVectorBase)@pageoff
  	msr		VBAR_EL2, x1
-@@ -315,19 +315,19 @@ LEXT(sweet_secondary_entry)
+@@ -315,19 +315,19 @@
  	MOV64	x1, 0x30d00800
  	msr		SCTLR_EL1, x1
  	isb
@@ -8365,7 +8384,7 @@ index 9a848111b9f315d07f1ff53f925ea718c92d351d..62585cef831146ee2724b36e7ca01c3d
  
  	.align 2
  	.globl EXT(resume_idle_cpu)
-@@ -513,22 +513,22 @@ LEXT(start_first_cpu)
+@@ -513,22 +513,22 @@
  	mov		x20, x0
  	mov		x21, #0
  
@@ -8393,7 +8412,7 @@ index 9a848111b9f315d07f1ff53f925ea718c92d351d..62585cef831146ee2724b36e7ca01c3d
  	dsb		sy
  #endif
  
-@@ -678,12 +678,12 @@ Lkernelcache_base_found:
+@@ -678,12 +678,12 @@
  	lsr		x5,  x24, #(ARM_TT_L2_SHIFT)
  	create_bootstrap_mapping x14, x15, x5, x3, x2, x9, x10, x11, x12, x13
  
@@ -8408,7 +8427,7 @@ index 9a848111b9f315d07f1ff53f925ea718c92d351d..62585cef831146ee2724b36e7ca01c3d
  	 * V=P L2 page is bootstrap_pagetables + 2*PGBYTES.
  	 */
  	MOV64	x10, 0x9c000000
-@@ -793,7 +793,7 @@ common_start:
+@@ -793,7 +793,7 @@
  	ic		iallu
  #endif
  
@@ -8417,7 +8436,7 @@ index 9a848111b9f315d07f1ff53f925ea718c92d351d..62585cef831146ee2724b36e7ca01c3d
  	/* Complete local TLB/I-cache invalidation before enabling the MMU. */
  	dsb		sy
  	isb
-@@ -837,11 +837,11 @@ common_start:
+@@ -837,11 +837,11 @@
  	MSR_SCTLR_EL1_X0
  	isb		sy
  
@@ -8479,7 +8498,7 @@ diff --git a/osfmk/conf/files.arm64 b/osfmk/conf/files.arm64
 index b0dad4927792fd4849a0fb793bf3abfc0b5e604a..250312d0a782d938af9dc594658a66f61800726c 100644
 --- a/osfmk/conf/files.arm64
 +++ b/osfmk/conf/files.arm64
-@@ -40,7 +40,7 @@ osfmk/arm64/dbgwrap.c		standard
+@@ -40,7 +40,7 @@
  osfmk/arm/arm_timer.c		standard
  osfmk/arm/arm_init.c	optional config_pmap_ppl
  osfmk/arm64/arm_vm_init.c	optional config_pmap_ppl
@@ -8492,7 +8511,7 @@ diff --git a/osfmk/console/serial_console.c b/osfmk/console/serial_console.c
 index 64a0e6cb5fad36f1c1f1f3ca9c46ec03f400b32e..92fa9ff955b762613b5336bde3a777ce40edd24b 100644
 --- a/osfmk/console/serial_console.c
 +++ b/osfmk/console/serial_console.c
-@@ -266,16 +266,16 @@ _cnputc(char c, bool poll)
+@@ -266,16 +266,16 @@
   *             waiting for an interrupt when the hardware device isn't ready
   * @param size The number of characters to print to the console.
   */
@@ -8514,7 +8533,7 @@ index 64a0e6cb5fad36f1c1f1f3ca9c46ec03f400b32e..92fa9ff955b762613b5336bde3a777ce
  #endif
  
  static inline void
-@@ -283,11 +283,11 @@ _cnputs(char *c, int size, bool poll)
+@@ -283,11 +283,11 @@
  {
  	extern int disableConsoleOutput;
  
@@ -8543,7 +8562,7 @@ index 109cfb1f2a167b90ac8669cae20e8d307f7df0f9..7869740dd4c0e6c57156f44e89dc27b8
  #endif
  #include <IOKit/IOBSD.h>
  
-@@ -1072,9 +1072,9 @@ panic_trap_to_debugger(const char *panic_format_str, va_list *panic_args, unsign
+@@ -1072,9 +1072,9 @@
  {
  #pragma clang diagnostic pop
  
@@ -8559,7 +8578,7 @@ diff --git a/osfmk/kern/exception.c b/osfmk/kern/exception.c
 index b5a283be4717615528a2e9323abf6d172099ad84..aab42ccc94d7055e210fdea409914fb1ec3f9073 100644
 --- a/osfmk/kern/exception.c
 +++ b/osfmk/kern/exception.c
-@@ -820,23 +820,23 @@ exception_triage(
+@@ -820,23 +820,23 @@
  	return exception_triage_thread(exception, code, codeCnt, thread);
  }
  
@@ -8588,7 +8607,7 @@ index b5a283be4717615528a2e9323abf6d172099ad84..aab42ccc94d7055e210fdea409914fb1
  {
  	thread_t thread = current_thread();
  	task_t task = current_task();
-@@ -893,12 +893,12 @@ sweet_crash_log(const char *name, int pid, int sig, uint64_t code, uint64_t subc
+@@ -893,12 +893,12 @@
  		vm_map_unlock_read(map);
  	}
  	if (sig == 6 || sig == 5) {
@@ -8603,7 +8622,7 @@ index b5a283be4717615528a2e9323abf6d172099ad84..aab42ccc94d7055e210fdea409914fb1
   * default "backboardd,SpringBoard"; "-" = off) that dies with SIGABRT or
   * SIGTRAP (BSAssert / NSAssert style failures) print the printable text runs
   * (>= 24 characters, at least 2 spaces) found in its malloc heap as
-@@ -906,7 +906,7 @@ sweet_crash_log(const char *name, int pid, int sig, uint64_t code, uint64_t subc
+@@ -906,7 +906,7 @@
   * is among them: the abort message only carries the exception's type.
   */
  static void
@@ -8612,7 +8631,7 @@ index b5a283be4717615528a2e9323abf6d172099ad84..aab42ccc94d7055e210fdea409914fb1
  {
  	static char names[128];
  	char *buf;
-@@ -916,7 +916,7 @@ sweet_crash_strings(const char *name)
+@@ -916,7 +916,7 @@
  	int lines = 0;
  	char last[96] = "";
  
@@ -8621,7 +8640,7 @@ index b5a283be4717615528a2e9323abf6d172099ad84..aab42ccc94d7055e210fdea409914fb1
  		strlcpy(names, "backboardd,SpringBoard", sizeof(names));
  	}
  	size_t n = strlen(name), found = 0;
-@@ -991,13 +991,13 @@ sweet_crash_strings(const char *name)
+@@ -991,13 +991,13 @@
  	kfree_data(buf, 65536);
  }
  /*
@@ -8638,7 +8657,7 @@ index b5a283be4717615528a2e9323abf6d172099ad84..aab42ccc94d7055e210fdea409914fb1
  {
  	vm_map_t map = get_task_map(task);
  	uint64_t slide = 0;
-@@ -1040,7 +1040,7 @@ sweet_sample_task(const char *name, int pid, task_t task)
+@@ -1040,7 +1040,7 @@
  	task_unlock(task);
  }
  
@@ -8660,7 +8679,7 @@ index 5a2ddf39fbd9e672f445e65b3b7109569f5151a7..54d157cf090a25ed8cbd11fdbbc286b6
  #include <corecrypto/ccdigest.h>
  #include <corecrypto/ccsha2.h>
  #endif
-@@ -97,7 +97,7 @@ typedef struct entropy_data {
+@@ -97,7 +97,7 @@
  	// State for a SHA256 computation. This is used to accumulate
  	// entropy samples from across all CPUs. It is finalized when
  	// entropy is provided to the consumer of this module.
@@ -8669,7 +8688,7 @@ index 5a2ddf39fbd9e672f445e65b3b7109569f5151a7..54d157cf090a25ed8cbd11fdbbc286b6
  	ccdigest_ctx_decl(CCSHA256_STATE_SIZE, CCSHA256_BLOCK_SIZE, sha256_ctx);
  #else
  	SHA256_CTX sha256_ctx;
-@@ -478,11 +478,11 @@ entropy_health_test(uint32_t sample_count, entropy_sample_t *samples, __assert_o
+@@ -478,11 +478,11 @@
  	return result;
  }
  
@@ -8683,7 +8702,7 @@ index 5a2ddf39fbd9e672f445e65b3b7109569f5151a7..54d157cf090a25ed8cbd11fdbbc286b6
  	ccdigest_init(&ccsha256_ltc_di, entropy_data.sha256_ctx);
  #else
  	SHA256_Init(&entropy_data.sha256_ctx);
-@@ -492,7 +492,7 @@ entropy_hash_init(void)
+@@ -492,7 +492,7 @@
  static void
  entropy_hash_update(const void *data, size_t nbytes)
  {
@@ -8692,7 +8711,7 @@ index 5a2ddf39fbd9e672f445e65b3b7109569f5151a7..54d157cf090a25ed8cbd11fdbbc286b6
  	ccdigest_update(&ccsha256_ltc_di, entropy_data.sha256_ctx, nbytes, data);
  #else
  	SHA256_Update(&entropy_data.sha256_ctx, data, nbytes);
-@@ -502,7 +502,7 @@ entropy_hash_update(const void *data, size_t nbytes)
+@@ -502,7 +502,7 @@
  static void
  entropy_hash_final(void *out)
  {
@@ -8701,7 +8720,7 @@ index 5a2ddf39fbd9e672f445e65b3b7109569f5151a7..54d157cf090a25ed8cbd11fdbbc286b6
  	ccdigest_final(&ccsha256_ltc_di, entropy_data.sha256_ctx, out);
  	ccdigest_ctx_clear(CCSHA256_STATE_SIZE, CCSHA256_BLOCK_SIZE, entropy_data.sha256_ctx);
  #else
-@@ -523,8 +523,8 @@ entropy_provide(size_t *entropy_size, void *entropy, __unused void *arg)
+@@ -523,8 +523,8 @@
  	*entropy_size = 0;
  
  	// Apple platforms need the corecrypto kext's SHA256 implementation.
@@ -8716,7 +8735,7 @@ diff --git a/osfmk/prng/prng_random.c b/osfmk/prng/prng_random.c
 index c87e87e8b2c492e63cc041c00c249aab3ca7f2a8..d5ca3826a149e5d24f57ea06f4908592063d3a9a 100644
 --- a/osfmk/prng/prng_random.c
 +++ b/osfmk/prng/prng_random.c
-@@ -145,9 +145,9 @@ static struct {
+@@ -145,9 +145,9 @@
  		     .strictFIPS = 0,
  	     }};
  
@@ -8728,7 +8747,7 @@ index c87e87e8b2c492e63cc041c00c249aab3ca7f2a8..d5ca3826a149e5d24f57ea06f4908592
   * kext: use the built-in HMAC-SHA256 DRBG, just as early_random does. A
   * single mutex serializes generation and reseeding across all CPUs. This
   * favors a small, auditable bring-up implementation over per-CPU scaling.
-@@ -155,129 +155,129 @@ static struct {
+@@ -155,129 +155,129 @@
   */
  #include <kern/startup.h>
  
@@ -8910,7 +8929,7 @@ index c87e87e8b2c492e63cc041c00c249aab3ca7f2a8..d5ca3826a149e5d24f57ea06f4908592
  
  static void read_erandom(void * buf, size_t nbytes);
  
-@@ -473,7 +473,7 @@ int
+@@ -473,7 +473,7 @@
  write_random(void * buffer, u_int numbytes)
  {
  	uint8_t seed[SHA256_DIGEST_LENGTH];
@@ -8923,7 +8942,7 @@ diff --git a/osfmk/vm/vm_kern.c b/osfmk/vm/vm_kern.c
 index f7c4c3f8d95a3a23f216d1c503298a9f02a32f7f..0f06a4041db0c3b9e829625cbb8466692e0821a4 100644
 --- a/osfmk/vm/vm_kern.c
 +++ b/osfmk/vm/vm_kern.c
-@@ -2439,9 +2439,9 @@ kmem_sizeclass_init(void)
+@@ -2439,9 +2439,9 @@
  	}
  }
  
@@ -8935,7 +8954,7 @@ index f7c4c3f8d95a3a23f216d1c503298a9f02a32f7f..0f06a4041db0c3b9e829625cbb846669
   * a non-cryptographic generator and requires lock-free generation. Keep
   * allocator RNG state per CPU/sizeclass; seed it from XNU's built-in early
   * HMAC-SHA256 DRBG during single-CPU initialization.
-@@ -2450,12 +2450,12 @@ kmem_sizeclass_init(void)
+@@ -2450,12 +2450,12 @@
   * https://prng.di.unimi.it/splitmix64.c
   * This is private to kmem; it does not register or replace crypto services.
   */
@@ -8950,7 +8969,7 @@ index f7c4c3f8d95a3a23f216d1c503298a9f02a32f7f..0f06a4041db0c3b9e829625cbb846669
  {
  	uint64_t value = (rng->state += 0x9e3779b97f4a7c15ULL);
  	value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
-@@ -2464,18 +2464,18 @@ sweet_kmem_random64(struct sweet_kmem_rng *rng)
+@@ -2464,18 +2464,18 @@
  }
  
  static uint64_t
@@ -8972,7 +8991,7 @@ index f7c4c3f8d95a3a23f216d1c503298a9f02a32f7f..0f06a4041db0c3b9e829625cbb846669
  
  /*
   * This is done during EARLY_BOOT as it needs the corecrypto module to be
-@@ -2485,8 +2485,8 @@ __startup_func
+@@ -2485,8 +2485,8 @@
  static void
  kmem_crypto_init(void)
  {
@@ -8983,7 +9002,7 @@ index f7c4c3f8d95a3a23f216d1c503298a9f02a32f7f..0f06a4041db0c3b9e829625cbb846669
  #else
  	vm_size_t ctx_size = crypto_random_kmem_ctx_size();
  #endif
-@@ -2496,8 +2496,8 @@ kmem_crypto_init(void)
+@@ -2496,8 +2496,8 @@
  
  		ks->ks_rng_ctx = zalloc_percpu_permanent(ctx_size, ZALIGN_PTR);
  		zpercpu_foreach(ctx, ks->ks_rng_ctx) {
@@ -8994,7 +9013,7 @@ index f7c4c3f8d95a3a23f216d1c503298a9f02a32f7f..0f06a4041db0c3b9e829625cbb846669
  #else
  			crypto_random_kmem_init(ctx);
  #endif
-@@ -2765,8 +2765,8 @@ kmem_get_next_slot(
+@@ -2765,8 +2765,8 @@
  		 */
  		slot_idx = kmem_get_random16((uint16_t)num_slots - 1);
  	} else {
@@ -9021,7 +9040,7 @@ index 8e1e744ea29be0bf7fb651f7dd29c752778aa6c4..25bbe2a6b26474b3e6349d379fb19f72
  #endif
  
  static vm_offset_t gicd_base;
-@@ -102,7 +102,7 @@ pe_init_fiq()
+@@ -102,7 +102,7 @@
  			panic("%s: incorrect reg property size in GIC DT node; expecting 32 bytes but got %u bytes", __func__, prop_size);
  		}
  
@@ -9030,7 +9049,7 @@ index 8e1e744ea29be0bf7fb651f7dd29c752778aa6c4..25bbe2a6b26474b3e6349d379fb19f72
  		/* Read only on the boot CPU, before the GIC and RO-late lockdown. */
  		void const *timer_prop;
  		unsigned int timer_size;
-@@ -114,9 +114,9 @@ pe_init_fiq()
+@@ -114,9 +114,9 @@
  			if (intid < 16 || intid >= 32) {
  				panic("%s: virtual timer INTID %u is not a PPI", __func__, intid);
  			}
@@ -9042,7 +9061,7 @@ index 8e1e744ea29be0bf7fb651f7dd29c752778aa6c4..25bbe2a6b26474b3e6349d379fb19f72
  #endif
  
  		vm_offset_t soc_base_phys = pe_arm_get_soc_base_phys();
-@@ -164,7 +164,7 @@ pe_init_fiq()
+@@ -164,7 +164,7 @@
  		}
  	}
  
@@ -9051,7 +9070,7 @@ index 8e1e744ea29be0bf7fb651f7dd29c752778aa6c4..25bbe2a6b26474b3e6349d379fb19f72
  	/*
  	 * Real hardware with two security states: Group 0 is TrustZone's and
  	 * non-secure writes to it are ignored. Everything we own is Group 1 NS
-@@ -175,14 +175,14 @@ pe_init_fiq()
+@@ -175,14 +175,14 @@
  	for (unsigned int i = 0; i < 32; i += 4) {
  		gicr_write32(GICR_IPRIORITYR0 + i, 0xA0A0A0A0);
  	}
@@ -9068,7 +9087,7 @@ index 8e1e744ea29be0bf7fb651f7dd29c752778aa6c4..25bbe2a6b26474b3e6349d379fb19f72
  
  	// Enable system register access
  	uint64_t icc_sre = __builtin_arm_rsr64("ICC_SRE_EL1");
-@@ -190,12 +190,12 @@ pe_init_fiq()
+@@ -190,12 +190,12 @@
  	__builtin_arm_wsr64("ICC_SRE_EL1", icc_sre);
  	__builtin_arm_isb(ISB_SY);
  
@@ -9083,7 +9102,7 @@ index 8e1e744ea29be0bf7fb651f7dd29c752778aa6c4..25bbe2a6b26474b3e6349d379fb19f72
  	__builtin_arm_wsr64("ICC_PMR_EL1", 0xFF);
  
  	// Set EOI mode of this processor
-@@ -203,7 +203,7 @@ pe_init_fiq()
+@@ -203,7 +203,7 @@
  	icc_ctlr &= ~ICC_CTLR_EOIMODE;
  	__builtin_arm_wsr64("ICC_CTLR_EL1", icc_ctlr);
  
@@ -9092,7 +9111,7 @@ index 8e1e744ea29be0bf7fb651f7dd29c752778aa6c4..25bbe2a6b26474b3e6349d379fb19f72
  	// ABL leaves only ARE_NS set; Linux writes ARE_NS | EnableGrp1A | EnableGrp1
  	uint32_t gicd_ctlr = gicd_read32(GICD_CTLR);
  	gicd_ctlr |= GICD_CTLR_ARE_NS | GICD_CTLR_ENABLEGRP1A | GICD_CTLR_ENABLEGRP1;
-@@ -220,7 +220,7 @@ pe_init_fiq()
+@@ -220,7 +220,7 @@
  	gicd_write32(GICD_CTLR, gicd_ctlr);
  	__builtin_arm_wsr64("ICC_IGRPEN0_EL1", 1);
  	__builtin_arm_isb(ISB_SY);
@@ -9114,7 +9133,7 @@ index 19f27cd86465511741ddaf721b1095960ef9b304..3d8885f5b03d339869309c86086bea7e
  #include <pexpert/arm/protos.h>
  #include <kern/sched_prim.h>
  #if HIBERNATION
-@@ -701,9 +701,9 @@ register_serial_functions(struct pe_serial_functions *fns)
+@@ -701,9 +701,9 @@
  /*****************************************************************************/
  
  /*
@@ -9126,7 +9145,7 @@ index 19f27cd86465511741ddaf721b1095960ef9b304..3d8885f5b03d339869309c86086bea7e
   *   reg    = <phys size>       absolute physical address, not arm-io relative
   *   width, height              pixels
   *   stride                     bytes per line, 32bpp
-@@ -800,14 +800,14 @@ fbcon_receive_data(void)
+@@ -800,14 +800,14 @@
  	return 0;
  }
  
@@ -9143,7 +9162,7 @@ index 19f27cd86465511741ddaf721b1095960ef9b304..3d8885f5b03d339869309c86086bea7e
  };
  
  static void
-@@ -818,7 +818,7 @@ fbcon_probe(void)
+@@ -818,7 +818,7 @@
  	uint32_t const *val;
  	unsigned int size;
  
@@ -9152,7 +9171,7 @@ index 19f27cd86465511741ddaf721b1095960ef9b304..3d8885f5b03d339869309c86086bea7e
  	    SecureDTGetProperty(entry, "reg", (void const **)&reg, &size) != kSuccess || size < 16) {
  		return;
  	}
-@@ -834,11 +834,11 @@ fbcon_probe(void)
+@@ -834,11 +834,11 @@
  	if (!fbcon_width || !fbcon_height || fbcon_stride < fbcon_width * 4) {
  		return;
  	}
@@ -9171,7 +9190,7 @@ diff --git a/pexpert/pexpert/arm/protos.h b/pexpert/pexpert/arm/protos.h
 index ae809c08798957466e5bf188bed1087734dcd7ee..058cb6532eb4b68d689ae714f6e3e613c39f36eb 100644
 --- a/pexpert/pexpert/arm/protos.h
 +++ b/pexpert/pexpert/arm/protos.h
-@@ -36,8 +36,8 @@ void uart_putc_options(char, bool);
+@@ -36,8 +36,8 @@
  int uart_getc(void);
  
  void pe_init_fiq(void);
@@ -9182,7 +9201,7 @@ index ae809c08798957466e5bf188bed1087734dcd7ee..058cb6532eb4b68d689ae714f6e3e613
  #endif
  
  #ifdef PRIVATE
-@@ -51,7 +51,7 @@ typedef enum serial_device {
+@@ -51,7 +51,7 @@
  	SERIAL_PI3_UART=0x4,
  	SERIAL_VMAPPLE_UART=0x8,
  	SERIAL_DCC_UART=0x10,
@@ -9227,7 +9246,7 @@ diff --git a/pexpert/pexpert/arm64/Makefile b/pexpert/pexpert/arm64/Makefile
 index cb3b74b770d15091f3e35cc58c829171e9aaadb9..f32eef931cb6cf0c6947ec35876893e49e0046f0 100644
 --- a/pexpert/pexpert/arm64/Makefile
 +++ b/pexpert/pexpert/arm64/Makefile
-@@ -18,7 +18,7 @@ PRIVATE_KERNELFILES = \
+@@ -18,7 +18,7 @@
  	H13.h \
  	VMAPPLE.h \
  	BCM2837.h \
