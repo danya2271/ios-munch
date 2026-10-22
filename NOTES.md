@@ -1,5 +1,29 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: 8-CPU A3 RAM BOOT PREPARED
+
+- Verified and unpacked the prior `xnu-kernel.zip` CI artifact; its
+  `kernel.development.munch` SHA-256 is
+  `10a5fa286959a72934a86f71417b6809b619ef56ecae4dbe489663e6a3c597f1`.
+- Built A3 payload with the same UFS ADT and userspace boot arguments, changed
+  `cpus=1` to `cpus=8`. Payload:
+  `/tmp/munch-ufs-userspace-a3-8cpu-payload.bin`, SHA-256
+  `60ea2b1e19b76454b295c2445d26b75bd6ce54664a7ff126411e6e74540679a6`.
+- Built A3 Android boot v2 image using
+  `/home/danya2271/xiaomi_sm8250_kernel/out/arch/arm64/boot/dts/vendor/qcom/kona-v2.1.dtb`;
+  image `/tmp/munch-ufs-userspace-a3-8cpu-boot.img`, SHA-256
+  `dbe50625f8fb740cc2fce4895115ebaee8de8915469fea9eb2a0866ff0e80978`.
+  Unpacked the boot image and byte-verified its payload; cmdline is confirmed
+  as `debug=0xc serial=3 cpus=8 keepsyms=1 rd=ufsroot0 iosrootrw=1
+  unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1`.
+- This uses the existing platform CPU code and the development kernel; not yet
+  boot-tested. `hackios-xnu-kernel` is redwood-specific HackiOS infrastructure,
+  not a direct Munch kernel replacement.
+- User is separately preparing a 16-GiB debug root image with launchd console
+  logging for `bluetoothd`, `fairplayd.H2`, `SpringBoard`, `backboardd`,
+  `mediaserverd`, `medialibraryd` and `assetsd`. A3 can first be RAM-booted
+  against the current flashed root to validate 8-core bring-up.
+
 ### HANDOFF 2026-10-22: TRAMPOLINE FIX CONFIRMED; NEXT CONSOLE TRACE
 
 - User flashed the trampoline-patched sparse candidate and booted the A2 RAM
