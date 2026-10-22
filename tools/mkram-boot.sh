@@ -13,8 +13,8 @@ PREFIX="munch"
 ROOT="ufs"
 DRAM_BASE="0x100000000"
 DRAM_SIZE="0xfcc00000"
-UFS_CMDLINE="debug=0xc serial=3 cpus=${CPUS} keepsyms=1 rd=ufsroot0 iosrootrw=1 unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 munchfb_noconsole=1 sweetfb_hz=30 -enable_kprintf_spam -noprogress"
-RAM_CMDLINE="debug=0xc serial=3 cpus=${CPUS} keepsyms=1 rd=md0 munchfb_noconsole=1 sweetfb_hz=30 -enable_kprintf_spam -noprogress"
+UFS_CMDLINE="debug=0xc serial=3 cpus=${CPUS} keepsyms=1 rd=ufsroot0 iosrootrw=1 unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1 munchfb_noconsole=1 munchfb_hz=30 -enable_kprintf_spam -noprogress"
+RAM_CMDLINE="debug=0xc serial=3 cpus=${CPUS} keepsyms=1 rd=md0 munchfb_noconsole=1 munchfb_hz=30 -enable_kprintf_spam -noprogress"
 CMDLINE=""
 
 usage() {

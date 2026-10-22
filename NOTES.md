@@ -9,7 +9,7 @@
 - Candidate cause: the current UFS cmdline omitted the framebuffer console
   mute/throttle flags used by the known-good display path. `mkram-boot.sh`
   now defaults UFS boots to
-  `munchfb_noconsole=1 sweetfb_hz=30`, generates an ADT with `--ufs`, and
+  `munchfb_noconsole=1 munchfb_hz=30`, generates an ADT with `--ufs`, and
   creates an empty payload RAMDisk instead of requiring the diagnostic cpio.
 - Tooling: universal `tools/mkram-boot.sh` now supports `--root ufs|ram`.
   UFS is default and read/write. RAM mode retains `--cp-macho`, `rd=md0`,
