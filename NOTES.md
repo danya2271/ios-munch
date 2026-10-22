@@ -1,5 +1,30 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: PATCH 0085 ORIGIN VERIFIED
+
+- Observed: commit `aceb1e9` (`feat(munch): add Focaltech report parser`)
+  adds `munch_touch.c` and `munch_touch.h` as new files; it is not a SWEET
+  driver rename. The added CRC/frame-parser functions have no callers in the
+  patch series, while patch 0060 contains the actual GENI/Focaltech touch
+  bring-up driver.
+- Observed: strict replay of committed patches 0001–0087 against XNU
+  `xnu-8796.141.3` succeeds; patch 0088 fails `git apply --check`. The CI log
+  for run `39780417091` records the same conflict: `bsd/dev/munch_touch.c`
+  already exists, plus mismatches in `bsd/conf/files` and
+  `bsd/kern/syscalls.master`. Patch 0085 registers the parser as
+  `bsd/dev/munch_touch.c`; patch 0088 tries to rename the Sweet touch driver
+  to that same path, so the patch must be reconciled rather than skipped.
+- Root-cause inference from the applied XNU code: the failed 0088 leaves
+  MUNCH at `MAX_CPU_CLUSTERS=1` with `NO_ECORE`, while topology parsing maps
+  P-cluster CPUs to physical cluster ID 1 and asserts it is <= 0. This
+  explains `phys_cluster_id <= MAX_CPU_CLUSTER_PHY_ID`. The same skipped
+  rebrand leaves `sweet_early` code active, explaining the `SWEET EARLY
+  PANIC` label; it is not evidence that the device was identified as Sweet.
+- No source patch, kernel build, or device operation was performed during
+  this audit. Next: reconcile the parser/driver path and patch 0088, make CI
+  fail on any skipped MUNCH patch, then build and test via temporary RAM boot
+  only. Preserve Android, `userdata`, GPT, and existing backups.
+
 ### HANDOFF 2026-10-22: 8-CPU READ-ONLY RAM IMAGE READY
 
 - GitHub Actions XNU run `39780417091` completed successfully for commit
