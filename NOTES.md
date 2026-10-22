@@ -1,5 +1,30 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: TRAMPOLINE PATCH CANDIDATE READY
+
+- User's root-shell patch completed successfully on the local raw keybag image.
+  Added root-level copies from `Cryptexes/OS/usr/lib`:
+  `libobjc-trampolines.dylib`, `libffi-trampolines.dylib`,
+  `libstdc++.6.0.9.dylib`, `libstdc++.6.dylib` and `libstdc++.dylib`.
+  The `App` cryptex did not provide a top-level `usr/lib`.
+- Rebuilt Android sparse image after verifying/removing the previous sparse
+  candidate. Final raw candidate:
+  `/home/danya2271/Загрузки/ios-munch-20H392/iosroot-partition-28GiB-keybag.img`,
+  SHA-256
+  `eed0309520165015ce7a36bf0b0e79d4e74f0fce38741dfa54fc780ab5d692ee`.
+  Final sparse candidate:
+  `/home/danya2271/Загрузки/ios-munch-20H392/iosroot-partition-28GiB-keybag.simg`,
+  SHA-256
+  `b30e9988ec17f711a87cc7bbdf2ebf9b83d09ecc7b53b36282e883ed9b717cf3`.
+- `fsck.hfsplus -f -y` reports `The volume iOSRoot appears to be OK`. The image
+  has not yet been flashed or booted. The prior shell had a missing closing
+  quote only in its final literal prompt; the executed logic and outputs were
+  valid.
+- Next: user explicitly confirms flashing the new sparse image to `iosroot`,
+  then reboot to fastboot and run the existing A2 temporary RAM boot with
+  `rd=ufsroot0 iosrootrw=1 unentitled_ios_sim_launch=1 ignition_level=1
+  launchd_unsecure_cache=1`. Do not touch `userdata`.
+
 ### HANDOFF 2026-10-22: A1 REACHED LAUNCHD JOBS; FIX TWO FOLLOW-UPS
 
 - Investigated `danya2271/hackios-xnu-userland` and its companion kernel
