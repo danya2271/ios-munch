@@ -1,5 +1,25 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: SCOPE CI FAIL-CLOSED TO OUR PATCH SERIES
+
+- Observed: commit `41d4dbb` fixed the generated Xcode `TargetConditionals.h`
+  rename issue. CI run `39832110083` then applied all local patches 0001–0088
+  successfully, verified by the uploaded post-patch build tree, but stopped
+  before compiling when the broad fail-closed guard rejected DXB's own
+  `TrustCache.patch`; its headers already existed in XNU. This was a guard
+  scope issue, not a MUNCH patch failure.
+- Changed: the workflow guard now applies only to four-digit numbered project
+  patches, so DXB's separate `TrustCache.patch` retains its existing skip
+  behavior. `tools/validate-repo.py` checks that scope.
+- Observed: the updated repo validator, YAML parse, injected Bash syntax check,
+  and `git diff --check` pass. CI's uploaded source after 0088 has the MUNCH
+  board config and both staged SDK headers moved to their MUNCH paths; their
+  contents were preserved. No kernel was compiled in run `39832110083`.
+- Device safety: ADB was no longer connected during a read-only topology query.
+  No fastboot boot, flash, UFS, userdata, GPT, or partition operation occurred.
+- Next: commit/push this guard-scope fix and rerun CI. Only prepare a RAM boot
+  image after CI emits a real kernel artifact.
+
 ### HANDOFF 2026-10-22: CI EXPOSED GENERATED SDK HEADER RENAME BUG
 
 - Observed: GitHub Actions run `39829505050` for commit `c66c8f8` correctly

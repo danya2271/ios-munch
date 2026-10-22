@@ -175,7 +175,8 @@ def validate_munch_ci_fail_closed():
     required = (
         'Refusing to skip MUNCH patch ${PATCH}: ${APPLY_CHECK}',
         'pinned DXB patch-skip handler changed; refusing a non-fail-closed build',
-        'if [ "$MACHINE_CONFIG" = "MUNCH" ]; then',
+        'case "${PATCH##*/}" in',
+        '[0-9][0-9][0-9][0-9]-*)',
     )
     errors = [f'missing fail-closed workflow guard: {needle!r}'
               for needle in required if needle not in text]
@@ -185,7 +186,7 @@ def validate_munch_ci_fail_closed():
             print(f'    - {error}')
         return False
 
-    print(green('[✓] MUNCH CI refuses skipped XNU patches'))
+    print(green('[✓] MUNCH CI fails closed on numbered project patches'))
     return True
 
 

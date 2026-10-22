@@ -56,10 +56,14 @@ jobs:
           path = Path("dxb/build.sh")
           text = path.read_text()
           needle = '                warning "Skipping patch ${PATCH} (already upstream, previously applied, or malformed): ${APPLY_CHECK}"'
-          replacement = '''                if [ "$MACHINE_CONFIG" = "MUNCH" ]; then
-                    error "Refusing to skip MUNCH patch ${PATCH}: ${APPLY_CHECK}"
-                    exit 1
-                fi
+          replacement = '''                case "${PATCH##*/}" in
+                    [0-9][0-9][0-9][0-9]-*)
+                        if [ "$MACHINE_CONFIG" = "MUNCH" ]; then
+                            error "Refusing to skip MUNCH patch ${PATCH}: ${APPLY_CHECK}"
+                            exit 1
+                        fi
+                        ;;
+                esac
                 warning "Skipping patch ${PATCH} (already upstream, previously applied, or malformed): ${APPLY_CHECK}"'''
           if text.count(needle) != 1:
               raise SystemExit("pinned DXB patch-skip handler changed; refusing a non-fail-closed build")
