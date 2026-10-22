@@ -1,13 +1,25 @@
 diff --git a/osfmk/arm64/exception_asm.h b/osfmk/arm64/exception_asm.h
 --- a/osfmk/arm64/exception_asm.h
 +++ b/osfmk/arm64/exception_asm.h
-@@ -69,0 +70,4 @@
+@@ -67,6 +67,10 @@
+ .macro LOAD_PMAP_CPU_DATA
+ 	/* Get the CPU ID. */
+ 	mrs		$0, MPIDR_EL1
 +#if defined(MUNCH)
 +	/* Qualcomm Kona exposes the logical CPU in MPIDR Aff1. */
 +	ubfx	$0, $0, MPIDR_AFF1_SHIFT, MPIDR_AFF1_WIDTH
 +#else
-@@ -76,0 +81,1 @@
+ 	ubfx	$1, $0, MPIDR_AFF1_SHIFT, MPIDR_AFF1_WIDTH
+ 	adrp	$2, EXT(cluster_offsets)@page
+ 	add		$2, $2, EXT(cluster_offsets)@pageoff
+@@ -74,6 +78,7 @@
+ 
+ 	and		$0, $0, MPIDR_AFF0_MASK
+ 	add		$0, $0, $1
 +#endif
+ 
+ 	/* Get the PPL CPU data array. */
+ 	adrp	$1, EXT(pmap_cpu_data_array)@page
 diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
 --- a/osfmk/arm64/machine_routines.c
 +++ b/osfmk/arm64/machine_routines.c
