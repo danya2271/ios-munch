@@ -1,5 +1,28 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: CI EXPOSED GENERATED SDK HEADER RENAME BUG
+
+- Observed: GitHub Actions run `39829505050` for commit `c66c8f8` correctly
+  failed closed while applying patch 0088, before compiling. The staged
+  `TargetConditionals.h` files in both libpthread and HFS are full Xcode SDK
+  headers, while 0088 expected synthetic 14-line stubs and then tried to
+  delete/recreate them. The failure is patch construction, not a compiler or
+  device regression.
+- Changed: 0088 now expresses both generated-header moves as content-preserving
+  Git renames from the staged Sweet donor paths to the Munch paths. It no longer
+  assumes SDK header contents or embeds a test-only stub.
+- Observed: the modified patch passed `git apply --check` and application
+  against the failed run's uploaded XNU build tree, including the real Xcode
+  headers. Both resulting Munch headers have identical SHA-1
+  `da1c6e37d0d23720db69954989ea1e3d80796d72`; the stale Sweet header paths are
+  absent. `python3 tools/validate-repo.py` passes. CI did not produce a kernel;
+  it uploaded only the diagnostic/build-tree artifacts.
+- Device safety: phone remains in Android over ADB; no fastboot boot, flash,
+  UFS, userdata, GPT, or partition operation was performed.
+- Next: run the final diff checks, commit and push the corrected patch, then
+  inspect the new CI result. Do not prepare or boot an image until a kernel is
+  actually built and inspected.
+
 ### HANDOFF 2026-10-22: 0088 RECONCILED; CI MADE FAIL-CLOSED
 
 - Observed: candidate 0088 was rebuilt from the clean post-0087 replay and

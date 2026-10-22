@@ -2686,13 +2686,10 @@ index 11d8fa5f2e7c94138732b189639ff6e79f389125..16c97ab623c55fc7c5cd8c4f704766b7
  435	AUE_NULL	ALL	{ int pid_hibernate(int pid); }
  #else
  435     AUE_NULL        ALL     { int nosys(void); }
-diff --git a/bsd/munch_hfs/TargetConditionals.h b/bsd/munch_hfs/TargetConditionals.h
-new file mode 100644
-index 0000000000000000000000000000000000000000..790af847b10abd69455da0402b2d32681651d63e
---- /dev/null
-+++ b/bsd/munch_hfs/TargetConditionals.h
-@@ -0,0 +1 @@
-+/* stub for patch-application-only audit */
+diff --git a/bsd/sweet_hfs/TargetConditionals.h b/bsd/munch_hfs/TargetConditionals.h
+similarity index 100%
+rename from bsd/sweet_hfs/TargetConditionals.h
+rename to bsd/munch_hfs/TargetConditionals.h
 diff --git a/bsd/sweet_hfs/core/BTree.c b/bsd/munch_hfs/core/BTree.c
 similarity index 100%
 rename from bsd/sweet_hfs/core/BTree.c
@@ -3248,13 +3245,10 @@ index 76f7057db652bfe2f3c3b05c225750c5009f280c..1b50b03d26cd9e110c4bf2cd3bdeef04
  			    cmd == SIOCAIFADDR ? "add address" : "delete address", a[0], a[1], a[2], a[3]);
  		}
  	}
-diff --git a/bsd/pthread/munch_libpthread/TargetConditionals.h b/bsd/pthread/munch_libpthread/TargetConditionals.h
-new file mode 100644
-index 0000000000000000000000000000000000000000..790af847b10abd69455da0402b2d32681651d63e
---- /dev/null
-+++ b/bsd/pthread/munch_libpthread/TargetConditionals.h
-@@ -0,0 +1 @@
-+/* stub for patch-application-only audit */
+diff --git a/bsd/pthread/sweet_libpthread/TargetConditionals.h b/bsd/pthread/munch_libpthread/TargetConditionals.h
+similarity index 100%
+rename from bsd/pthread/sweet_libpthread/TargetConditionals.h
+rename to bsd/pthread/munch_libpthread/TargetConditionals.h
 diff --git a/bsd/pthread/sweet_libpthread/include/darwin_posix_pthread.modulemap b/bsd/pthread/munch_libpthread/include/darwin_posix_pthread.modulemap
 similarity index 100%
 rename from bsd/pthread/sweet_libpthread/include/darwin_posix_pthread.modulemap
@@ -3510,26 +3504,6 @@ index 0000000000000000000000000000000000000000..f00dc23df04f325b8d1f130ded1b5872
 +#include "munch_pthread_compat.h"
 +#include "munch_libpthread/kern/kern_synch.c"
 +#endif /* ARM64_BOARD_CONFIG_MUNCH */
-diff --git a/bsd/pthread/sweet_libpthread/TargetConditionals.h b/bsd/pthread/sweet_libpthread/TargetConditionals.h
-deleted file mode 100644
-index 0c9d9d5861db712893568183a7edc190199a529a..0000000000000000000000000000000000000000
---- a/bsd/pthread/sweet_libpthread/TargetConditionals.h
-+++ /dev/null
-@@ -1,14 +0,0 @@
--#ifndef __TARGETCONDITIONALS__
--#define __TARGETCONDITIONALS__ 1
--#define TARGET_OS_MAC 1
--#define TARGET_OS_OSX 1
--#define TARGET_OS_IPHONE 0
--#define TARGET_OS_IOS 0
--#define TARGET_OS_SIMULATOR 0
--#define TARGET_OS_EMBEDDED 0
--#define TARGET_OS_DRIVERKIT 0
--#define TARGET_OS_MACCATALYST 0
--#define TARGET_OS_BRIDGE 0
--#define TARGET_OS_WIN32 0
--#define TARGET_OS_LINUX 0
--#endif
 diff --git a/bsd/pthread/sweet_pthread_init.c b/bsd/pthread/sweet_pthread_init.c
 deleted file mode 100644
 index 0092ad3f99e9c13361f72da1d2f8d8fcf99ab4c9..0000000000000000000000000000000000000000
@@ -3584,26 +3558,6 @@ index 3d70203387258e70807c21317019fb6b649418c2..00000000000000000000000000000000
 -#include "sweet_pthread_compat.h"
 -#include "sweet_libpthread/kern/kern_synch.c"
 -#endif /* ARM64_BOARD_CONFIG_SWEET */
-diff --git a/bsd/sweet_hfs/TargetConditionals.h b/bsd/sweet_hfs/TargetConditionals.h
-deleted file mode 100644
-index 0c9d9d5861db712893568183a7edc190199a529a..0000000000000000000000000000000000000000
---- a/bsd/sweet_hfs/TargetConditionals.h
-+++ /dev/null
-@@ -1,14 +0,0 @@
--#ifndef __TARGETCONDITIONALS__
--#define __TARGETCONDITIONALS__ 1
--#define TARGET_OS_MAC 1
--#define TARGET_OS_OSX 1
--#define TARGET_OS_IPHONE 0
--#define TARGET_OS_IOS 0
--#define TARGET_OS_SIMULATOR 0
--#define TARGET_OS_EMBEDDED 0
--#define TARGET_OS_DRIVERKIT 0
--#define TARGET_OS_MACCATALYST 0
--#define TARGET_OS_BRIDGE 0
--#define TARGET_OS_WIN32 0
--#define TARGET_OS_LINUX 0
--#endif
 diff --git a/bsd/sys/pthread_internal.h b/bsd/sys/pthread_internal.h
 index fac4aeb11b26b35a7980d43c959a254839c70963..a46ac777271b80f9f403ae0e1b1ae530af5e5e49 100644
 --- a/bsd/sys/pthread_internal.h
