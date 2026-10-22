@@ -1,5 +1,30 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-23: UFS BOOTS TO ACTIVE USERLAND, PRESENTATION FIX CANDIDATE
+
+- Device observation: UFS RW boot with 8 CPUs reached active iOS userland.
+  The panel power state works (the display can be turned off and back on by
+  power button), but no Apple logo/lock screen frame appears. This is not a
+  mount failure.
+- Candidate cause: the current UFS cmdline omitted the framebuffer console
+  mute/throttle flags used by the known-good display path. `mkram-boot.sh`
+  now defaults UFS boots to
+  `munchfb_noconsole=1 sweetfb_hz=30`, generates an ADT with `--ufs`, and
+  creates an empty payload RAMDisk instead of requiring the diagnostic cpio.
+- Tooling: universal `tools/mkram-boot.sh` now supports `--root ufs|ram`.
+  UFS is default and read/write. RAM mode retains `--cp-macho`, `rd=md0`,
+  and `--ram-only`. Both modes use the upper DRAM bank, 8-CPU defaults,
+  MUNCH identity, and validate the kernel has no `SWEET` strings and contains
+  `MUNCHLOG`. The script still never invokes fastboot.
+- Static test passed with the CI 0089 kernel and live Munch DTB. Candidate:
+  `/tmp/munch-boot-script-ufs-test/shim-boot.img`, SHA-256
+  `721844c18b48b14b5fa16af1e34d81e2853188c6ccc1b7dbc15e5e820b146c85`.
+  Test with temporary `fastboot boot` only; do not flash.
+- Next: boot the candidate and capture whether `MUNCH FB` reports swaps. If
+  swaps occur but the screen is blank, trace backboardd's missing
+  `AppleM2ScalerCSCDriver`/surface composition path. If there are no swaps,
+  inspect `backboardd` display matching and IOSurface handling.
+
 ### HANDOFF 2026-10-23: 0089 KERNEL PASSED, SWEETLOG REMOVED, CI RERUNNING
 
 - Observed: CI run `39841992478` reached the post-0088 source tree and rejected
