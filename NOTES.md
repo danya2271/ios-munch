@@ -1,5 +1,25 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22 12:48 +05: HOST IMAGE MOUNT SIZE MISMATCH FOUND
+
+- User attempted a read-only mount of the 28-GiB raw container as a whole. The
+  mount failed; no image or device data was modified.
+- Host inspection confirms the primary and alternate volume headers are HFSX
+  (`HX`), allocation block size 4096, and 4,194,304 allocation blocks, so the
+  HFSX volume is exactly 16 GiB. Its valid alternate header is at byte
+  17,179,868,160 (16 GiB - 1024); the 12-GiB container tail starts at byte
+  17,179,869,184 and is zero-filled.
+- Linux hfsplus reads the alternate header from the end of the visible block
+  device and rejects it if the signature differs from the primary header.
+  Therefore mounting the whole 28-GiB loop device reads zeros instead of the
+  valid header. This explains the mount failure; it does not indicate a missing
+  keybag or by itself prove HFSX corruption.
+- Next: retry read-only with a loop device limited to 17,179,869,184 bytes
+  (`losetup --sizelimit 17179869184`), then inspect
+  `/private/var/keybags/systembag.kb`. If absent, make a separate raw copy and
+  repeat with a writable 16-GiB-limited loop. Do not run repair on the source;
+  do not write to the phone or access `userdata`.
+
 ### HANDOFF 2026-10-22 12:42 +05: KEYBAG FILE CHECK NEEDED
 
 - Latest user console logs show `keybagd` failing to open
