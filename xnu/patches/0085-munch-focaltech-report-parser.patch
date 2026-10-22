@@ -4,15 +4,15 @@ diff --git a/bsd/conf/files b/bsd/conf/files
 @@ -111,3 +111,4 @@
  bsd/dev/sweet_rpmh.c			standard
  bsd/dev/sweet_spmi.c			standard
-+bsd/dev/munch_touch.c			standard
++bsd/dev/munch_touch_parser.c		standard
  bsd/dev/sweet_usb.c			standard
-diff --git a/bsd/dev/munch_touch.h b/bsd/dev/munch_touch.h
+diff --git a/bsd/dev/munch_touch_parser.h b/bsd/dev/munch_touch_parser.h
 new file mode 100644
 --- /dev/null
-+++ b/bsd/dev/munch_touch.h
++++ b/bsd/dev/munch_touch_parser.h
 @@ -0,0 +1,42 @@
-+#ifndef _BSD_DEV_MUNCH_TOUCH_H_
-+#define _BSD_DEV_MUNCH_TOUCH_H_
++#ifndef _BSD_DEV_MUNCH_TOUCH_PARSER_H_
++#define _BSD_DEV_MUNCH_TOUCH_PARSER_H_
 +
 +#include <stddef.h>
 +#include <stdint.h>
@@ -53,12 +53,12 @@ new file mode 100644
 +    struct munch_touch_report *report);
 +
 +#endif
-diff --git a/bsd/dev/munch_touch.c b/bsd/dev/munch_touch.c
+diff --git a/bsd/dev/munch_touch_parser.c b/bsd/dev/munch_touch_parser.c
 new file mode 100644
 --- /dev/null
-+++ b/bsd/dev/munch_touch.c
++++ b/bsd/dev/munch_touch_parser.c
 @@ -0,0 +1,96 @@
-+#include "munch_touch.h"
++#include "munch_touch_parser.h"
 +
 +uint16_t
 +munch_touch_crc16(const uint8_t *data, size_t length)

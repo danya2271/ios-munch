@@ -164,6 +164,31 @@ def validate_munch_build_plumbing():
     return True
 
 
+def validate_munch_ci_fail_closed():
+    path = os.path.join(REPO_ROOT, '.github/workflows/xnu.yml')
+    try:
+        text = open(path, errors='replace').read()
+    except OSError as exc:
+        print(red(f"[-] MUNCH CI patch guard validation failed: {exc}"))
+        return False
+
+    required = (
+        'Refusing to skip MUNCH patch ${PATCH}: ${APPLY_CHECK}',
+        'pinned DXB patch-skip handler changed; refusing a non-fail-closed build',
+        'if [ "$MACHINE_CONFIG" = "MUNCH" ]; then',
+    )
+    errors = [f'missing fail-closed workflow guard: {needle!r}'
+              for needle in required if needle not in text]
+    if errors:
+        print(red('[-] MUNCH CI patch guard validation failed:'))
+        for error in errors:
+            print(f'    - {error}')
+        return False
+
+    print(green('[✓] MUNCH CI refuses skipped XNU patches'))
+    return True
+
+
 def validate_munch_adt():
     import mkadt
 
@@ -231,6 +256,16 @@ def validate_munch_adt():
             errors.append('active Munch CPU profile must identify A77, not A76')
         if 'Snapdragon 870' not in added_cpu_text or 'Kryo 585' not in added_cpu_text:
             errors.append('active Munch CPU profile must identify Snapdragon 870/Kryo 585')
+        if '#define __ARM_AMP__' not in added_cpu_text:
+            errors.append('Munch board profile must enable heterogeneous AMP topology')
+        if '#define MAX_CPU_CLUSTERS               2' not in added_cpu_text:
+            errors.append('Munch board profile must allow E/P logical clusters')
+        if '+#define NO_ECORE' in cpu_text:
+            errors.append('Munch board profile must not disable E-core topology')
+        if re.search(r'^\+[^+].*SWEET|^\+[^+].*sweet', cpu_text, re.MULTILINE):
+            errors.append('0088 must not add active SWEET identifiers')
+        if 'MUNCH EARLY PANIC' not in added_cpu_text:
+            errors.append('early panic diagnostics must use the Munch identity')
 
     if errors:
         print(red('[-] Munch ADT validation failed:'))
@@ -332,6 +367,7 @@ def main():
     print(bold("=== Running ios-munch Repository Validation ==="))
     ok_patches = validate_patches(a.verbose)
     ok_munch = validate_munch_build_plumbing()
+    ok_munch_ci = validate_munch_ci_fail_closed()
     ok_munch_adt = validate_munch_adt()
     ok_userdata = validate_userdata_safety()
     ok_live_fdt = validate_live_fdt_helper()
@@ -339,7 +375,7 @@ def main():
     ok_python = validate_python_scripts(a.verbose)
     ok_shell = validate_shell_scripts(a.verbose)
 
-    if ok_patches and ok_munch and ok_munch_adt and ok_userdata and ok_live_fdt and ok_shim_storage and ok_python and ok_shell:
+    if ok_patches and ok_munch and ok_munch_ci and ok_munch_adt and ok_userdata and ok_live_fdt and ok_shim_storage and ok_python and ok_shell:
         print(bold(green("\nAll repository integrity checks PASSED successfully!")))
         return 0
     else:

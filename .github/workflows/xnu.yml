@@ -50,6 +50,22 @@ jobs:
           git -C dxb checkout -q FETCH_HEAD
           cp xnu/patches/*.patch xnu/patches/*.sh dxb/patches/
           sed -i '' 's/ARCHS="x86_64 arm64e" VALID_ARCHS="x86_64 arm64e"/ARCHS="x86_64 arm64e arm64" VALID_ARCHS="x86_64 arm64e arm64"/' dxb/build.sh
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("dxb/build.sh")
+          text = path.read_text()
+          needle = '                warning "Skipping patch ${PATCH} (already upstream, previously applied, or malformed): ${APPLY_CHECK}"'
+          replacement = '''                if [ "$MACHINE_CONFIG" = "MUNCH" ]; then
+                    error "Refusing to skip MUNCH patch ${PATCH}: ${APPLY_CHECK}"
+                    exit 1
+                fi
+                warning "Skipping patch ${PATCH} (already upstream, previously applied, or malformed): ${APPLY_CHECK}"'''
+          if text.count(needle) != 1:
+              raise SystemExit("pinned DXB patch-skip handler changed; refusing a non-fail-closed build")
+          path.write_text(text.replace(needle, replacement))
+          PY
+          grep -q 'Refusing to skip MUNCH patch' dxb/build.sh
           awk '
             { print }
             /^    patches$/ {

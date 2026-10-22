@@ -1,5 +1,5 @@
 diff --git a/bsd/conf/Makefile.template b/bsd/conf/Makefile.template
-index f01c82a..e63f269 100644
+index f01c82acd3138be6cf1c5526a823ec56bd8811e9..e63f2696ceec7e6101d87c292c08dccece6d0b80 100644
 --- a/bsd/conf/Makefile.template
 +++ b/bsd/conf/Makefile.template
 @@ -44,19 +44,19 @@ CFLAGS+= -include meta_features.h -DDRIVER_PRIVATE \
@@ -35,10 +35,10 @@ index f01c82a..e63f269 100644
  hfs_encodings.o_CFLAGS_ADD += -Dhfs_allocated=hfs_encodings_allocated
  hfs_encodinghint.o_CFLAGS_ADD += -Dhfs_allocated=hfs_encodings_allocated
 diff --git a/bsd/conf/files b/bsd/conf/files
-index 6630131..f9e2bd3 100644
+index 5a604ad77484e69953e43e3bc4930b465c22a301..47413be43c2f8fbb2f546e8d4720b6a5e0488cfd 100644
 --- a/bsd/conf/files
 +++ b/bsd/conf/files
-@@ -104,13 +104,13 @@ bsd/dev/dtrace/fasttrap.c		optional config_dtrace
+@@ -104,14 +104,14 @@ bsd/dev/dtrace/fasttrap.c		optional config_dtrace
  bsd/dev/random/randomdev.c		standard
  
  bsd/dev/memdev.c			standard
@@ -48,18 +48,19 @@ index 6630131..f9e2bd3 100644
 -bsd/dev/sweet_touch.c			standard
 -bsd/dev/sweet_rpmh.c			standard
 -bsd/dev/sweet_spmi.c			standard
--bsd/dev/sweet_usb.c			standard
 +bsd/dev/munch_ufs.c			standard
 +bsd/dev/munch_sample.c			standard
 +bsd/dev/munch_keys.c			standard
 +bsd/dev/munch_touch.c			standard
 +bsd/dev/munch_rpmh.c			standard
 +bsd/dev/munch_spmi.c			standard
+ bsd/dev/munch_touch_parser.c		standard
+-bsd/dev/sweet_usb.c			standard
 +bsd/dev/munch_usb.c			standard
  bsd/dev/mem.c				standard
  bsd/dev/munge.c 			optional config_requires_u32_munging
  bsd/dev/unix_startup.c			standard
-@@ -368,9 +368,9 @@ bsd/security/audit/audit_syscalls.c		standard
+@@ -369,9 +369,9 @@ bsd/security/audit/audit_syscalls.c		standard
  bsd/security/audit/audit_worker.c		optional config_audit
  
  bsd/pthread/pthread_shims.c		standard
@@ -72,7 +73,7 @@ index 6630131..f9e2bd3 100644
  bsd/pthread/pthread_priority.c		standard
  bsd/pthread/pthread_workqueue.c		standard
  
-@@ -388,49 +388,49 @@ bsd/kern/kern_core.c			optional config_coredump
+@@ -389,49 +389,49 @@ bsd/kern/kern_core.c			optional config_coredump
  bsd/kern/kern_credential.c		standard
  bsd/kern/kern_crossarch.c		standard
  bsd/kern/kern_cs.c			standard
@@ -164,7 +165,7 @@ index 6630131..f9e2bd3 100644
  bsd/kern/kern_csr.c			optional config_csr
  bsd/kern/kern_debug.c			standard
 diff --git a/bsd/dev/dtrace/fasttrap.c b/bsd/dev/dtrace/fasttrap.c
-index 8d4fbb9..ac1ce67 100644
+index 8d4fbb91d65ffea39c804f9d39ff4cbf86facb2b..ac1ce67fd4241fbc2e2d89ce7bb466f6c22921fb 100644
 --- a/bsd/dev/dtrace/fasttrap.c
 +++ b/bsd/dev/dtrace/fasttrap.c
 @@ -216,7 +216,7 @@ ZONE_DEFINE(fasttrap_tracepoint_t_zone, "dtrace.fasttrap_tracepoint_t",
@@ -177,7 +178,7 @@ index 8d4fbb9..ac1ce67 100644
   */
  #define FASTTRAP_PROBE_T_ZONE_MAX_TRACEPOINTS 4
 diff --git a/bsd/dev/mem.c b/bsd/dev/mem.c
-index 291a546..f7cea16 100644
+index 291a546cc375e76cb820da792c2be0e3205273b1..f7cea164f33f79606c05a9d952da35073e1b35a1 100644
 --- a/bsd/dev/mem.c
 +++ b/bsd/dev/mem.c
 @@ -153,30 +153,30 @@ mmioctl(dev_t dev, u_long cmd, __unused caddr_t data,
@@ -240,7 +241,7 @@ diff --git a/bsd/dev/sweet_keys.c b/bsd/dev/munch_keys.c
 similarity index 84%
 rename from bsd/dev/sweet_keys.c
 rename to bsd/dev/munch_keys.c
-index a148608..5d0b763 100644
+index a1486081ba2885ec6d4cbb98453315dec7b60d0e..5d0b763bcce23fb97d1056e4d673c727f45d20bd 100644
 --- a/bsd/dev/sweet_keys.c
 +++ b/bsd/dev/munch_keys.c
 @@ -1,10 +1,10 @@
@@ -359,7 +360,7 @@ diff --git a/bsd/dev/sweet_rpmh.c b/bsd/dev/munch_rpmh.c
 similarity index 86%
 rename from bsd/dev/sweet_rpmh.c
 rename to bsd/dev/munch_rpmh.c
-index 4da50d8..a629379 100644
+index 4da50d882002fd92489b73494a5803f1e3ede3c9..a629379c28945cb555d5cd431be8c5b5f6637ed3 100644
 --- a/bsd/dev/sweet_rpmh.c
 +++ b/bsd/dev/munch_rpmh.c
 @@ -1,9 +1,9 @@
@@ -569,7 +570,7 @@ diff --git a/bsd/dev/sweet_sample.c b/bsd/dev/munch_sample.c
 similarity index 57%
 rename from bsd/dev/sweet_sample.c
 rename to bsd/dev/munch_sample.c
-index b40eccd..be97f11 100644
+index b40eccd288216b121f4835e6705bc4666d85f46c..be97f1184e67cf657d43fe719e0aa615f9053ab2 100644
 --- a/bsd/dev/sweet_sample.c
 +++ b/bsd/dev/munch_sample.c
 @@ -1,13 +1,13 @@
@@ -672,7 +673,7 @@ diff --git a/bsd/dev/sweet_spmi.c b/bsd/dev/munch_spmi.c
 similarity index 84%
 rename from bsd/dev/sweet_spmi.c
 rename to bsd/dev/munch_spmi.c
-index 1981490..58c2ee4 100644
+index 1981490ad6506cf2701939dea82b3420dc4f4d34..58c2ee4b834fde20f316f912f42fc54ce595d69c 100644
 --- a/bsd/dev/sweet_spmi.c
 +++ b/bsd/dev/munch_spmi.c
 @@ -1,16 +1,16 @@
@@ -749,7 +750,7 @@ index 1981490..58c2ee4 100644
 +#endif /* ARM64_BOARD_CONFIG_MUNCH */
 diff --git a/bsd/dev/munch_spmi.h b/bsd/dev/munch_spmi.h
 new file mode 100644
-index 0000000..e1a5346
+index 0000000000000000000000000000000000000000..e1a53469e9c0598ba46d2c5e1a8320af0cc08022
 --- /dev/null
 +++ b/bsd/dev/munch_spmi.h
 @@ -0,0 +1,14 @@
@@ -771,7 +772,7 @@ diff --git a/bsd/dev/sweet_touch.c b/bsd/dev/munch_touch.c
 similarity index 88%
 rename from bsd/dev/sweet_touch.c
 rename to bsd/dev/munch_touch.c
-index 03defe6..20bc691 100644
+index 03defe6a77a13164407c8127cbe50424bac7af09..20bc69176fd0cbdd89253dc358ada306ec5e26bb 100644
 --- a/bsd/dev/sweet_touch.c
 +++ b/bsd/dev/munch_touch.c
 @@ -1,11 +1,11 @@
@@ -1061,7 +1062,7 @@ diff --git a/bsd/dev/sweet_ufs.c b/bsd/dev/munch_ufs.c
 similarity index 77%
 rename from bsd/dev/sweet_ufs.c
 rename to bsd/dev/munch_ufs.c
-index cd8cdcb..5eabc7c 100644
+index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264bd9fc317 100644
 --- a/bsd/dev/sweet_ufs.c
 +++ b/bsd/dev/munch_ufs.c
 @@ -1,5 +1,5 @@
@@ -1624,7 +1625,7 @@ diff --git a/bsd/dev/sweet_usb.c b/bsd/dev/munch_usb.c
 similarity index 90%
 rename from bsd/dev/sweet_usb.c
 rename to bsd/dev/munch_usb.c
-index b6c1a41..3bc3af1 100644
+index b6c1a41ba73792cb71d4ce36d4cc5c037eddb791..3bc3af1000b8b59e49fed5a151f16a9d7a3553a8 100644
 --- a/bsd/dev/sweet_usb.c
 +++ b/bsd/dev/munch_usb.c
 @@ -1,5 +1,5 @@
@@ -1993,7 +1994,7 @@ index b6c1a41..3bc3af1 100644
 +#endif /* ARM64_BOARD_CONFIG_MUNCH */
 diff --git a/bsd/dev/sweet_spmi.h b/bsd/dev/sweet_spmi.h
 deleted file mode 100644
-index 45565d1..0000000
+index 45565d1ffccc23ac867188bbfa67b6bc5e9eebe4..0000000000000000000000000000000000000000
 --- a/bsd/dev/sweet_spmi.h
 +++ /dev/null
 @@ -1,14 +0,0 @@
@@ -2012,7 +2013,7 @@ index 45565d1..0000000
 -#endif
 -#endif
 diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
-index 7142854..ca59911 100644
+index 71428547b98ae96c2acd77c5cc0a168783164f34..ca59911ebbc7584cba42492bcaf376308b931741 100644
 --- a/bsd/kern/bsd_init.c
 +++ b/bsd/kern/bsd_init.c
 @@ -691,16 +691,16 @@ bsd_init(void)
@@ -2059,7 +2060,7 @@ index 7142854..ca59911 100644
  #else
  			if (autherr) {
 diff --git a/bsd/kern/kern_core.c b/bsd/kern/kern_core.c
-index e9e6bfa..b80caaf 100644
+index e9e6bfa16927cb548c6237e4b991b40682526476..b80caafffe763c3c966dead6e70ccb770bb6804b 100644
 --- a/bsd/kern/kern_core.c
 +++ b/bsd/kern/kern_core.c
 @@ -117,9 +117,9 @@ kern_return_t thread_getstatus(thread_t act, int flavor,
@@ -2075,7 +2076,7 @@ index e9e6bfa..b80caaf 100644
   * volume and takes minutes on the phone's UFS.
   */
 diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
-index a624707..3322395 100644
+index a6247072323f67145a6c172c8ae60395e9b89aca..33223951170c2fef16f089eb85615754b5d627b1 100644
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
 @@ -7411,8 +7411,8 @@ process_signature(proc_t p, struct image_params *imgp)
@@ -2090,7 +2091,7 @@ index a624707..3322395 100644
  #else
  			printf("Allowing spawn of iOS binary %s since it has "
 diff --git a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
-index 3cc8fde..4cb8759 100644
+index 3cc8fdeb9afa299cf0087adaef4c9c0ae7ab13d2..4cb8759ed27649d541c918c8ce89f506a46fda48 100644
 --- a/bsd/kern/kern_exit.c
 +++ b/bsd/kern/kern_exit.c
 @@ -1884,10 +1884,10 @@ proc_prepareexit(proc_t p, int rv, boolean_t perf_notify)
@@ -2108,7 +2109,7 @@ index 3cc8fde..4cb8759 100644
  			/* abort_with_payload messages (_objc_fatal, os_crash_fmt, ...) */
  			if (PROC_HAS_EXITREASON(p)) {
 diff --git a/bsd/kern/kern_mib.c b/bsd/kern/kern_mib.c
-index 4643c47..ed7700a 100644
+index 4643c475dbd76a74b4d549904a51802a1d2d41ae..ed7700a3321a38502725aa4617e4be319b318dd8 100644
 --- a/bsd/kern/kern_mib.c
 +++ b/bsd/kern/kern_mib.c
 @@ -518,8 +518,8 @@ sysctl_hw_generic(__unused struct sysctl_oid *oidp, void *arg1,
@@ -2123,7 +2124,7 @@ index 4643c47..ed7700a 100644
  	/* The following two are kludged for backward
  	 * compatibility. Use hw.product/hw.target for something
 diff --git a/bsd/kern/kern_trustcache.c b/bsd/kern/kern_trustcache.c
-index 9ebfd55..282456d 100644
+index 9ebfd55b3086cb77c7ed0cbbf1ffe8bdcfa208d0..282456dbe96b058725fad4abcdb9899100b3aeb5 100644
 --- a/bsd/kern/kern_trustcache.c
 +++ b/bsd/kern/kern_trustcache.c
 @@ -248,9 +248,9 @@ trust_cache_runtime_init(void)
@@ -2196,7 +2197,7 @@ diff --git a/bsd/kern/sweet_amfi.c b/bsd/kern/munch_amfi.c
 similarity index 53%
 rename from bsd/kern/sweet_amfi.c
 rename to bsd/kern/munch_amfi.c
-index dcb3381..524ab44 100644
+index dcb33817966ab53bad39f19441ba50e18d4ee49a..524ab441bb6c354cf0e6f9b99d018ac357611673 100644
 --- a/bsd/kern/sweet_amfi.c
 +++ b/bsd/kern/munch_amfi.c
 @@ -1,13 +1,13 @@
@@ -2673,22 +2674,25 @@ index dcb3381..524ab44 100644
 -#endif /* ARM64_BOARD_CONFIG_SWEET */
 +#endif /* ARM64_BOARD_CONFIG_MUNCH */
 diff --git a/bsd/kern/syscalls.master b/bsd/kern/syscalls.master
-index 422873e..16c97ab 100644
+index 11d8fa5f2e7c94138732b189639ff6e79f389125..16c97ab623c55fc7c5cd8c4f704766b783902da5 100644
 --- a/bsd/kern/syscalls.master
 +++ b/bsd/kern/syscalls.master
 @@ -650,7 +650,7 @@
  432	AUE_NULL	ALL	{ int audit_session_port(au_asid_t asid, user_addr_t portnamep); }
  433	AUE_NULL	ALL	{ int pid_suspend(int pid); }
  434	AUE_NULL	ALL	{ int pid_resume(int pid); }
--#if CONFIG_EMBEDDED || defined(ARM64_BOARD_CONFIG_SWEET)
+-#if CONFIG_EMBEDDED || defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_MUNCH)
 +#if CONFIG_EMBEDDED || defined(ARM64_BOARD_CONFIG_MUNCH)
  435	AUE_NULL	ALL	{ int pid_hibernate(int pid); }
  #else
  435     AUE_NULL        ALL     { int nosys(void); }
-diff --git a/bsd/pthread/sweet_libpthread/TargetConditionals.h b/bsd/munch_hfs/TargetConditionals.h
-similarity index 100%
-rename from bsd/pthread/sweet_libpthread/TargetConditionals.h
-rename to bsd/munch_hfs/TargetConditionals.h
+diff --git a/bsd/munch_hfs/TargetConditionals.h b/bsd/munch_hfs/TargetConditionals.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..790af847b10abd69455da0402b2d32681651d63e
+--- /dev/null
++++ b/bsd/munch_hfs/TargetConditionals.h
+@@ -0,0 +1 @@
++/* stub for patch-application-only audit */
 diff --git a/bsd/sweet_hfs/core/BTree.c b/bsd/munch_hfs/core/BTree.c
 similarity index 100%
 rename from bsd/sweet_hfs/core/BTree.c
@@ -2801,7 +2805,7 @@ diff --git a/bsd/sweet_hfs/core/hfs_catalog.c b/bsd/munch_hfs/core/hfs_catalog.c
 similarity index 99%
 rename from bsd/sweet_hfs/core/hfs_catalog.c
 rename to bsd/munch_hfs/core/hfs_catalog.c
-index aa03e9b..ef1dcc0 100644
+index aa03e9bd5328c4f9c042986919f8663bbb921356..ef1dcc07d57a080106888e9dd6407328308cf47b 100644
 --- a/bsd/sweet_hfs/core/hfs_catalog.c
 +++ b/bsd/munch_hfs/core/hfs_catalog.c
 @@ -757,20 +757,20 @@ falsematch:
@@ -2991,7 +2995,7 @@ diff --git a/bsd/sweet_hfs/core/hfs_vfsutils.c b/bsd/munch_hfs/core/hfs_vfsutils
 similarity index 99%
 rename from bsd/sweet_hfs/core/hfs_vfsutils.c
 rename to bsd/munch_hfs/core/hfs_vfsutils.c
-index 7da2a89..75abe45 100644
+index 7da2a894f6c3f867b47f50058d7d2a7c80cd5802..75abe451bb2dee48a4877225d83f2a030930fb61 100644
 --- a/bsd/sweet_hfs/core/hfs_vfsutils.c
 +++ b/bsd/munch_hfs/core/hfs_vfsutils.c
 @@ -202,20 +202,20 @@ OSErr hfs_MountHFSPlusVolume(struct hfsmount *hfsmp, HFSPlusVolumeHeader *vhp,
@@ -3087,7 +3091,7 @@ diff --git a/bsd/sweet_hfs/sweet_hfs_compat.h b/bsd/munch_hfs/munch_hfs_compat.h
 similarity index 70%
 rename from bsd/sweet_hfs/sweet_hfs_compat.h
 rename to bsd/munch_hfs/munch_hfs_compat.h
-index df55151..3cda43b 100644
+index df5515148404ab7c20e6ee1cee4229eb4f88b857..3cda43b50513594069f225bd3b881076a02b077e 100644
 --- a/bsd/sweet_hfs/sweet_hfs_compat.h
 +++ b/bsd/munch_hfs/munch_hfs_compat.h
 @@ -1,12 +1,12 @@
@@ -3120,7 +3124,7 @@ diff --git a/bsd/sweet_hfs/sweet_hfs_iokit.c b/bsd/munch_hfs/munch_hfs_iokit.c
 similarity index 84%
 rename from bsd/sweet_hfs/sweet_hfs_iokit.c
 rename to bsd/munch_hfs/munch_hfs_iokit.c
-index 9d7f2e1..a3816d1 100644
+index 9d7f2e187d20d715681b2826d8668e409e705a01..a3816d1996ff75e9229bdba2b496c1009574f457 100644
 --- a/bsd/sweet_hfs/sweet_hfs_iokit.c
 +++ b/bsd/munch_hfs/munch_hfs_iokit.c
 @@ -1,18 +1,18 @@
@@ -3191,7 +3195,7 @@ index 9d7f2e1..a3816d1 100644
  	return kOSKextInvalidLoadTag;
  }
 diff --git a/bsd/net/rtsock.c b/bsd/net/rtsock.c
-index e13d481..c333aa1 100644
+index e13d4812d4439855803a8f482cc7ba1e002c425f..c333aa1836cf9029039f642d01b9c821026de370 100644
 --- a/bsd/net/rtsock.c
 +++ b/bsd/net/rtsock.c
 @@ -510,19 +510,19 @@ route_output(struct mbuf *m, struct socket *so)
@@ -3220,7 +3224,7 @@ index e13d481..c333aa1 100644
  			    d[0], d[1], d[2], d[3], g ? g[0] : 0, g ? g[1] : 0, g ? g[2] : 0, g ? g[3] : 0,
  			    rtm->rtm_index, rtm->rtm_flags);
 diff --git a/bsd/netinet/in.c b/bsd/netinet/in.c
-index 76f7057..1b50b03 100644
+index 76f7057db652bfe2f3c3b05c225750c5009f280c..1b50b03d26cd9e110c4bf2cd3bdeef04989fbdb4 100644
 --- a/bsd/netinet/in.c
 +++ b/bsd/netinet/in.c
 @@ -1210,15 +1210,15 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
@@ -3244,10 +3248,13 @@ index 76f7057..1b50b03 100644
  			    cmd == SIOCAIFADDR ? "add address" : "delete address", a[0], a[1], a[2], a[3]);
  		}
  	}
-diff --git a/bsd/sweet_hfs/TargetConditionals.h b/bsd/pthread/munch_libpthread/TargetConditionals.h
-similarity index 100%
-rename from bsd/sweet_hfs/TargetConditionals.h
-rename to bsd/pthread/munch_libpthread/TargetConditionals.h
+diff --git a/bsd/pthread/munch_libpthread/TargetConditionals.h b/bsd/pthread/munch_libpthread/TargetConditionals.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..790af847b10abd69455da0402b2d32681651d63e
+--- /dev/null
++++ b/bsd/pthread/munch_libpthread/TargetConditionals.h
+@@ -0,0 +1 @@
++/* stub for patch-application-only audit */
 diff --git a/bsd/pthread/sweet_libpthread/include/darwin_posix_pthread.modulemap b/bsd/pthread/munch_libpthread/include/darwin_posix_pthread.modulemap
 similarity index 100%
 rename from bsd/pthread/sweet_libpthread/include/darwin_posix_pthread.modulemap
@@ -3416,7 +3423,7 @@ diff --git a/bsd/pthread/sweet_pthread_compat.h b/bsd/pthread/munch_pthread_comp
 similarity index 64%
 rename from bsd/pthread/sweet_pthread_compat.h
 rename to bsd/pthread/munch_pthread_compat.h
-index 18300b4..168a378 100644
+index 18300b4e95a3fa08f21404b655cdb9cae4191912..168a3782d4965446cffcb9a01d4c7f1afc422ccf 100644
 --- a/bsd/pthread/sweet_pthread_compat.h
 +++ b/bsd/pthread/munch_pthread_compat.h
 @@ -3,8 +3,8 @@
@@ -3451,7 +3458,7 @@ index 18300b4..168a378 100644
  #endif
 diff --git a/bsd/pthread/munch_pthread_init.c b/bsd/pthread/munch_pthread_init.c
 new file mode 100644
-index 0000000..0bcc284
+index 0000000000000000000000000000000000000000..0bcc284fac793c0cec3379c5b73926404b22a733
 --- /dev/null
 +++ b/bsd/pthread/munch_pthread_init.c
 @@ -0,0 +1,26 @@
@@ -3483,7 +3490,7 @@ index 0000000..0bcc284
 +#endif /* ARM64_BOARD_CONFIG_MUNCH */
 diff --git a/bsd/pthread/munch_pthread_support.c b/bsd/pthread/munch_pthread_support.c
 new file mode 100644
-index 0000000..37a5233
+index 0000000000000000000000000000000000000000..37a5233c1999939bd2a6a081bd585db9e8688c1f
 --- /dev/null
 +++ b/bsd/pthread/munch_pthread_support.c
 @@ -0,0 +1,5 @@
@@ -3494,7 +3501,7 @@ index 0000000..37a5233
 +#endif /* ARM64_BOARD_CONFIG_MUNCH */
 diff --git a/bsd/pthread/munch_pthread_synch.c b/bsd/pthread/munch_pthread_synch.c
 new file mode 100644
-index 0000000..f00dc23
+index 0000000000000000000000000000000000000000..f00dc23df04f325b8d1f130ded1b5872e5302c4d
 --- /dev/null
 +++ b/bsd/pthread/munch_pthread_synch.c
 @@ -0,0 +1,5 @@
@@ -3503,9 +3510,29 @@ index 0000000..f00dc23
 +#include "munch_pthread_compat.h"
 +#include "munch_libpthread/kern/kern_synch.c"
 +#endif /* ARM64_BOARD_CONFIG_MUNCH */
+diff --git a/bsd/pthread/sweet_libpthread/TargetConditionals.h b/bsd/pthread/sweet_libpthread/TargetConditionals.h
+deleted file mode 100644
+index 0c9d9d5861db712893568183a7edc190199a529a..0000000000000000000000000000000000000000
+--- a/bsd/pthread/sweet_libpthread/TargetConditionals.h
++++ /dev/null
+@@ -1,14 +0,0 @@
+-#ifndef __TARGETCONDITIONALS__
+-#define __TARGETCONDITIONALS__ 1
+-#define TARGET_OS_MAC 1
+-#define TARGET_OS_OSX 1
+-#define TARGET_OS_IPHONE 0
+-#define TARGET_OS_IOS 0
+-#define TARGET_OS_SIMULATOR 0
+-#define TARGET_OS_EMBEDDED 0
+-#define TARGET_OS_DRIVERKIT 0
+-#define TARGET_OS_MACCATALYST 0
+-#define TARGET_OS_BRIDGE 0
+-#define TARGET_OS_WIN32 0
+-#define TARGET_OS_LINUX 0
+-#endif
 diff --git a/bsd/pthread/sweet_pthread_init.c b/bsd/pthread/sweet_pthread_init.c
 deleted file mode 100644
-index 0092ad3..0000000
+index 0092ad3f99e9c13361f72da1d2f8d8fcf99ab4c9..0000000000000000000000000000000000000000
 --- a/bsd/pthread/sweet_pthread_init.c
 +++ /dev/null
 @@ -1,26 +0,0 @@
@@ -3537,7 +3564,7 @@ index 0092ad3..0000000
 -#endif /* ARM64_BOARD_CONFIG_SWEET */
 diff --git a/bsd/pthread/sweet_pthread_support.c b/bsd/pthread/sweet_pthread_support.c
 deleted file mode 100644
-index c764157..0000000
+index c7641574b408015879ffc5b27c2fde7bdeffb7e1..0000000000000000000000000000000000000000
 --- a/bsd/pthread/sweet_pthread_support.c
 +++ /dev/null
 @@ -1,5 +0,0 @@
@@ -3548,7 +3575,7 @@ index c764157..0000000
 -#endif /* ARM64_BOARD_CONFIG_SWEET */
 diff --git a/bsd/pthread/sweet_pthread_synch.c b/bsd/pthread/sweet_pthread_synch.c
 deleted file mode 100644
-index 3d70203..0000000
+index 3d70203387258e70807c21317019fb6b649418c2..0000000000000000000000000000000000000000
 --- a/bsd/pthread/sweet_pthread_synch.c
 +++ /dev/null
 @@ -1,5 +0,0 @@
@@ -3557,8 +3584,28 @@ index 3d70203..0000000
 -#include "sweet_pthread_compat.h"
 -#include "sweet_libpthread/kern/kern_synch.c"
 -#endif /* ARM64_BOARD_CONFIG_SWEET */
+diff --git a/bsd/sweet_hfs/TargetConditionals.h b/bsd/sweet_hfs/TargetConditionals.h
+deleted file mode 100644
+index 0c9d9d5861db712893568183a7edc190199a529a..0000000000000000000000000000000000000000
+--- a/bsd/sweet_hfs/TargetConditionals.h
++++ /dev/null
+@@ -1,14 +0,0 @@
+-#ifndef __TARGETCONDITIONALS__
+-#define __TARGETCONDITIONALS__ 1
+-#define TARGET_OS_MAC 1
+-#define TARGET_OS_OSX 1
+-#define TARGET_OS_IPHONE 0
+-#define TARGET_OS_IOS 0
+-#define TARGET_OS_SIMULATOR 0
+-#define TARGET_OS_EMBEDDED 0
+-#define TARGET_OS_DRIVERKIT 0
+-#define TARGET_OS_MACCATALYST 0
+-#define TARGET_OS_BRIDGE 0
+-#define TARGET_OS_WIN32 0
+-#define TARGET_OS_LINUX 0
+-#endif
 diff --git a/bsd/sys/pthread_internal.h b/bsd/sys/pthread_internal.h
-index fac4aeb..a46ac77 100644
+index fac4aeb11b26b35a7980d43c959a254839c70963..a46ac777271b80f9f403ae0e1b1ae530af5e5e49 100644
 --- a/bsd/sys/pthread_internal.h
 +++ b/bsd/sys/pthread_internal.h
 @@ -34,7 +34,7 @@
@@ -3571,7 +3618,7 @@ index fac4aeb..a46ac77 100644
  	char opaque[56];
  #else
 diff --git a/bsd/vfs/kpi_vfs.c b/bsd/vfs/kpi_vfs.c
-index d03e3da..788c327 100644
+index d03e3da956a1f513defd55ffd70cf2f861107f44..788c3278e929265f7f1596b01ea37ac46bd3151b 100644
 --- a/bsd/vfs/kpi_vfs.c
 +++ b/bsd/vfs/kpi_vfs.c
 @@ -4459,9 +4459,9 @@ vn_rename(struct vnode *fdvp, struct vnode **fvpp, struct componentname *fcnp, s
@@ -3587,7 +3634,7 @@ index d03e3da..788c327 100644
  			 * file: Operation not supported"). Swapping two regular files
  			 * on one volume is what exchangedata does: each name ends up
 diff --git a/bsd/vfs/vfs_subr.c b/bsd/vfs/vfs_subr.c
-index 0478018..437cc88 100644
+index 047801812b9039f54f83a3d118be022d22ec79fc..437cc881b6dfa4b57253c8b3202416e59c4b9b1a 100644
 --- a/bsd/vfs/vfs_subr.c
 +++ b/bsd/vfs/vfs_subr.c
 @@ -1257,9 +1257,9 @@ vfs_mountroot(void)
@@ -3603,7 +3650,7 @@ index 0478018..437cc88 100644
  		 */
  		{
 diff --git a/bsd/vm/vm_unix.c b/bsd/vm/vm_unix.c
-index 6ef79c7..c189ffc 100644
+index 6ef79c7c74f43eadb4c81c92af2d28d09baf5aa2..c189ffcd7b7548b5b24fd6f705fe3544472cdc68 100644
 --- a/bsd/vm/vm_unix.c
 +++ b/bsd/vm/vm_unix.c
 @@ -1755,9 +1755,9 @@ out:
@@ -3628,7 +3675,7 @@ index 6ef79c7..c189ffc 100644
  #if SOCKETS
  int
 diff --git a/config/MASTER b/config/MASTER
-index 4fde794..dcf4a3c 100644
+index 4fde79478e50b648b39645d3ea1e8ca03e9f0edf..dcf4a3cd7b0920bbda0df35be5b14d857084cfb2 100644
 --- a/config/MASTER
 +++ b/config/MASTER
 @@ -113,7 +113,7 @@ options		CONFIG_WORKLOOP_DEBUG	# <config_workloop_debug>
@@ -3641,7 +3688,7 @@ index 4fde794..dcf4a3c 100644
  options		FDESC		# fdesc_fs support		# <fdesc>
  options		DEVFS		# devfs support			# <devfs>
 diff --git a/config/MASTER.arm64.munch b/config/MASTER.arm64.munch
-index 6c25122..af3d33a 100644
+index 6c25122e388921909b5c07958501a8b672933c6f..af3d33a2f0421b1d33aea764be15f67cd1ee1c7e 100644
 --- a/config/MASTER.arm64.munch
 +++ b/config/MASTER.arm64.munch
 @@ -31,7 +31,7 @@
@@ -3655,7 +3702,7 @@ index 6c25122..af3d33a 100644
  #  FILESYS_DEBUG =  [ FILESYS_BASE config_iocount_trace ]
 diff --git a/config/MASTER.arm64.sweet b/config/MASTER.arm64.sweet
 deleted file mode 100644
-index e305f0d..0000000
+index e305f0dd116e8e1fff1865203f47ad2a4d0d145c..0000000000000000000000000000000000000000
 --- a/config/MASTER.arm64.sweet
 +++ /dev/null
 @@ -1,115 +0,0 @@
@@ -3775,7 +3822,7 @@ index e305f0d..0000000
 -options   CONFIG_RESLIDE_SHARED_CACHE		# <reslide_shared_cache>
 -options   CONFIG_KERNEL_TBI		# <kernel_tbi>
 diff --git a/iokit/Kernel/IOService.cpp b/iokit/Kernel/IOService.cpp
-index e276b15..52633a9 100644
+index e276b1598c2adca3eeca09be5f8efa3e5d448227..52633a97ac7bfb4146ea4beb4a564ab34046ac3d 100644
 --- a/iokit/Kernel/IOService.cpp
 +++ b/iokit/Kernel/IOService.cpp
 @@ -5126,7 +5126,7 @@ IOService::publishHiddenMedia(IOService * parent)
@@ -3811,7 +3858,7 @@ index e276b15..52633a9 100644
  	 */
  	if (!ioblockstoragedriverClass) {
 diff --git a/iokit/Kernel/IOUserClient.cpp b/iokit/Kernel/IOUserClient.cpp
-index 4a47b60..dcc8fbf 100644
+index 4a47b6087f3d0bca441403da22ea00b9488d73cf..dcc8fbf148430616908a5c489f51bb20a298369c 100644
 --- a/iokit/Kernel/IOUserClient.cpp
 +++ b/iokit/Kernel/IOUserClient.cpp
 @@ -2599,36 +2599,36 @@ is_io_service_match_property_table_bin(
@@ -3967,7 +4014,7 @@ diff --git a/iokit/Kernel/arm/SweetBattery.cpp b/iokit/Kernel/arm/MunchBattery.c
 similarity index 78%
 rename from iokit/Kernel/arm/SweetBattery.cpp
 rename to iokit/Kernel/arm/MunchBattery.cpp
-index 9969739..39b3ec5 100644
+index 9969739eed65d43841cbd932d0de382c998e7298..39b3ec5af54bd275bc637c94e1ce6b323d2310de 100644
 --- a/iokit/Kernel/arm/SweetBattery.cpp
 +++ b/iokit/Kernel/arm/MunchBattery.cpp
 @@ -1,10 +1,10 @@
@@ -4220,7 +4267,7 @@ diff --git a/iokit/Kernel/arm/SweetCPU.cpp b/iokit/Kernel/arm/MunchCPU.cpp
 similarity index 66%
 rename from iokit/Kernel/arm/SweetCPU.cpp
 rename to iokit/Kernel/arm/MunchCPU.cpp
-index 0835d14..de186de 100644
+index 0835d142ffd26ddadbecc6b177f681568aad6f9a..de186de4c1d47e302c750d667c46defaa1cd3f99 100644
 --- a/iokit/Kernel/arm/SweetCPU.cpp
 +++ b/iokit/Kernel/arm/MunchCPU.cpp
 @@ -1,12 +1,11 @@
@@ -4531,7 +4578,7 @@ diff --git a/iokit/Kernel/arm/SweetEntitlements.cpp b/iokit/Kernel/arm/MunchEnti
 similarity index 73%
 rename from iokit/Kernel/arm/SweetEntitlements.cpp
 rename to iokit/Kernel/arm/MunchEntitlements.cpp
-index 9be7a30..54f78b5 100644
+index 9be7a305560bf91c0ad69371b5a45b0ce446c13f..54f78b5f8a71d84f16fb20fe4e22963cd00fe62d 100644
 --- a/iokit/Kernel/arm/SweetEntitlements.cpp
 +++ b/iokit/Kernel/arm/MunchEntitlements.cpp
 @@ -1,16 +1,16 @@
@@ -4693,7 +4740,7 @@ diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/MunchFrame
 similarity index 78%
 rename from iokit/Kernel/arm/SweetFramebuffer.cpp
 rename to iokit/Kernel/arm/MunchFramebuffer.cpp
-index a62416c..0dd90f1 100644
+index 235d0e36e54d006bc6a57cd43a70db90f3455285..0dd90f1971cfe631466ed6a4e4e8b11d66f7727a 100644
 --- a/iokit/Kernel/arm/SweetFramebuffer.cpp
 +++ b/iokit/Kernel/arm/MunchFramebuffer.cpp
 @@ -1,5 +1,5 @@
@@ -4717,7 +4764,7 @@ index a62416c..0dd90f1 100644
 -extern "C" int sweet_console_muted;     /* osfmk/console/serial_console.c */
 +extern "C" int munch_console_muted;     /* osfmk/console/serial_console.c */
  
--#if defined(SWEET)
+-#if defined(SWEET) || defined(MUNCH)
 +#if defined(MUNCH)
  #include <IOKit/IOService.h>
  #include <IOKit/IOUserClient.h>
@@ -5089,13 +5136,13 @@ index a62416c..0dd90f1 100644
  	}
  	return ret;
  }
--#endif /* SWEET */
+-#endif /* SWEET || MUNCH */
 +#endif /* MUNCH */
 diff --git a/iokit/Kernel/arm/SweetKeyStore.cpp b/iokit/Kernel/arm/MunchKeyStore.cpp
-similarity index 87%
+similarity index 86%
 rename from iokit/Kernel/arm/SweetKeyStore.cpp
 rename to iokit/Kernel/arm/MunchKeyStore.cpp
-index d11fe26..f3e40bf 100644
+index 2c38fc8d61c39be628cfaaeb2a42d24176a1a245..f3e40bfaffedc693d567287c90708e1d8a087972 100644
 --- a/iokit/Kernel/arm/SweetKeyStore.cpp
 +++ b/iokit/Kernel/arm/MunchKeyStore.cpp
 @@ -1,5 +1,5 @@
@@ -5109,7 +5156,7 @@ index d11fe26..f3e40bf 100644
   */
  #include <pexpert/arm64/board_config.h>
  
--#if defined(SWEET)
+-#if defined(SWEET) || defined(MUNCH)
 +#if defined(MUNCH)
  #include <IOKit/IOService.h>
  #include <IOKit/IOUserClient.h>
@@ -5235,13 +5282,13 @@ index d11fe26..f3e40bf 100644
  	    arg0, in_scalars, in_struct, out_scalars, out_struct, ret);
  	return ret;
  }
--#endif /* SWEET */
+-#endif /* SWEET || MUNCH */
 +#endif /* MUNCH */
 diff --git a/iokit/Kernel/arm/SweetPlatformExpert.cpp b/iokit/Kernel/arm/MunchPlatformExpert.cpp
 similarity index 73%
 rename from iokit/Kernel/arm/SweetPlatformExpert.cpp
 rename to iokit/Kernel/arm/MunchPlatformExpert.cpp
-index ccd250a..5fd6244 100644
+index ccd250a60bd9e3e7ee2be0845df45a7bf2287e8f..5fd6244ddab4e88e50d9b6a5987d8ddc06667c56 100644
 --- a/iokit/Kernel/arm/SweetPlatformExpert.cpp
 +++ b/iokit/Kernel/arm/MunchPlatformExpert.cpp
 @@ -1,17 +1,17 @@
@@ -5323,7 +5370,7 @@ diff --git a/iokit/Kernel/arm/SweetSurface.cpp b/iokit/Kernel/arm/MunchSurface.c
 similarity index 63%
 rename from iokit/Kernel/arm/SweetSurface.cpp
 rename to iokit/Kernel/arm/MunchSurface.cpp
-index 7f90c56..1b34a30 100644
+index 1af83c3df4a2743092c16917929f71e981bf8978..1b34a30eaaecae701c63e4160868ba9ee757a134 100644
 --- a/iokit/Kernel/arm/SweetSurface.cpp
 +++ b/iokit/Kernel/arm/MunchSurface.cpp
 @@ -1,5 +1,5 @@
@@ -5348,7 +5395,7 @@ index 7f90c56..1b34a30 100644
 -#include "SweetSurface.h"
 +#include "MunchSurface.h"
  
--#if defined(SWEET)
+-#if defined(SWEET) || defined(MUNCH)
 +#if defined(MUNCH)
  #include <IOKit/IOService.h>
  #include <IOKit/IOUserClient.h>
@@ -6198,13 +6245,13 @@ index 7f90c56..1b34a30 100644
 -	return &sweet_surface_traps[index];
 +	return &munch_surface_traps[index];
  }
--#endif /* SWEET */
+-#endif /* SWEET || MUNCH */
 +#endif /* MUNCH */
 diff --git a/iokit/Kernel/arm/SweetSurface.h b/iokit/Kernel/arm/MunchSurface.h
-similarity index 71%
+similarity index 70%
 rename from iokit/Kernel/arm/SweetSurface.h
 rename to iokit/Kernel/arm/MunchSurface.h
-index fbcdfac..3dd5eb6 100644
+index dae3e8f739a1fcbdc63f4712d735d05cab623e67..3dd5eb69d9256f3dce7e4f817c57e4715087c11f 100644
 --- a/iokit/Kernel/arm/SweetSurface.h
 +++ b/iokit/Kernel/arm/MunchSurface.h
 @@ -1,31 +1,31 @@
@@ -6224,7 +6271,7 @@ index fbcdfac..3dd5eb6 100644
  
  #include <pexpert/arm64/board_config.h>
  
--#if defined(SWEET)
+-#if defined(SWEET) || defined(MUNCH)
 +#if defined(MUNCH)
  #include <IOKit/IOMemoryDescriptor.h>
  #include <IOKit/IOBufferMemoryDescriptor.h>
@@ -6277,15 +6324,15 @@ index fbcdfac..3dd5eb6 100644
 -mach_port_name_t sweet_surface_port_in_task(SweetSurface *surface, task_t task);
 +mach_port_name_t munch_surface_port_in_task(MunchSurface *surface, task_t task);
  
--#endif /* SWEET */
+-#endif /* SWEET || MUNCH */
 -#endif /* _SWEET_SURFACE_H */
 +#endif /* MUNCH */
 +#endif /* _MUNCH_SURFACE_H */
 diff --git a/iokit/Kernel/arm/SweetWatchdog.cpp b/iokit/Kernel/arm/MunchWatchdog.cpp
-similarity index 85%
+similarity index 84%
 rename from iokit/Kernel/arm/SweetWatchdog.cpp
 rename to iokit/Kernel/arm/MunchWatchdog.cpp
-index 8f53742..b3e11f5 100644
+index 8755881b821f01b7abb217c964b592632676e276..b3e11f5a3dc6d1f11db0ec6fd0c03b3278fb17d2 100644
 --- a/iokit/Kernel/arm/SweetWatchdog.cpp
 +++ b/iokit/Kernel/arm/MunchWatchdog.cpp
 @@ -1,22 +1,22 @@
@@ -6310,7 +6357,7 @@ index 8f53742..b3e11f5 100644
   */
  #include <pexpert/arm64/board_config.h>
  
--#if defined(SWEET)
+-#if defined(SWEET) || defined(MUNCH)
 +#if defined(MUNCH)
  #include <IOKit/IOService.h>
  #include <IOKit/IOUserClient.h>
@@ -6352,10 +6399,10 @@ index 8f53742..b3e11f5 100644
  	}
  	return kIOReturnSuccess;
  }
--#endif /* SWEET */
+-#endif /* SWEET || MUNCH */
 +#endif /* MUNCH */
 diff --git a/iokit/Kernel/arm/hid/IOGraphicsTypes.h b/iokit/Kernel/arm/hid/IOGraphicsTypes.h
-index 0505bdf..d4dda15 100644
+index 0505bdf526aa3341525670e5cff10dda5c428ca1..d4dda15400fb825ad9ae7cffee082b778f6d392f 100644
 --- a/iokit/Kernel/arm/hid/IOGraphicsTypes.h
 +++ b/iokit/Kernel/arm/hid/IOGraphicsTypes.h
 @@ -1,5 +1,5 @@
@@ -6366,7 +6413,7 @@ index 0505bdf..d4dda15 100644
   */
  #ifndef _IOKIT_IOGRAPHICSTYPES_H
 diff --git a/iokit/Kernel/arm/hid/IOHIDDebug.h b/iokit/Kernel/arm/hid/IOHIDDebug.h
-index 6833c4d..da126ce 100644
+index 6833c4defe192d49b78091507555fb3088a5d4f0..da126ce24761375ff440832f68e6c1832eb10aa7 100644
 --- a/iokit/Kernel/arm/hid/IOHIDDebug.h
 +++ b/iokit/Kernel/arm/hid/IOHIDDebug.h
 @@ -12,7 +12,7 @@
@@ -6379,7 +6426,7 @@ index 6833c4d..da126ce 100644
   */
  #define HIDLog(fmt, ...)        IOLog("HID: " fmt "\n", ##__VA_ARGS__)
 diff --git a/iokit/Kernel/arm/hid/IOHIDDeviceTypes.h b/iokit/Kernel/arm/hid/IOHIDDeviceTypes.h
-index e1b9a75..22e9901 100644
+index e1b9a75a0139d8fdfb9a59210a08012d3672bea8..22e99019e0613dd841876b58c89f4ad249d91f07 100644
 --- a/iokit/Kernel/arm/hid/IOHIDDeviceTypes.h
 +++ b/iokit/Kernel/arm/hid/IOHIDDeviceTypes.h
 @@ -25,7 +25,7 @@
@@ -6392,7 +6439,7 @@ index e1b9a75..22e9901 100644
  #define TARGET_OS_DRIVERKIT 0
  #endif
 diff --git a/iokit/Kernel/arm/hid/IOHIDEvent.cpp b/iokit/Kernel/arm/hid/IOHIDEvent.cpp
-index 27175f9..c3fb224 100644
+index 27175f97c0f322be2fb3de2bd48cd0d358184b3a..c3fb2248e7184e8f874e07a4158f5dbdde2d8e62 100644
 --- a/iokit/Kernel/arm/hid/IOHIDEvent.cpp
 +++ b/iokit/Kernel/arm/hid/IOHIDEvent.cpp
 @@ -33,7 +33,7 @@
@@ -6405,7 +6452,7 @@ index 27175f9..c3fb224 100644
  #define NAN __builtin_nanf("")
  #endif
 diff --git a/iokit/Kernel/arm/hid/IOHIDEvent.h b/iokit/Kernel/arm/hid/IOHIDEvent.h
-index d518265..be3dd6f 100644
+index d51826599d2122532098c210e8601ef02ed6e3d4..be3dd6fdb8e82ed8343e7ac1a1ae874b3a72e104 100644
 --- a/iokit/Kernel/arm/hid/IOHIDEvent.h
 +++ b/iokit/Kernel/arm/hid/IOHIDEvent.h
 @@ -24,7 +24,7 @@
@@ -6418,7 +6465,7 @@ index d518265..be3dd6f 100644
  #define TARGET_OS_DRIVERKIT 0
  #endif
 diff --git a/iokit/Kernel/arm/hid/IOHIDEventService.h b/iokit/Kernel/arm/hid/IOHIDEventService.h
-index 4e79ad5..9265ddc 100644
+index 4e79ad52ba01d9703d2e6cc58c82d3ec78b2aed9..9265ddcc094d665147d5c58bacdba86f98f3c7e0 100644
 --- a/iokit/Kernel/arm/hid/IOHIDEventService.h
 +++ b/iokit/Kernel/arm/hid/IOHIDEventService.h
 @@ -1,5 +1,5 @@
@@ -6429,7 +6476,7 @@ index 4e79ad5..9265ddc 100644
   * Apple's IOHIDFamily kext is not part of xnu. The iOS 16.7 userland
   * (IOKit.framework's HID event system, IOHIDFamily-1915.140.3) talks to
 diff --git a/iokit/Kernel/arm/hid/IOHIDEventTypes.h b/iokit/Kernel/arm/hid/IOHIDEventTypes.h
-index af34563..b5537c6 100644
+index af345635788d935c7f60f1ff143ffdff35c1227d..b5537c63a854149ff9632acf12caad927c9f5a1a 100644
 --- a/iokit/Kernel/arm/hid/IOHIDEventTypes.h
 +++ b/iokit/Kernel/arm/hid/IOHIDEventTypes.h
 @@ -25,7 +25,7 @@
@@ -6445,7 +6492,7 @@ diff --git a/iokit/Kernel/arm/hid/SweetHID.cpp b/iokit/Kernel/arm/hid/MunchHID.c
 similarity index 84%
 rename from iokit/Kernel/arm/hid/SweetHID.cpp
 rename to iokit/Kernel/arm/hid/MunchHID.cpp
-index 27bc49d..48f920d 100644
+index 27bc49da90b74425ddf1df1c35c76ea2f94b247b..48f920deea971d314f7c89e9811134574b9f350a 100644
 --- a/iokit/Kernel/arm/hid/SweetHID.cpp
 +++ b/iokit/Kernel/arm/hid/MunchHID.cpp
 @@ -1,5 +1,5 @@
@@ -6726,19 +6773,17 @@ index 27bc49d..48f920d 100644
  	}
  }
 diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
-index ddb4bdf..7007774 100644
+index 9d269d70dbee1987bb86f70966db244f6f4b3593..82f23a928f109e0ca7207ccbd0dee6ee58c32281 100644
 --- a/iokit/KernelConfigTables.cpp
 +++ b/iokit/KernelConfigTables.cpp
-@@ -34,21 +34,15 @@
+@@ -34,70 +34,15 @@
  
  const char * gIOKernelConfigTables =
      "("
 -#if defined(ARM64_BOARD_CONFIG_SWEET)
-+#if defined(ARM64_BOARD_CONFIG_MUNCH)
-     "   {"
+-    "   {"
 -    "     'IOClass'         = SweetPlatformExpert;"
-+    "     'IOClass'         = MunchPlatformExpert;"
-     "     'IOProviderClass' = IOPlatformExpertDevice;"
+-    "     'IOProviderClass' = IOPlatformExpertDevice;"
 -    "     'IONameMatch'     = 'xiaomi,sweet';"
 -    "     'IOProbeScore'    = 10000:32;"
 -    "   },"
@@ -6746,6 +6791,56 @@ index ddb4bdf..7007774 100644
 -    "     'IOClass'         = SweetCPU;"
 -    "     'IOProviderClass' = IOPlatformDevice;"
 -    "     'IONameMatch'     = 'qcom,kryo470';"
+-    "     'IOProbeScore'    = 10000:32;"
+-    "   },"
+-    "   {"
+-    "     'IOClass'         = SweetCPU;"
+-    "     'IOProviderClass' = IOPlatformDevice;"
+-    "     'IONameMatch'     = 'qcom,kryo';"
+-    "     'IOProbeScore'    = 10000:32;"
+-    "   },"
+-    "   {"
+-    "     'IOClass'         = AppleKeyStore;"
+-    "     'IOProviderClass' = IOResources;"
+-    "     'IOMatchCategory' = AppleKeyStore;"
+-    "   },"
+-    "   {"
+-    "     'IOClass'         = IOWatchdog;"
+-    "     'IOProviderClass' = IOResources;"
+-    "     'IOMatchCategory' = IOWatchdog;"
+-    "   },"
+-    "   {"
+-    "     'IOClass'         = IOCoreSurfaceRoot;"
+-    "     'IOProviderClass' = IOResources;"
+-    "     'IOMatchCategory' = IOCoreSurfaceRoot;"
+-    "   },"
+-    "   {"
+-    "     'IOClass'         = AppleCLCD;"
+-    "     'IOProviderClass' = IOPlatformDevice;"
+-    "     'IONameMatch'     = 'sweet,display';"
+-    "   },"
+-    "   {"
+-    "     'IOClass'         = SweetHIDButtons;"
+-    "     'IOProviderClass' = IOResources;"
+-    "     'IOMatchCategory' = SweetHIDButtons;"
+-    "   },"
+-    "   {"
+-    "     'IOClass'         = SweetHIDTouch;"
+-    "     'IOProviderClass' = IOResources;"
+-    "     'IOMatchCategory' = SweetHIDTouch;"
+-    "   },"
+-    "   {"
+-    "     'IOClass'         = SweetBattery;"
+-    "     'IOProviderClass' = IOResources;"
+-    "     'IOMatchCategory' = SweetBattery;"
+-    "   },"
+-#endif
+ #if defined(ARM64_BOARD_CONFIG_MUNCH)
+     "   {"
+-    "     'IOClass'         = SweetPlatformExpert;"
++    "     'IOClass'         = MunchPlatformExpert;"
+     "     'IOProviderClass' = IOPlatformExpertDevice;"
+-    "     'IONameMatch'     = 'D22AP';"
 +    "     'IONameMatch'     = 'xiaomi,munch';"
      "     'IOProbeScore'    = 10000:32;"
      "   },"
@@ -6755,12 +6850,8 @@ index ddb4bdf..7007774 100644
      "     'IOProviderClass' = IOPlatformDevice;"
      "     'IONameMatch'     = 'qcom,kryo';"
      "     'IOProbeScore'    = 10000:32;"
-@@ -71,36 +65,22 @@ const char * gIOKernelConfigTables =
-     "   {"
-     "     'IOClass'         = AppleCLCD;"
-     "     'IOProviderClass' = IOPlatformDevice;"
--    "     'IONameMatch'     = 'sweet,display';"
-+    "     'IONameMatch'     = 'munch,display';"
+@@ -123,15 +68,20 @@ const char * gIOKernelConfigTables =
+     "     'IONameMatch'     = 'munch,display';"
      "   },"
      "   {"
 -    "     'IOClass'         = SweetHIDButtons;"
@@ -6776,31 +6867,16 @@ index ddb4bdf..7007774 100644
 -    "     'IOMatchCategory' = SweetHIDTouch;"
 +    "     'IOMatchCategory' = MunchHIDTouch;"
      "   },"
-     "   {"
--    "     'IOClass'         = SweetBattery;"
++    "   {"
 +    "     'IOClass'         = MunchBattery;"
-     "     'IOProviderClass' = IOResources;"
--    "     'IOMatchCategory' = SweetBattery;"
--    "   },"
--#endif
--#if defined(ARM64_BOARD_CONFIG_MUNCH)
--    "   {"
--    "     'IOClass'         = SweetPlatformExpert;"
--    "     'IOProviderClass' = IOPlatformExpertDevice;"
--    "     'IONameMatch'     = 'xiaomi,munch';"
--    "     'IOProbeScore'    = 10000:32;"
--    "   },"
--    "   {"
--    "     'IOClass'         = SweetCPU;"
--    "     'IOProviderClass' = IOPlatformDevice;"
--    "     'IONameMatch'     = 'qcom,kryo';"
--    "     'IOProbeScore'    = 10000:32;"
++    "     'IOProviderClass' = IOResources;"
 +    "     'IOMatchCategory' = MunchBattery;"
-     "   },"
++    "   },
  #endif
      "   {"
+     "     'IOClass'         = IOPanicPlatform;"
 diff --git a/iokit/bsddev/IOKitBSDInit.cpp b/iokit/bsddev/IOKitBSDInit.cpp
-index de6e37f..3edbada 100644
+index de6e37f266aee296f4e610b5f9dc939e50473096..3edbada49acc0a447e771d12eaf5b7b05371c6ab 100644
 --- a/iokit/bsddev/IOKitBSDInit.cpp
 +++ b/iokit/bsddev/IOKitBSDInit.cpp
 @@ -766,14 +766,14 @@ IOFindBSDRoot( char * rootName, unsigned int rootNameSize,
@@ -6823,7 +6899,7 @@ index de6e37f..3edbada 100644
  			panic("IOFindBSDRoot: internal UFS root %s unavailable: %d", rdBootVar, ufs_error);
  		}
 diff --git a/iokit/conf/files.arm64 b/iokit/conf/files.arm64
-index acc9ae0..03a44bb 100644
+index acc9ae0264818a7ef3235c827530c459efd3b67d..03a44bbcc98a772eef6b43783b0f7a758f603ab5 100644
 --- a/iokit/conf/files.arm64
 +++ b/iokit/conf/files.arm64
 @@ -6,17 +6,17 @@ iokit/Kernel/IOPMrootDomain.cpp    					optional iokitcpp
@@ -6855,7 +6931,7 @@ index acc9ae0..03a44bb 100644
  iokit/Kernel/arm/hid/IOHIDEventServiceQueue.cpp                  optional iokitcpp
  iokit/Kernel/arm/hid/IOHIDEventServiceUserClient.cpp             optional iokitcpp
 diff --git a/libkern/conf/Makefile.template b/libkern/conf/Makefile.template
-index 404e88a..8b60cf1 100644
+index 404e88a931033a2833f9493e5d8e4e589d4fed21..8b60cf1aeef4faaa025588877e992d7c7bdaba18 100644
 --- a/libkern/conf/Makefile.template
 +++ b/libkern/conf/Makefile.template
 @@ -19,48 +19,48 @@ include $(MakeInc_def)
@@ -6944,7 +7020,7 @@ index 404e88a..8b60cf1 100644
  endif
  
 diff --git a/libkern/conf/files b/libkern/conf/files
-index b9d424f..547057c 100644
+index b9d424f9f9f710b438977ce4aa947efbb2bd6468..547057c0f52c43a71ad9067b66119e71fbe43fba 100644
 --- a/libkern/conf/files
 +++ b/libkern/conf/files
 @@ -97,21 +97,21 @@ libkern/crypto/corecrypto_sha1.c		optional crypto
@@ -6985,7 +7061,7 @@ index b9d424f..547057c 100644
  libkern/crypto/corecrypto_rand.c		optional crypto
  libkern/crypto/corecrypto_rsa.c		    optional crypto
 diff --git a/libkern/crypto/corecrypto_aes.c b/libkern/crypto/corecrypto_aes.c
-index c6d2c65..8d47a5d 100644
+index c6d2c65c117c178ee6e7fc84768b68f27fd51cba..8d47a5d7a185e5b935203823aacae9fd358a7b08 100644
 --- a/libkern/crypto/corecrypto_aes.c
 +++ b/libkern/crypto/corecrypto_aes.c
 @@ -32,12 +32,12 @@
@@ -7008,7 +7084,7 @@ index c6d2c65..8d47a5d 100644
  #define AES_CBC_ENCRYPT_MODE (g_crypto_funcs->ccaes_cbc_encrypt)
  #define AES_CBC_DECRYPT_MODE (g_crypto_funcs->ccaes_cbc_decrypt)
 diff --git a/libkern/crypto/corecrypto_md5.c b/libkern/crypto/corecrypto_md5.c
-index 601b0b6..fe54a29 100644
+index 601b0b6e9ecbc2b0d768e8d6b07645c14ee640d5..fe54a29ed688ddab3fc9549a95151009bb0b3a71 100644
 --- a/libkern/crypto/corecrypto_md5.c
 +++ b/libkern/crypto/corecrypto_md5.c
 @@ -17,14 +17,14 @@ setCount(MD5_CTX *ctx, uint64_t count)
@@ -7046,7 +7122,7 @@ index 601b0b6..fe54a29 100644
 -#endif /* !ARM64_BOARD_CONFIG_SWEET */
 +#endif /* !ARM64_BOARD_CONFIG_MUNCH */
 diff --git a/libkern/crypto/corecrypto_sha1.c b/libkern/crypto/corecrypto_sha1.c
-index 5968801..3701d02 100644
+index 59688014f1f1265af8bacbbff12c31de246a9756..3701d027b7498abcb9eb86b05645539ba5c3a594 100644
 --- a/libkern/crypto/corecrypto_sha1.c
 +++ b/libkern/crypto/corecrypto_sha1.c
 @@ -16,14 +16,14 @@ setCount(SHA1_CTX *ctx, uint64_t count)
@@ -7087,7 +7163,7 @@ index 5968801..3701d02 100644
  /* This is not publicised in header, but exported in libkern.exports */
  void SHA1Final_r(SHA1_CTX *context, void *digest);
 diff --git a/libkern/crypto/corecrypto_sha2.c b/libkern/crypto/corecrypto_sha2.c
-index b70996a..4d54e50 100644
+index b70996a90178bd473d6be373bbe7822e5a5b7623..4d54e50458642c5f372b493de4aaf2681cdaadf3 100644
 --- a/libkern/crypto/corecrypto_sha2.c
 +++ b/libkern/crypto/corecrypto_sha2.c
 @@ -34,12 +34,12 @@
@@ -7140,7 +7216,7 @@ diff --git a/libkern/crypto/sweet_aes.c b/libkern/crypto/munch_aes.c
 similarity index 75%
 rename from libkern/crypto/sweet_aes.c
 rename to libkern/crypto/munch_aes.c
-index 28ac4d2..aa6e373 100644
+index 28ac4d2f7eea101cf013e39823a0ab19c6ec8cc0..aa6e373b9972d3cddfaec07deeabc1b7fdc0eed8 100644
 --- a/libkern/crypto/sweet_aes.c
 +++ b/libkern/crypto/munch_aes.c
 @@ -1,15 +1,15 @@
@@ -7243,7 +7319,7 @@ index 28ac4d2..aa6e373 100644
 +#endif /* ARM64_BOARD_CONFIG_MUNCH */
 diff --git a/libkern/crypto/munch_aes_ct.c b/libkern/crypto/munch_aes_ct.c
 new file mode 100644
-index 0000000..4ca6161
+index 0000000000000000000000000000000000000000..4ca6161a8fa3e4379a5b191de325d74eadfcb478
 --- /dev/null
 +++ b/libkern/crypto/munch_aes_ct.c
 @@ -0,0 +1,4 @@
@@ -7253,7 +7329,7 @@ index 0000000..4ca6161
 +#endif
 diff --git a/libkern/crypto/munch_aes_ct_cbcdec.c b/libkern/crypto/munch_aes_ct_cbcdec.c
 new file mode 100644
-index 0000000..fdb3a9b
+index 0000000000000000000000000000000000000000..fdb3a9b2eec0df087ae49c40cc542b1d7cf19c6e
 --- /dev/null
 +++ b/libkern/crypto/munch_aes_ct_cbcdec.c
 @@ -0,0 +1,4 @@
@@ -7263,7 +7339,7 @@ index 0000000..fdb3a9b
 +#endif
 diff --git a/libkern/crypto/munch_aes_ct_cbcenc.c b/libkern/crypto/munch_aes_ct_cbcenc.c
 new file mode 100644
-index 0000000..027442d
+index 0000000000000000000000000000000000000000..027442d96723a50ed7c87cec24053f4f2bc0ac5e
 --- /dev/null
 +++ b/libkern/crypto/munch_aes_ct_cbcenc.c
 @@ -0,0 +1,4 @@
@@ -7273,7 +7349,7 @@ index 0000000..027442d
 +#endif
 diff --git a/libkern/crypto/munch_aes_ct_dec.c b/libkern/crypto/munch_aes_ct_dec.c
 new file mode 100644
-index 0000000..b151bbf
+index 0000000000000000000000000000000000000000..b151bbf13ee595119591332a82a1c1f39efffbd3
 --- /dev/null
 +++ b/libkern/crypto/munch_aes_ct_dec.c
 @@ -0,0 +1,4 @@
@@ -7283,7 +7359,7 @@ index 0000000..b151bbf
 +#endif
 diff --git a/libkern/crypto/munch_aes_ct_enc.c b/libkern/crypto/munch_aes_ct_enc.c
 new file mode 100644
-index 0000000..b6fa416
+index 0000000000000000000000000000000000000000..b6fa4169f21fa84c1b4207d2519d5381e638db37
 --- /dev/null
 +++ b/libkern/crypto/munch_aes_ct_enc.c
 @@ -0,0 +1,4 @@
@@ -7413,7 +7489,7 @@ rename from libkern/crypto/sweet_bearssl/src/symcipher/aes_ct_enc.c
 rename to libkern/crypto/munch_bearssl/src/symcipher/aes_ct_enc.c
 diff --git a/libkern/crypto/munch_dec32be.c b/libkern/crypto/munch_dec32be.c
 new file mode 100644
-index 0000000..9ea857c
+index 0000000000000000000000000000000000000000..9ea857ca6e8639c714d9fd5fb9e74841db9a4e56
 --- /dev/null
 +++ b/libkern/crypto/munch_dec32be.c
 @@ -0,0 +1,4 @@
@@ -7423,7 +7499,7 @@ index 0000000..9ea857c
 +#endif
 diff --git a/libkern/crypto/munch_dec32le.c b/libkern/crypto/munch_dec32le.c
 new file mode 100644
-index 0000000..a642b5d
+index 0000000000000000000000000000000000000000..a642b5dadd132013d3290046a7e12b2ecb061bc9
 --- /dev/null
 +++ b/libkern/crypto/munch_dec32le.c
 @@ -0,0 +1,4 @@
@@ -7433,7 +7509,7 @@ index 0000000..a642b5d
 +#endif
 diff --git a/libkern/crypto/munch_dec64be.c b/libkern/crypto/munch_dec64be.c
 new file mode 100644
-index 0000000..1c5f02b
+index 0000000000000000000000000000000000000000..1c5f02b7e6b994286d74a2cbc3cadf51b756b396
 --- /dev/null
 +++ b/libkern/crypto/munch_dec64be.c
 @@ -0,0 +1,4 @@
@@ -7443,7 +7519,7 @@ index 0000000..1c5f02b
 +#endif
 diff --git a/libkern/crypto/munch_enc32be.c b/libkern/crypto/munch_enc32be.c
 new file mode 100644
-index 0000000..c3d605c
+index 0000000000000000000000000000000000000000..c3d605cd8714162e78d7d9c794421e9efe82f702
 --- /dev/null
 +++ b/libkern/crypto/munch_enc32be.c
 @@ -0,0 +1,4 @@
@@ -7453,7 +7529,7 @@ index 0000000..c3d605c
 +#endif
 diff --git a/libkern/crypto/munch_enc32le.c b/libkern/crypto/munch_enc32le.c
 new file mode 100644
-index 0000000..46df82c
+index 0000000000000000000000000000000000000000..46df82ca5f219eb2c56b176104f473a2755237af
 --- /dev/null
 +++ b/libkern/crypto/munch_enc32le.c
 @@ -0,0 +1,4 @@
@@ -7463,7 +7539,7 @@ index 0000000..46df82c
 +#endif
 diff --git a/libkern/crypto/munch_enc64be.c b/libkern/crypto/munch_enc64be.c
 new file mode 100644
-index 0000000..ef568a5
+index 0000000000000000000000000000000000000000..ef568a55bbc5dfb5bf324dfa4bf6d4055badd70c
 --- /dev/null
 +++ b/libkern/crypto/munch_enc64be.c
 @@ -0,0 +1,4 @@
@@ -7473,7 +7549,7 @@ index 0000000..ef568a5
 +#endif
 diff --git a/libkern/crypto/munch_md5.c b/libkern/crypto/munch_md5.c
 new file mode 100644
-index 0000000..52cd296
+index 0000000000000000000000000000000000000000..52cd29639554f03369e013301cd0e6e20fbeaa7e
 --- /dev/null
 +++ b/libkern/crypto/munch_md5.c
 @@ -0,0 +1,4 @@
@@ -7483,7 +7559,7 @@ index 0000000..52cd296
 +#endif
 diff --git a/libkern/crypto/munch_sha1.c b/libkern/crypto/munch_sha1.c
 new file mode 100644
-index 0000000..7a17d49
+index 0000000000000000000000000000000000000000..7a17d49f584f246d6607ddbc1cf055f62b8083cb
 --- /dev/null
 +++ b/libkern/crypto/munch_sha1.c
 @@ -0,0 +1,4 @@
@@ -7493,7 +7569,7 @@ index 0000000..7a17d49
 +#endif
 diff --git a/libkern/crypto/munch_sha2big.c b/libkern/crypto/munch_sha2big.c
 new file mode 100644
-index 0000000..18fe6d1
+index 0000000000000000000000000000000000000000..18fe6d125cfd1d6d44735082fb813d790f5d883e
 --- /dev/null
 +++ b/libkern/crypto/munch_sha2big.c
 @@ -0,0 +1,4 @@
@@ -7503,7 +7579,7 @@ index 0000000..18fe6d1
 +#endif
 diff --git a/libkern/crypto/sweet_aes_ct.c b/libkern/crypto/sweet_aes_ct.c
 deleted file mode 100644
-index b2ddeec..0000000
+index b2ddeecdeb9f79993a0c18e5605ab5de76c9b161..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_aes_ct.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7513,7 +7589,7 @@ index b2ddeec..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_aes_ct_cbcdec.c b/libkern/crypto/sweet_aes_ct_cbcdec.c
 deleted file mode 100644
-index 23a01a1..0000000
+index 23a01a1470a85c17560144eda3fa4e074a1578a8..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_aes_ct_cbcdec.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7523,7 +7599,7 @@ index 23a01a1..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_aes_ct_cbcenc.c b/libkern/crypto/sweet_aes_ct_cbcenc.c
 deleted file mode 100644
-index 35674d0..0000000
+index 35674d069f896f295a8d6175108404344d06f68d..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_aes_ct_cbcenc.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7533,7 +7609,7 @@ index 35674d0..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_aes_ct_dec.c b/libkern/crypto/sweet_aes_ct_dec.c
 deleted file mode 100644
-index 6092c1c..0000000
+index 6092c1c7e631278e48efa1ec3af2a0901d8fc64e..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_aes_ct_dec.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7543,7 +7619,7 @@ index 6092c1c..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_aes_ct_enc.c b/libkern/crypto/sweet_aes_ct_enc.c
 deleted file mode 100644
-index fd750aa..0000000
+index fd750aacd993db929dd38312f4bcc36b931d2bda..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_aes_ct_enc.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7553,7 +7629,7 @@ index fd750aa..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_dec32be.c b/libkern/crypto/sweet_dec32be.c
 deleted file mode 100644
-index 8054bbf..0000000
+index 8054bbf31aed8cb4ba3566f4ca8c1d7a0e3902e1..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_dec32be.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7563,7 +7639,7 @@ index 8054bbf..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_dec32le.c b/libkern/crypto/sweet_dec32le.c
 deleted file mode 100644
-index 2c48f01..0000000
+index 2c48f013956b6f67570cf7cb4bf79905a84dfb6c..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_dec32le.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7573,7 +7649,7 @@ index 2c48f01..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_dec64be.c b/libkern/crypto/sweet_dec64be.c
 deleted file mode 100644
-index c8d8bca..0000000
+index c8d8bcaa23d501f40a23acb742d9d0eadffbcfa7..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_dec64be.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7583,7 +7659,7 @@ index c8d8bca..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_enc32be.c b/libkern/crypto/sweet_enc32be.c
 deleted file mode 100644
-index c6a32f6..0000000
+index c6a32f6507a81b9192da9ada53beed75893aab04..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_enc32be.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7593,7 +7669,7 @@ index c6a32f6..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_enc32le.c b/libkern/crypto/sweet_enc32le.c
 deleted file mode 100644
-index 29390d4..0000000
+index 29390d4a36af05b43f370dada55bb527fb753ba8..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_enc32le.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7603,7 +7679,7 @@ index 29390d4..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_enc64be.c b/libkern/crypto/sweet_enc64be.c
 deleted file mode 100644
-index dd72c9d..0000000
+index dd72c9dc615c07a6d1c029706a443373931d1a25..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_enc64be.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7613,7 +7689,7 @@ index dd72c9d..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_md5.c b/libkern/crypto/sweet_md5.c
 deleted file mode 100644
-index d00afb1..0000000
+index d00afb13c721de594d1b6b1a82f09e41901275be..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_md5.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7623,7 +7699,7 @@ index d00afb1..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_sha1.c b/libkern/crypto/sweet_sha1.c
 deleted file mode 100644
-index 02392a1..0000000
+index 02392a14cb7d5bbd1c836f836107002f54392b24..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_sha1.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7633,7 +7709,7 @@ index 02392a1..0000000
 -#endif
 diff --git a/libkern/crypto/sweet_sha2big.c b/libkern/crypto/sweet_sha2big.c
 deleted file mode 100644
-index 1a635b7..0000000
+index 1a635b78448c59f838bc4aad746b1267d053d698..0000000000000000000000000000000000000000
 --- a/libkern/crypto/sweet_sha2big.c
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -7642,7 +7718,7 @@ index 1a635b7..0000000
 -#include "sweet_bearssl/src/hash/sha2big.c"
 -#endif
 diff --git a/makedefs/MakeInc.def b/makedefs/MakeInc.def
-index de118e4..4f28a87 100644
+index de118e4a1008769726b782d4b1dc9ba8d9a2f434..4f28a876ea560a812f6f4d22fd54eb21a7c8cc0e 100644
 --- a/makedefs/MakeInc.def
 +++ b/makedefs/MakeInc.def
 @@ -29,7 +29,7 @@ SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
@@ -7674,7 +7750,7 @@ index de118e4..4f28a87 100644
  endif
  endif
 diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
-index 42362c5..700a8aa 100644
+index 42362c5eafc32afc0bfd163773f39b2c30a996ab..700a8aa7916cdc8370776002fe512a8e37b4342a 100644
 --- a/osfmk/arm/arm_init.c
 +++ b/osfmk/arm/arm_init.c
 @@ -56,7 +56,7 @@
@@ -7770,7 +7846,7 @@ index 42362c5..700a8aa 100644
  
  	serialmode = 0;
 diff --git a/osfmk/arm/pmap/pmap_misc.c b/osfmk/arm/pmap/pmap_misc.c
-index a6d23fa..cf94039 100644
+index a6d23fa8fb4afd8f33ee434b3750f0c90f61318d..cf94039e9a8dfb93b66987f6251a212d8876a443 100644
 --- a/osfmk/arm/pmap/pmap_misc.c
 +++ b/osfmk/arm/pmap/pmap_misc.c
 @@ -40,7 +40,7 @@
@@ -7783,7 +7859,7 @@ index a6d23fa..cf94039 100644
   * no extra state to check.
   */
 diff --git a/osfmk/arm64/Makefile b/osfmk/arm64/Makefile
-index d75b285..7bd0741 100644
+index d75b285f26b9744868bcf7c04edb34edaaa6020e..7bd074178da8c8057b78491b3aea69e78c1496a8 100644
 --- a/osfmk/arm64/Makefile
 +++ b/osfmk/arm64/Makefile
 @@ -40,7 +40,7 @@ EXPORT_MD_LIST = \
@@ -7796,7 +7872,7 @@ index d75b285..7bd0741 100644
  	tlb.h \
  	pal_hibernate.h
 diff --git a/osfmk/arm64/amcc_rorgn_common.c b/osfmk/arm64/amcc_rorgn_common.c
-index 963cdc1..aaa0441 100644
+index 963cdc1bc8343fa9cddbaefb6496a664433e61bc..aaa0441d453157ed17674a3c850eb0ecad0d3e02 100644
 --- a/osfmk/arm64/amcc_rorgn_common.c
 +++ b/osfmk/arm64/amcc_rorgn_common.c
 @@ -1,9 +1,9 @@
@@ -7813,7 +7889,7 @@ index 963cdc1..aaa0441 100644
 -static const uint8_t sweet_no_amcc_rorgn __attribute__((unused)) = 0;
 +static const uint8_t munch_no_amcc_rorgn __attribute__((unused)) = 0;
 diff --git a/osfmk/arm64/amcc_rorgn_ppl.c b/osfmk/arm64/amcc_rorgn_ppl.c
-index 963cdc1..aaa0441 100644
+index 963cdc1bc8343fa9cddbaefb6496a664433e61bc..aaa0441d453157ed17674a3c850eb0ecad0d3e02 100644
 --- a/osfmk/arm64/amcc_rorgn_ppl.c
 +++ b/osfmk/arm64/amcc_rorgn_ppl.c
 @@ -1,9 +1,9 @@
@@ -7830,7 +7906,7 @@ index 963cdc1..aaa0441 100644
 -static const uint8_t sweet_no_amcc_rorgn __attribute__((unused)) = 0;
 +static const uint8_t munch_no_amcc_rorgn __attribute__((unused)) = 0;
 diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
-index 644b46e..a07c2da 100644
+index 644b46e1aaffeb9bdc79636764a18a78964f6870..a07c2da5fbbbf93ce2fd56e77f1479ac2adcd4fa 100644
 --- a/osfmk/arm64/arm_vm_init.c
 +++ b/osfmk/arm64/arm_vm_init.c
 @@ -41,7 +41,7 @@
@@ -7928,7 +8004,7 @@ index 644b46e..a07c2da 100644
  #if defined(KERNEL_INTEGRITY_KTRR) || defined(KERNEL_INTEGRITY_CTRR)
  	/*
 diff --git a/osfmk/arm64/caches_asm.s b/osfmk/arm64/caches_asm.s
-index e777b77..ea46d6d 100644
+index e777b771fa9c3082fdcd22797bc3d3710f5d80b6..ea46d6dc38064ca3eb03f1731084075601a9f625 100644
 --- a/osfmk/arm64/caches_asm.s
 +++ b/osfmk/arm64/caches_asm.s
 @@ -212,7 +212,7 @@ L_ipui_loop:
@@ -7950,7 +8026,7 @@ index e777b77..ea46d6d 100644
   */
  	.text
 diff --git a/osfmk/arm64/cpu.c b/osfmk/arm64/cpu.c
-index 1af58ff..a73b0df 100644
+index 1af58ffae5dd12297cbde446e238d32bb947ecf0..a73b0df579b3f0d98f74795e0540791e4af5429b 100644
 --- a/osfmk/arm64/cpu.c
 +++ b/osfmk/arm64/cpu.c
 @@ -922,7 +922,7 @@ cpu_start(int cpu)
@@ -7978,7 +8054,7 @@ index 1af58ff..a73b0df 100644
  	if (cpu >= MAX_CPUS) {
  		return FALSE;
 diff --git a/osfmk/arm64/kpc.c b/osfmk/arm64/kpc.c
-index 1ac5f54..09625c7 100644
+index 1ac5f54121015f4a6cf60d9da340eca026b55cdd..09625c7a8d85f67a16b7213bf41f8beeb69585aa 100644
 --- a/osfmk/arm64/kpc.c
 +++ b/osfmk/arm64/kpc.c
 @@ -1,5 +1,5 @@
@@ -7989,7 +8065,7 @@ index 1ac5f54..09625c7 100644
   * closed per-SoC library. xnu does not build without kperf, and kperf needs
   * kpc, so this backend reports no counters at all: every class is empty and
 diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
-index 4e03115..8754502 100644
+index 4e031152ddbdee5cb8633980d5e62d20287fac4d..8754502b9b6b3ce1ea3a42fcb271cbbe660cdfc7 100644
 --- a/osfmk/arm64/machine_routines.c
 +++ b/osfmk/arm64/machine_routines.c
 @@ -954,8 +954,8 @@ ml_parse_cpu_topology(void)
@@ -8038,7 +8114,7 @@ diff --git a/osfmk/arm64/sweet_early.c b/osfmk/arm64/munch_early.c
 similarity index 77%
 rename from osfmk/arm64/sweet_early.c
 rename to osfmk/arm64/munch_early.c
-index 5b3efbf..7f85103 100644
+index 5b3efbfb158881c3f57cfd060ebb614536b73d45..7f851035ced25903648e31e182c4cbe73bdff058 100644
 --- a/osfmk/arm64/sweet_early.c
 +++ b/osfmk/arm64/munch_early.c
 @@ -5,9 +5,9 @@
@@ -8170,7 +8246,7 @@ index 5b3efbf..7f85103 100644
 +#endif /* MUNCH */
 diff --git a/osfmk/arm64/munch_early.h b/osfmk/arm64/munch_early.h
 new file mode 100644
-index 0000000..f284527
+index 0000000000000000000000000000000000000000..f28452792fd4c0a30a6904e38f7cdd677b3c82f8
 --- /dev/null
 +++ b/osfmk/arm64/munch_early.h
 @@ -0,0 +1,24 @@
@@ -8199,7 +8275,7 @@ index 0000000..f284527
 +
 +#endif
 diff --git a/osfmk/arm64/ppl/sart.h b/osfmk/arm64/ppl/sart.h
-index a8cd7b6..8758788 100644
+index a8cd7b64868e4ecd98da266fc205c9cc275ae3d0..87587885cf31b03292d3e9003ca879497c9b4139 100644
 --- a/osfmk/arm64/ppl/sart.h
 +++ b/osfmk/arm64/ppl/sart.h
 @@ -1,5 +1,5 @@
@@ -8210,7 +8286,7 @@ index a8cd7b6..8758788 100644
   */
  #ifndef _ARM64_PPL_SART_H_
 diff --git a/osfmk/arm64/ppl/uat.h b/osfmk/arm64/ppl/uat.h
-index 4a790c2..642ad37 100644
+index 4a790c225caef2341df45fdcd55913301d09e800..642ad37972427b95b62fa11dd4740bf806ec42c5 100644
 --- a/osfmk/arm64/ppl/uat.h
 +++ b/osfmk/arm64/ppl/uat.h
 @@ -1,5 +1,5 @@
@@ -8221,7 +8297,7 @@ index 4a790c2..642ad37 100644
   */
  #ifndef _ARM64_PPL_UAT_H_
 diff --git a/osfmk/arm64/proc_reg.h b/osfmk/arm64/proc_reg.h
-index 4e1a44f..111c900 100644
+index 4e1a44f6d5d50eefd37bde2c29c63205129cb195..111c900217d36167e8e1a79f49f918e74943f773 100644
 --- a/osfmk/arm64/proc_reg.h
 +++ b/osfmk/arm64/proc_reg.h
 @@ -213,7 +213,7 @@
@@ -8234,7 +8310,7 @@ index 4e1a44f..111c900 100644
  /* I-Cache. */
  #define MMU_I_CLINE 6
 diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
-index fdaadf0..1c27b84 100644
+index fdaadf0126f5f6a8938cef659a4c7772ae8c2f39..1c27b84525d3b168dab6f464cc243b26f5b5d896 100644
 --- a/osfmk/arm64/sleh.c
 +++ b/osfmk/arm64/sleh.c
 @@ -1856,9 +1856,9 @@ sleh_irq(arm_saved_state_t *state)
@@ -8268,7 +8344,7 @@ index fdaadf0..1c27b84 100644
  	entropy_collect();
  
 diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
-index 9a84811..62585ce 100644
+index 9a848111b9f315d07f1ff53f925ea718c92d351d..62585cef831146ee2724b36e7ca01c3d11f2214b 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
 @@ -143,8 +143,8 @@ LEXT(reset_vector)
@@ -8402,7 +8478,7 @@ index 9a84811..62585ce 100644
  	/* Watchtower
 diff --git a/osfmk/arm64/sweet_early.h b/osfmk/arm64/sweet_early.h
 deleted file mode 100644
-index f495580..0000000
+index f495580e0c4e58a3a7a21c6a42d094581a948b8a..0000000000000000000000000000000000000000
 --- a/osfmk/arm64/sweet_early.h
 +++ /dev/null
 @@ -1,24 +0,0 @@
@@ -8431,7 +8507,7 @@ index f495580..0000000
 -
 -#endif
 diff --git a/osfmk/arm64/tunables/tunables.s b/osfmk/arm64/tunables/tunables.s
-index 959c1a2..17722a5 100644
+index 959c1a29a3e0d55b438483a6a948212fe1410dd8..17722a54df713918be5a7fa83ce0cae5f613190a 100644
 --- a/osfmk/arm64/tunables/tunables.s
 +++ b/osfmk/arm64/tunables/tunables.s
 @@ -1,7 +1,7 @@
@@ -8445,7 +8521,7 @@ index 959c1a2..17722a5 100644
  .macro APPLY_TUNABLES midr, tmp1, tmp2
  .endmacro
 diff --git a/osfmk/conf/files.arm64 b/osfmk/conf/files.arm64
-index b0dad49..250312d 100644
+index b0dad4927792fd4849a0fb793bf3abfc0b5e604a..250312d0a782d938af9dc594658a66f61800726c 100644
 --- a/osfmk/conf/files.arm64
 +++ b/osfmk/conf/files.arm64
 @@ -40,7 +40,7 @@ osfmk/arm64/dbgwrap.c		standard
@@ -8458,10 +8534,10 @@ index b0dad49..250312d 100644
  osfmk/arm/io_map.c		standard
  osfmk/arm64/loose_ends.c	standard
 diff --git a/osfmk/console/serial_console.c b/osfmk/console/serial_console.c
-index c86b9e7..66a01d5 100644
+index 64a0e6cb5fad36f1c1f1f3ca9c46ec03f400b32e..92fa9ff955b762613b5336bde3a777ce40edd24b 100644
 --- a/osfmk/console/serial_console.c
 +++ b/osfmk/console/serial_console.c
-@@ -266,14 +266,14 @@ _cnputc(char c, bool poll)
+@@ -266,16 +266,16 @@ _cnputc(char c, bool poll)
   *             waiting for an interrupt when the hardware device isn't ready
   * @param size The number of characters to print to the console.
   */
@@ -8469,6 +8545,9 @@ index c86b9e7..66a01d5 100644
 -extern void sweet_log_append(const char *c, int size);  /* bsd/dev/sweet_ufs.c */
 +#if defined(ARM64_BOARD_CONFIG_MUNCH)
 +extern void munch_log_append(const char *c, int size);  /* bsd/dev/munch_ufs.c */
+ #endif
+-#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_MUNCH)
++#if defined(ARM64_BOARD_CONFIG_MUNCH)
  /*
 - * Set by AppleCLCD (boot-arg sweetfb_noconsole=1) once the GUI presents:
 + * Set by AppleCLCD (boot-arg munchfb_noconsole=1) once the GUI presents:
@@ -8480,21 +8559,24 @@ index c86b9e7..66a01d5 100644
  #endif
  
  static inline void
-@@ -281,9 +281,9 @@ _cnputs(char *c, int size, bool poll)
+@@ -283,11 +283,11 @@ _cnputs(char *c, int size, bool poll)
  {
  	extern int disableConsoleOutput;
  
 -#if defined(ARM64_BOARD_CONFIG_SWEET)
 -	sweet_log_append(c, size);
--	if (sweet_console_muted && !panic_active()) {
 +#if defined(ARM64_BOARD_CONFIG_MUNCH)
 +	munch_log_append(c, size);
+ #endif
+-#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_MUNCH)
+-	if (sweet_console_muted && !panic_active()) {
++#if defined(ARM64_BOARD_CONFIG_MUNCH)
 +	if (munch_console_muted && !panic_active()) {
  		return;
  	}
  #endif
 diff --git a/osfmk/kern/debug.c b/osfmk/kern/debug.c
-index 109cfb1..7869740 100644
+index 109cfb1f2a167b90ac8669cae20e8d307f7df0f9..7869740dd4c0e6c57156f44e89dc27b89eb0bea1 100644
 --- a/osfmk/kern/debug.c
 +++ b/osfmk/kern/debug.c
 @@ -85,7 +85,7 @@
@@ -8519,14 +8601,14 @@ index 109cfb1..7869740 100644
  
  #if defined(__x86_64__) && (DEVELOPMENT || DEBUG)
 diff --git a/osfmk/kern/exception.c b/osfmk/kern/exception.c
-index a20a764..aab42cc 100644
+index b5a283be4717615528a2e9323abf6d172099ad84..aab42ccc94d7055e210fdea409914fb1ec3f9073 100644
 --- a/osfmk/kern/exception.c
 +++ b/osfmk/kern/exception.c
 @@ -820,23 +820,23 @@ exception_triage(
  	return exception_triage_thread(exception, code, codeCnt, thread);
  }
  
--#if defined(ARM64_BOARD_CONFIG_SWEET)
+-#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_MUNCH)
 +#if defined(ARM64_BOARD_CONFIG_MUNCH)
  #include <vm/vm_shared_region.h>
  #include <arm/thread.h>
@@ -8605,13 +8687,13 @@ index a20a764..aab42cc 100644
  	task_unlock(task);
  }
  
--#endif /* ARM64_BOARD_CONFIG_SWEET */
+-#endif /* ARM64_BOARD_CONFIG_SWEET || ARM64_BOARD_CONFIG_MUNCH */
 +#endif /* ARM64_BOARD_CONFIG_MUNCH */
  
  kern_return_t
  bsd_exception(
 diff --git a/osfmk/prng/entropy.c b/osfmk/prng/entropy.c
-index 5a2ddf3..54d157c 100644
+index 5a2ddf39fbd9e672f445e65b3b7109569f5151a7..54d157cf090a25ed8cbd11fdbbc286b619485f1e 100644
 --- a/osfmk/prng/entropy.c
 +++ b/osfmk/prng/entropy.c
 @@ -40,7 +40,7 @@
@@ -8676,7 +8758,7 @@ index 5a2ddf3..54d157c 100644
  		return sample_count;
  	}
 diff --git a/osfmk/prng/prng_random.c b/osfmk/prng/prng_random.c
-index c87e87e..d5ca382 100644
+index c87e87e8b2c492e63cc041c00c249aab3ca7f2a8..d5ca3826a149e5d24f57ea06f4908592063d3a9a 100644
 --- a/osfmk/prng/prng_random.c
 +++ b/osfmk/prng/prng_random.c
 @@ -145,9 +145,9 @@ static struct {
@@ -8883,7 +8965,7 @@ index c87e87e..d5ca382 100644
  	const struct ccdigest_info *di = &ccsha256_ltc_di;
  	ccdigest_di_decl(di, ctx);
 diff --git a/osfmk/vm/vm_kern.c b/osfmk/vm/vm_kern.c
-index f7c4c3f..0f06a40 100644
+index f7c4c3f8d95a3a23f216d1c503298a9f02a32f7f..0f06a4041db0c3b9e829625cbb8466692e0821a4 100644
 --- a/osfmk/vm/vm_kern.c
 +++ b/osfmk/vm/vm_kern.c
 @@ -2439,9 +2439,9 @@ kmem_sizeclass_init(void)
@@ -8969,7 +9051,7 @@ index f7c4c3f..0f06a40 100644
  		crypto_random_uniform(zpercpu_get(sizeclass.ks_rng_ctx), num_slots,
  		    &slot_idx);
 diff --git a/pexpert/arm/pe_fiq.c b/pexpert/arm/pe_fiq.c
-index 8e1e744..25bbe2a 100644
+index 8e1e744ea29be0bf7fb651f7dd29c752778aa6c4..25bbe2a6b26474b3e6349d379fb19f72ca37863f 100644
 --- a/pexpert/arm/pe_fiq.c
 +++ b/pexpert/arm/pe_fiq.c
 @@ -17,9 +17,9 @@
@@ -9065,7 +9147,7 @@ index 8e1e744..25bbe2a 100644
  #else
  void
 diff --git a/pexpert/arm/pe_serial.c b/pexpert/arm/pe_serial.c
-index 19f27cd..3d8885f 100644
+index 19f27cd86465511741ddaf721b1095960ef9b304..3d8885f5b03d339869309c86086bea7e1b762721 100644
 --- a/pexpert/arm/pe_serial.c
 +++ b/pexpert/arm/pe_serial.c
 @@ -26,7 +26,7 @@
@@ -9131,7 +9213,7 @@ index 19f27cd..3d8885f 100644
  }
  
 diff --git a/pexpert/pexpert/arm/protos.h b/pexpert/pexpert/arm/protos.h
-index ae809c0..058cb65 100644
+index ae809c08798957466e5bf188bed1087734dcd7ee..058cb6532eb4b68d689ae714f6e3e613c39f36eb 100644
 --- a/pexpert/pexpert/arm/protos.h
 +++ b/pexpert/pexpert/arm/protos.h
 @@ -36,8 +36,8 @@ void uart_putc_options(char, bool);
@@ -9155,7 +9237,7 @@ index ae809c0..058cb65 100644
  
  kern_return_t serial_irq_enable(serial_device_t device);
 diff --git a/pexpert/pexpert/arm64/MUNCH.h b/pexpert/pexpert/arm64/MUNCH.h
-index f334773..fec2b66 100644
+index f33477303f37a5357fa761f1364a5a50512f346c..fec2b662e633d82add5e549a4c5cbdd94a225f8b 100644
 --- a/pexpert/pexpert/arm64/MUNCH.h
 +++ b/pexpert/pexpert/arm64/MUNCH.h
 @@ -1,6 +1,7 @@
@@ -9187,7 +9269,7 @@ index f334773..fec2b66 100644
  #define MUNCH_SMP_MAX_CPUS         8
  #define BOARD_SMP_MAX_CPUS         MUNCH_SMP_MAX_CPUS
 diff --git a/pexpert/pexpert/arm64/Makefile b/pexpert/pexpert/arm64/Makefile
-index cb3b74b..f32eef9 100644
+index cb3b74b770d15091f3e35cc58c829171e9aaadb9..f32eef931cb6cf0c6947ec35876893e49e0046f0 100644
 --- a/pexpert/pexpert/arm64/Makefile
 +++ b/pexpert/pexpert/arm64/Makefile
 @@ -18,7 +18,7 @@ PRIVATE_KERNELFILES = \
@@ -9201,7 +9283,7 @@ index cb3b74b..f32eef9 100644
  
 diff --git a/pexpert/pexpert/arm64/SWEET.h b/pexpert/pexpert/arm64/SWEET.h
 deleted file mode 100644
-index 9c31954..0000000
+index 9c31954f4119461041ebe88989608acb039a60f5..0000000000000000000000000000000000000000
 --- a/pexpert/pexpert/arm64/SWEET.h
 +++ /dev/null
 @@ -1,86 +0,0 @@
@@ -9292,7 +9374,7 @@ index 9c31954..0000000
 -
 -#endif /* ! _PEXPERT_ARM64_SWEET_H */
 diff --git a/pexpert/pexpert/arm64/board_config.h b/pexpert/pexpert/arm64/board_config.h
-index 804dfcc..b710f72 100644
+index 804dfcc071c7f8cc54c0543fd151ecce601f3e43..b710f72a55fc3fd468b16111d9392efd2eb891b0 100644
 --- a/pexpert/pexpert/arm64/board_config.h
 +++ b/pexpert/pexpert/arm64/board_config.h
 @@ -97,23 +97,12 @@

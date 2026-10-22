@@ -1,5 +1,59 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: 0088 RECONCILED; CI MADE FAIL-CLOSED
+
+- Observed: candidate 0088 was rebuilt from the clean post-0087 replay and
+  verified with `git apply --check --whitespace=error`; candidate SHA-256 is
+  `92b0cebb034a369d846e2662e0aef22d0ba40d6e32b4d0ad97ab5a68a48e8f44`.
+- Observed: strict ordered replay of all 88 patches against XNU
+  `xnu-8796.141.3` passed with the pinned dependency snapshots staged first.
+  The staging used a fake SDK `TargetConditionals.h` copied byte-for-byte from
+  the matching staged input. `--whitespace=error` flags pre-existing trailing
+  whitespace in patch 0006, so the full replay used `--whitespace=nowarn`;
+  patch applicability was checked before each apply. Staged files are generated
+  inputs and are not in the repository.
+- Observed: the candidate removes active SWEET source identifiers, renames the
+  board/runtime symbols to MUNCH, enables `__ARM_AMP__`, removes `NO_ECORE`,
+  sets `MAX_CPU_CLUSTERS=2`, and identifies Snapdragon 870/Kryo 585 with
+  Cortex-A77/A55. This directly addresses the prior
+  `phys_cluster_id <= MAX_CPU_CLUSTER_PHY_ID` panic and the `SWEET EARLY`
+  diagnostic label. A remaining ordinary comment contains “sweet-spot”; it is
+  not a platform identifier.
+- Changed: `.github/workflows/xnu.yml` now makes pinned DXB patch application
+  fail closed for `MACHINE_CONFIG=MUNCH` instead of silently skipping a patch.
+  `tools/validate-repo.py` validates this guard and the active MUNCH topology.
+- Observed: `python3 tools/validate-repo.py`, workflow YAML parsing, workflow
+  fetch-step `bash -n`, injected DXB `bash -n`, and `git diff --check` pass.
+  Parser symbols exist in the replayed source, and a case-insensitive scan of
+  active XNU source paths found no SWEET identifiers. The connected Android
+  device is `munch` over ADB; no fastboot boot, flash, UFS, userdata, GPT, or
+  partition operation was performed.
+- Next: commit this patch reconciliation, trigger the macOS GitHub Actions
+  build with `gh`, inspect the kernel artifact, then prepare a new temporary
+  `fastboot boot` image with `cpus=8`. Do not flash or modify `userdata`.
+
+### HANDOFF 2026-10-22: CURRENT PATCH EDITS NOT READY TO PUSH
+
+- Observed: the current worktree has 86 modified files under `xnu/patches/` and
+  an untracked `--help` file identified by `file` as an Excel BIFF 2 document.
+  No patch files were staged, committed, or pushed during this check.
+- Observed: `python3 tools/validate-repo.py` fails its MUNCH build-plumbing
+  checks for patches 0019, 0020, 0083, and 0086. The edits contain duplicated
+  conditions such as `MUNCH || MUNCH` and changed donor-side SWEET preimages.
+  This is consistent with a global replacement having changed patch context,
+  not just the MUNCH additions.
+- Observed: `git apply --check` of both the worktree's 0088 and committed 0088
+  fails against `/run/user/1000/xnu-munch-sequence`; that replay tree is
+  modified, so this is not a clean-upstream replay result. Do not infer clean
+  base applicability from it.
+- Recommendation: do not commit/push the current patch set as-is. A failed
+  validator is confirmed, and CI's existing guard only checks for the MUNCH
+  config/header after the patch runner; it does not prevent individual patch
+  failures from being skipped. Preserve the current edits, restore donor-side
+  context selectively, then validate the full ordered patch series on a clean
+  XNU 8796 tree and make patch application fail closed in CI.
+- No device, UFS, userdata, partition, or GPT operation was performed.
+
 ### HANDOFF 2026-10-22: PATCH 0085 ORIGIN VERIFIED
 
 - Observed: commit `aceb1e9` (`feat(munch): add Focaltech report parser`)
