@@ -24,6 +24,12 @@
   swaps occur but the screen is blank, trace backboardd's missing
   `AppleM2ScalerCSCDriver`/surface composition path. If there are no swaps,
   inspect `backboardd` display matching and IOSurface handling.
+- Additional observations: backboardd reports
+  `IOServiceMatchingFailed for: AppleM2ScalerCSCDriver`, and the kernel key
+  helper reports `MUNCH KEYS: read error pon-ok=1 gpio-ok=0 arb-status=0x1`.
+  Treat M2Scaler as a missing userspace/CoreAnimation dependency for
+  surface composition, not as panel power. Keys are a separate SPMI/GPIO
+  arbiter bring-up issue.
 
 ### HANDOFF 2026-10-23: 0089 KERNEL PASSED, SWEETLOG REMOVED, CI RERUNNING
 
