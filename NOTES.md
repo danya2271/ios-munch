@@ -18,8 +18,9 @@
 - Verified: repository validation, whitespace checks, 0089 dry-run/application
   against the post-0088 CI build tree, ADT generation, and local syntax-only
   checks for `machine_routines_asm.s` plus `machine_routines.c` all pass. The
-  first 0089 draft had a malformed combined hunk; it was corrected before this
-  handoff and must be committed as a follow-up to `30886fe`.
+  first 0089 draft had a malformed combined hunk; it was corrected and committed
+  in `c0f6e15`. The Munch topology comment now also names SM8250/Kona rather
+  than the inherited SM7150 donor.
 - CI: run `39835665572` for `b628c8d` was cancelled after remaining queued;
   it produced no kernel artifact. The 0089 commit must trigger a fresh run.
 - Device safety: no ADB/fastboot device is connected; no `fastboot boot`, flash,

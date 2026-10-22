@@ -8039,7 +8039,7 @@ index 4e031152ddbdee5cb8633980d5e62d20287fac4d..8754502b9b6b3ce1ea3a42fcb271cbbe
  
 -#if defined(SWEET) || defined(MUNCH)
 +#if defined(MUNCH)
- 		/* Aff1 encodes the core on SM7150, not an Apple cluster ID. */
+ 		/* Aff1 encodes the core on SM8250/Kona, not an Apple cluster ID. */
  		cpu->die_cluster_id = (int)ml_readprop(child, "die-cluster-id", 0);
  		cpu->cluster_core_id = (int)ml_readprop(child, "cluster-core-id", cpu->phys_id >> 8);
 @@ -2180,17 +2180,17 @@ ml_get_decrementer(void)
