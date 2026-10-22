@@ -1,5 +1,28 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: KEYBAG IMAGE FLASHED; RW BOOT DISPATCHED
+
+- User explicitly confirmed flashing the verified keybag image. Fastboot
+  preflight: serial `7c8c92ae`, product `munch`, partition
+  `partition-size:iosroot = 0x6FFFFF000`, sparse SHA-256
+  `2f115aa922259985f53bd43f0c376914887b69aed9d200eca4dfaee609a4b994`.
+- Wrote only that sparse image to the dedicated `iosroot` partition. All
+  16/16 chunks sent and wrote `OKAY`; `fastboot` reported `Finished. Total
+  time: 265.972s`. No `userdata` operation or GPT change occurred.
+- Built a temporary RAM boot payload with the same CI kernel and UFS ADT,
+  changing only the boot arguments to `rd=ufsroot0 iosrootrw=1`. Payload:
+  `/tmp/munch-ufs-keybag-payload.bin`, SHA-256
+  `084cbf2c018f2b3ef36d6d2076c71426642704c00e01d874effdd853155b6c49`.
+- Boot image: `/tmp/munch-ufs-keybag-boot.img`, SHA-256
+  `acd01fea86f56a51d7332efa56e8c4f085242dfd9984b98b4c081f5157abaad9`.
+  The first `fastboot boot` attempt failed with `Status read failed (No such
+  device)` before completing; the device immediately reappeared in fastboot.
+  A retry returned `Sending OKAY 0.369s`, `Booting OKAY 0.238s`.
+- This is a temporary RAM boot with XNU writing only to the existing
+  `iosroot`. Await the on-device console/photo or captured logs before any
+  further device command. Keybag absence was the known blocker; the new image
+  contains `/private/var/keybags/systembag.kb`.
+
 ### HANDOFF 2026-10-22: KEYBAG IMAGE BUILT; AWAIT FLASH CONFIRMATION
 
 - User repaired the separate keybag raw copy with `fsck.hfsplus -f -y` on a
