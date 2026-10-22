@@ -1,5 +1,35 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: A1 REACHED LAUNCHD JOBS; FIX TWO FOLLOW-UPS
+
+- User supplied output from two distinct boots. The first was this agent's
+  `/tmp/munch-ufs-launch-a1-boot.img`: `launchd_cache_loader` aborted with
+  `Unable to find AMFI`. That image accidentally omitted
+  `launchd_unsecure_cache=1`, which this AMFI-less kernel needs. This result is
+  a boot-argument mistake, not evidence of a new AMFI kernel regression.
+- The user's separate `/tmp/ios-munch-ufs-userspace-20261022-a1/` boot got
+  farther: launchd started jobs and SpringBoard, confirming the prior platform
+  kill is passed. Multiple daemons then failed because dyld could not find
+  `/usr/lib/libobjc-trampolines.dylib` in the cache. On the currently mounted
+  HFS+ source image, this file exists only at
+  `private/preboot/Cryptexes/OS/usr/lib/libobjc-trampolines.dylib`, not at the
+  root path; `ignition_level=1` does not search the cryptex for that load.
+- Prepared corrected temporary RAM boot A2 with the same kernel/ADT/DTB and
+  arguments `rd=ufsroot0 iosrootrw=1 unentitled_ios_sim_launch=1
+  ignition_level=1 launchd_unsecure_cache=1`. Payload SHA-256
+  `df69feafaec0d33516d4c25567b4d9a4d4edf268e958776e3039c56774c470cb`; boot
+  image `/tmp/munch-ufs-launch-a2-boot.img` SHA-256
+  `d5a0c74c46206dd2764623eed4470079e64f1c3b1032b4e09cfc26af7c3ecc43`.
+  Verified boot header v2. `fastboot devices` was empty at handoff, so A2 has
+  not been dispatched.
+- Next storage fix: on the host, add a hard link in the *local keybag raw
+  image copy* from
+  `private/preboot/Cryptexes/OS/usr/lib/libobjc-trampolines.dylib` to
+  `usr/lib/libobjc-trampolines.dylib`; validate, rebuild full sparse image,
+  check hash. Do not touch the phone until image inspection is complete; a
+  separately explicit confirmation is needed before flashing this changed
+  image. Never write `userdata`.
+
 ### HANDOFF 2026-10-22: RW BOOT REACHED OLD PLATFORM KILL; A1 RETRIED
 
 - User console confirms the keybag image boots read-write: UFS enumerates
