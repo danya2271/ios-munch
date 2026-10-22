@@ -1,6 +1,6 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
-### HANDOFF 2026-10-23: KONA AFF1 SMP PATCH CORRECTED, CI QUEUED
+### HANDOFF 2026-10-23: 0089 KERNEL PASSED, SWEETLOG REMOVED, CI RERUNNING
 
 - Observed: CI run `39841992478` reached the post-0088 source tree and rejected
   the old 0089 comment hunk. The following run `39843001146` was not a valid
@@ -13,16 +13,25 @@
 - Changed: commit `66f3336` adds validator checks for the direct Aff1 path and
   contextual patch shape. `python3 tools/validate-repo.py` passes all 89
   numbered patches and all script checks.
-- CI: run `39848369447` targets commit `3b6cfe0`; its first attempt waited for a
-  macOS runner for about 15 minutes and was cancelled without job steps or
-  artifacts. It has been rerun and is currently queued again. This is runner
-  capacity state, not a compiler error.
+- Observed: CI run `39848369447` for `3b6cfe0` completed successfully. The
+  kernel artifact `kernel.development.munch` is a valid ARM64 PIE and has
+  SHA-256 `2a7307211a6b782172ca6f380d253841e1d3d11455f03917a958339a3670fed9`.
+  Its working diagnostics are MUNCH; the sole `SWEET` string was the
+  persistent UFS-log magic `SWEETLOG`.
+- Changed: commit `533af54` changes that persistent UFS-log magic to
+  `MUNCHLOG`. CI run `39853721117` is building this final rebrand-only kernel.
+- Prepared: a RAM-only 8-CPU candidate using the successful 0089 kernel,
+  `/tmp/munch-init.macho` as a minimal MUNCH PID 1 root, the 8-CPU ADT
+  `/tmp/munch-8cpu-0089.adt`, and the live Munch DTB is
+  `/tmp/ios-munch-ram-8cpu-0089/shim-boot.img` (temporary SHA-256
+  `eac333c42de906e8318f8b628b712c3434d8407d0d2863f7ab0b112acf7cf715`). It is
+  not the final image because the CI kernel artifact is still downloading.
 - Device safety: `fastboot devices` and `adb devices -l` are empty. No
   `fastboot boot`, flash, UFS, userdata, GPT, or partition operation occurred.
-- Next: obtain a completed kernel artifact for `3b6cfe0`, verify MUNCH strings
-  and the eight-CPU topology, build the fresh RAM-only payload with
-  `/tmp/munch-8cpu-0089.adt`, then test only with temporary `fastboot boot`.
-  Do not reuse the old A3 image.
+- Next: wait for run `39853721117`, verify no `SWEET` strings in the kernel,
+  rebuild the RAM-only payload/boot image with its exact kernel, then test only
+  with temporary `fastboot boot`. Do not reuse the old A3 image or the
+  preliminary `eac333...` image once the final artifact is available.
 
 ### HANDOFF 2026-10-23: KONA MPIDR SMP FIX READY
 
