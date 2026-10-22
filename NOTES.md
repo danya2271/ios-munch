@@ -19,19 +19,23 @@
   Its working diagnostics are MUNCH; the sole `SWEET` string was the
   persistent UFS-log magic `SWEETLOG`.
 - Changed: commit `533af54` changes that persistent UFS-log magic to
-  `MUNCHLOG`. CI run `39853721117` is building this final rebrand-only kernel.
-- Prepared: a RAM-only 8-CPU candidate using the successful 0089 kernel,
-  `/tmp/munch-init.macho` as a minimal MUNCH PID 1 root, the 8-CPU ADT
-  `/tmp/munch-8cpu-0089.adt`, and the live Munch DTB is
-  `/tmp/ios-munch-ram-8cpu-0089/shim-boot.img` (temporary SHA-256
-  `eac333c42de906e8318f8b628b712c3434d8407d0d2863f7ab0b112acf7cf715`). It is
-  not the final image because the CI kernel artifact is still downloading.
+  `MUNCHLOG`. CI run `39853721117` for this commit completed successfully.
+- Prepared: the final RAM-only 8-CPU candidate is
+  `/tmp/ios-munch-ram-8cpu-final-533af54/shim-boot.img`, SHA-256
+  `b52ebccf4971043cb18a9797cd235253ac3228c9838f1568103fc5c72175b470`.
+  Its payload is `a5e0afb7cffaa53c8b3383183d1769b0c8c861caafd87017cf4c9389ba9433d6`,
+  kernel is
+  `4f15cbbbdceb20a933cb4f6bc5e49d11463f9af2e8847d7bfa6b87cd109fb76e`.
+  Boot-args are `debug=0xc serial=3 cpus=8 keepsyms=1 rd=md0
+  -enable_kprintf_spam -noprogress`; root is the minimal verified
+  `munch-init.macho`, not iOS userland. Unpacked DTB and payload match their
+  inputs byte-for-byte, and the kernel has no `SWEET` strings.
 - Device safety: `fastboot devices` and `adb devices -l` are empty. No
   `fastboot boot`, flash, UFS, userdata, GPT, or partition operation occurred.
-- Next: wait for run `39853721117`, verify no `SWEET` strings in the kernel,
-  rebuild the RAM-only payload/boot image with its exact kernel, then test only
-  with temporary `fastboot boot`. Do not reuse the old A3 image or the
-  preliminary `eac333...` image once the final artifact is available.
+- Next: with the phone in fastboot and product `munch`, test only
+  `fastboot boot /tmp/ios-munch-ram-8cpu-final-533af54/shim-boot.img`.
+  Capture the CPU startup and framebuffer logs. Do not flash anything and do
+  not touch UFS, GPT, `iosroot`, or `userdata`.
 
 ### HANDOFF 2026-10-23: KONA MPIDR SMP FIX READY
 
