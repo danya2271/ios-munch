@@ -1554,7 +1554,8 @@ index cd8cdcb2fe168fedf915e100e68289ad4f315f8b..5eabc7c217a21212cc335cab9d3e9264
  		if (!error) {
 -			struct sweet_log_header h = {
 +			struct munch_log_header h = {
- 				.magic = { 'S', 'W', 'E', 'E', 'T', 'L', 'O', 'G' },
+-				.magic = { 'S', 'W', 'E', 'E', 'T', 'L', 'O', 'G' },
++				.magic = { 'M', 'U', 'N', 'C', 'H', 'L', 'O', 'G' },
 -				.version = 1, .size = SWEET_LOG_SIZE, .total = total, .seq = ++seq,
 +				.version = 1, .size = MUNCH_LOG_SIZE, .total = total, .seq = ++seq,
  			};
