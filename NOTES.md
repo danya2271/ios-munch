@@ -1,5 +1,27 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: RW BOOT REACHED OLD PLATFORM KILL; A1 RETRIED
+
+- User console confirms the keybag image boots read-write: UFS enumerates
+  `iosroot`, HFS journal initializes, `iOSRoot` mounts, launchd is selected.
+  The screen shows the same known `unexpected SIGKILL of launchd (CS_KILLED)
+  ... namespace 9 code 0xe` platform-policy failure seen before the keybag
+  repair. UFS, HFS, keybag placement, and launchd loading are therefore no
+  longer the immediate blockers.
+- The prior `munch-ufs-userspace-a1` artifact was not retained. Rebuilt a
+  temporary RAM payload with the same CI kernel and UFS ADT, using
+  `rd=ufsroot0 iosrootrw=1 unentitled_ios_sim_launch=1 ignition_level=1`.
+  Payload SHA-256
+  `4f0b53eb432fd8c4eac5727454baa6217a8ec35f94797bdf8b073a3a34896e69`.
+- Boot image `/tmp/munch-ufs-launch-a1-boot.img`, SHA-256
+  `833db9945f6595c4992e4b83d2883802629dc96d92b837265dee7f6e3c59dd01`. After
+  the user returned the phone to fastboot, preflight confirmed product
+  `munch`, and `fastboot boot` completed successfully (`Sending OKAY
+  0.365s`, `Booting OKAY 0.226s`).
+- Await fresh console/photo or logs. No further device command until the user
+  reports the result. This is a temporary RAM boot; it does not flash or erase
+  anything.
+
 ### HANDOFF 2026-10-22: KEYBAG IMAGE FLASHED; RW BOOT DISPATCHED
 
 - User explicitly confirmed flashing the verified keybag image. Fastboot
