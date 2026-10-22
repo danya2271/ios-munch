@@ -1,5 +1,33 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: 8-CPU READ-ONLY RAM IMAGE READY
+
+- GitHub Actions XNU run `39780417091` completed successfully for commit
+  `152887d66ec74c3397e8d644d0c1765e44cf58c8`. Kernel artifact SHA-256:
+  `92b48bfe0c1b16d12d548eb97379caafbba54690c1456037eae7207f8298cbf5`.
+- The UFS ADT `/tmp/munch-8cpu-39780417091.adt` is 13,548 bytes, SHA-256
+  `bc14a23ac7c9c6b6ebec918925a988983325b5cba67c92aa14648f655678e002`.
+  Inspection confirms CPU0-3 are E (capacity 448) and CPU4-7 are P (three
+  capacity 1023, prime capacity 1024); DRAM base/size are `0x100000000` /
+  `0xfcc00000`.
+- Built an XNU payload with
+  `debug=0xc serial=3 cpus=8 keepsyms=1 rd=ufsroot0 iosrootrw=0
+  unentitled_ios_sim_launch=1 ignition_level=1 launchd_unsecure_cache=1`.
+  Payload SHA-256: `45137127596aa217cf68cf2a981c43498f13101c871a13c4e5ec5a78ec31d319`.
+- Packed Android boot v2 image at
+  `/home/danya2271/Загрузки/ios-munch-20H392/munch-8cpu-ro-20261022.img`,
+  SHA-256 `17c0923be5a63397d26b7185681d87d70eacb9755562d7bfe7ca5c85b6578270`.
+  Verified v2 header and byte-equal embedded shim and XNU payload. This is a
+  temporary boot image, not a flashable partition image.
+- `fastboot devices` and `adb devices -l` currently show no device. No boot,
+  flash, partition, userdata, or GPT operation occurred. Next: reconnect the
+  phone in fastboot, confirm product `munch`, then run only
+  `fastboot boot /home/danya2271/Загрузки/ios-munch-20H392/munch-8cpu-ro-20261022.img`.
+  Capture the CPU startup lines; expect XNU to report the requested/selected
+  CPU count and per-core PSCI bring-up. `iosrootrw=0` keeps this test read-only.
+- Existing user edits to patch names and the untracked `--help` file were left
+  untouched.
+
 ### HANDOFF 2026-10-22: A77 CPU PROFILE CORRECTED
 
 - Corrected active MUNCH CPU identity in patch 0088 and porting docs:
