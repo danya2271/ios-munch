@@ -132,6 +132,26 @@ recipe:
 | `sweetfb_hz=30` | Panel refresh rate of the CPU copy |
 | `sweettouch=0`, `sweetkeys=0` | Disable the touch or button driver |
 
+### Build a temporary MUNCH RAM boot image
+
+For the diagnostic RAM-only path, use one script. It generates an upper-bank
+Munch ADT, packs a small RAM root, embeds the `MUNCHXNU` payload as the Android
+ramdisk, and verifies the unpacked image:
+
+```sh
+tools/mkram-boot.sh \
+  --kernel xnu/out/RUN_ID/kernel.development.munch \
+  --dtb /tmp/munch-live.dtb \
+  --out /tmp/munch-ram-8cpu \
+  --cp-macho /tmp/munch-init.macho \
+  --cpus 8
+fastboot boot /tmp/munch-ram-8cpu/shim-boot.img
+```
+
+`--cpus 1` is the safe fallback. The script prints SHA-256 hashes and refuses to
+overwrite an existing image. It never runs `fastboot` and never touches
+partitions or `userdata`.
+
 ### 4. Device testing boundary
 
 Device tests are limited to temporary `fastboot boot` images. Do not flash a
