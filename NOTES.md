@@ -1,5 +1,22 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: TRAMPOLINE FIX CONFIRMED; NEXT CONSOLE TRACE
+
+- User flashed the trampoline-patched sparse candidate and booted the A2 RAM
+  image. The previous dyld failures for `/usr/lib/libobjc-trampolines.dylib`
+  no longer appear. Userspace now starts many more launchd jobs, including
+  `assetsd`, `suggestd`, `bluetoothd`, `fairplayd.H2`, `medialibraryd`,
+  `fileproviderd`, `nesessionmanager`, `symptomsd-diag`, `spindump`, `searchd`,
+  `com.apple.datamigrator` and `OTATaskingAgent`.
+- The supplied excerpt does not show `SpringBoard`; `bluetoothd` and
+  `fairplayd.H2` appear repeatedly without visible crash reasons. This is
+  progress, but not yet proof of a usable GUI.
+- Next offline debug image: mount the verified raw candidate, add
+  `/dev/console` stdout/stderr and `OS_ACTIVITY_DT_MODE=YES` /
+  `CFLOG_FORCE_STDERR=1` to the visible restart loops plus SpringBoard and
+  display/media jobs, rebuild sparse, then require explicit user confirmation
+  before flashing `iosroot`. Do not touch `userdata`.
+
 ### HANDOFF 2026-10-22: TRAMPOLINE PATCH CANDIDATE READY
 
 - User's root-shell patch completed successfully on the local raw keybag image.
