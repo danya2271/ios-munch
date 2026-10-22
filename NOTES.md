@@ -10,19 +10,20 @@
   cryptex/root linking logic. It is not a drop-in fix for MUNCH because its
   scripts, job lists, init and APFS format target HackiOS's loader/kernel and
   redwood (POCO X5 Pro), not our MUNCH XNU/UEFI flow.
-- Found the likely reason the flashed 20H392 image lacks root-level cryptex
-  hard links: an earlier build created a large temporary workspace on `/tmp`
-  (a 32 GiB tmpfs), so `rsync -aH` was probably run with limited heap and
-  aborted before it reached the cryptex-link loop. Also confirmed from the
-  original mounted OS image that `libobjc-trampolines.dylib` exists only under
-  `private/preboot/Cryptexes/OS/usr/lib/`; without the root-level link, the A1
-  failures are expected.
+- Confirmed the flashed candidate lacks root-level copies of the cryptex-only
+  `libobjc-trampolines.dylib`, `libffi-trampolines.dylib` and `libstdc++` files;
+  the userland log's dyld failure is consistent with this. The current builder
+  contains a generic cryptex-link loop, but the exact reason this older image
+  does not contain those files is not yet established. `/tmp` is a nearly full
+  32-GiB tmpfs; possible pressure during the prior image build is only a
+  hypothesis, not a verified cause.
 - Patched `tools/mkiosroot.sh` to create its workspace in the current
-  filesystem rather than tmpfs, preventing future silent partial builds. A
-  complete image rebuild still requires user-side `sudo`; current access is
-  password-protected. We only need a byte-level rebuild for this next test: the
-  flashed image is sparse and can remain sparse on disk while mounted through
-  `qemu-nbd`.
+  filesystem rather than tmpfs, avoiding pressure on `/tmp` during future
+  rebuilds. Current root access is password-protected. The next test candidate
+  can be made by copying the missing small libraries from the OS cryptex in the
+  raw keybag image; use a 16-GiB-limited loop device because the HFSX volume is
+  smaller than the raw 28-GiB partition image. Rebuild the Android sparse
+  image after offline validation; do not flash without separate confirmation.
 
 - User supplied output from two distinct boots. The first was this agent's
   `/tmp/munch-ufs-launch-a1-boot.img`: `launchd_cache_loader` aborted with
