@@ -1,5 +1,21 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22 10:28 +05: READ-ONLY UFS PROBE DISPATCHED
+
+- Confirmed the connected device in fastboot: serial `7c8c92ae`, product
+  `munch`.
+- Verified the temporary image SHA-256 before boot:
+  `e5e429e672f7bd849855c005000ae2b33800f36c0ee77e922e8d06148322147c`.
+- Ran only `fastboot boot` for
+  `/home/danya2271/Загрузки/ios-munch-install-20H392/shim-boot-ufs-iosroot.img`.
+  Fastboot reported `Sending 'boot.img' (17136 KB) OKAY [0.364s]`,
+  `Booting OKAY [0.228s]`, total `0.601s`.
+- No partition was flashed, erased, mounted, or otherwise written; `userdata`
+  was not accessed. Do not issue another device command until the user reports
+  the screen or provides the boot logs. The expected first result is UFS/GPT
+  enumeration followed by an HFS+ mount failure because the phone's current
+  `iosroot` contents are still F2FS.
+
 ### HANDOFF 2026-10-22: UFS ROOT CANDIDATE AND READ-ONLY BOOT IMAGE PREPARED
 
 - Prepared the existing iOS 16.7.16 (`20H392`) HFS+ root as a local install
