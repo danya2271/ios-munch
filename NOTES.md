@@ -1,5 +1,23 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: KERNEL BUILD REACHED COMPILER; FIXED TABLE STRING
+
+- Observed: CI run `39832968199` applied all 88 numbered project patches and
+  continued past DXB's own optional patches. The first compiler error was in
+  `iokit/KernelConfigTables.cpp:83`: the MunchBattery table's final C++ string
+  literal lacked its closing quote. The build therefore exited 2; no usable
+  kernel artifact was produced.
+- Changed: patch 0088 now closes that table string with `"   },"`.
+- Observed: repo validator and `git diff --check` pass. To test in the right
+  context, the previous successful full replay was copied to a temporary tree,
+  old 0088 was reverse-applied to recover post-0087 inputs, and the corrected
+  0088 passed apply-check/application. `clang++ -fsyntax-only -Werror` on the
+  resulting `KernelConfigTables.cpp` passes.
+- Device safety: ADB device is disconnected. No fastboot boot, flash, UFS,
+  userdata, GPT, or partition operation occurred.
+- Next: commit/push this compile fix and inspect the next CI run for further
+  compiler errors. Do not prepare a boot image until a kernel artifact builds.
+
 ### HANDOFF 2026-10-22: SCOPE CI FAIL-CLOSED TO OUR PATCH SERIES
 
 - Observed: commit `41d4dbb` fixed the generated Xcode `TargetConditionals.h`

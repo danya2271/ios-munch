@@ -6825,7 +6825,7 @@ index 9d269d70dbee1987bb86f70966db244f6f4b3593..82f23a928f109e0ca7207ccbd0dee6ee
 +    "     'IOClass'         = MunchBattery;"
 +    "     'IOProviderClass' = IOResources;"
 +    "     'IOMatchCategory' = MunchBattery;"
-+    "   },
++    "   },"
  #endif
      "   {"
      "     'IOClass'         = IOPanicPlatform;"
