@@ -1,0 +1,30 @@
+diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+index 7007774..4c1c490 100644
+--- a/iokit/KernelConfigTables.cpp
++++ b/iokit/KernelConfigTables.cpp
+@@ -82,6 +82,25 @@ const char * gIOKernelConfigTables =
+     "     'IOProviderClass' = IOResources;"
+     "     'IOMatchCategory' = MunchBattery;"
+     "   },"
++    "   {"
++    "     'IOClass'         = AppleM2ScalerCSCDriver;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = AppleM2ScalerCSCDriver;"
++    "     'IOSurfaceAcceleratorCapabilitiesDict' = {"
++    "       'IOSurfaceAcceleratorCapabilitiesColorManager' = 1:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesIdentityCSC' = 1:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesHDR' = 1:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxSourceWidth' = 4096:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxSourceHeight' = 4096:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxDestWidth' = 4096:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxDestHeight' = 4096:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxHUpscale' = 16:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxHDownscale' = 16:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxVUpscale' = 16:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesMaxVDownscale' = 16:32;"
++    "       'IOSurfaceAcceleratorCapabilitiesScalerVersion' = 2:32;"
++    "     };"
++    "   },"
+ #endif
+     "   {"
+     "     'IOClass'         = IOPanicPlatform;"
