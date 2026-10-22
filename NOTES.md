@@ -1,5 +1,19 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22: READ-ONLY HOST MOUNT CONFIRMED; KEYBAG ABSENT
+
+- User successfully mounted the raw image read-only after limiting the loop
+  device to 16 GiB (`losetup --sizelimit 17179869184`). This confirms the
+  28-GiB container tail caused the earlier whole-device mount failure.
+- The mounted source has no `/private/var/keybags` directory and no
+  `systembag.kb`. The user unmounted and detached the read-only loop device;
+  no image writes or phone operations occurred.
+- Next: create a separate sparse raw copy, attach it writable with the same
+  16-GiB size limit, add the root-owned keybag plist, cleanly unmount, then
+  convert the full 28-GiB raw copy to Android sparse format. Preserve the
+  original raw and sparse images. Do not flash until the generated image is
+  checked and separately confirmed.
+
 ### HANDOFF 2026-10-22 12:48 +05: HOST IMAGE MOUNT SIZE MISMATCH FOUND
 
 - User attempted a read-only mount of the 28-GiB raw container as a whole. The
