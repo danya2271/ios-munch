@@ -242,14 +242,15 @@ available.
 The local Munch kernel DTS and reconstructed live tree agree on eight CPU nodes
 with MPIDRs `0x000` through `0x700`. `kona.dtsi` groups cores 0-3 into
 frequency domain 0, cores 4-6 into domain 1, and core 7 into domain 2, with
-capacities 448, 1023, and 1024 respectively. The generated Munch ADT retains
-all CPUs as one `cluster-type = 0` SMP cluster because the current XNU port does
-not implement heterogeneous scheduling. All eight CPU nodes use
+capacities 448, 1023, and 1024 respectively. The Snapdragon 870 uses four
+Cortex-A55 efficiency cores and four Cortex-A77 performance cores (three big
+plus one prime). The generated Munch ADT exposes those as E/P classes instead
+of the donor's homogeneous cluster. All eight CPU nodes use
 `compatible = "qcom,kryo"`; before patch 0082, `SweetCPU` matched only
 `qcom,kryo470`, so the driver would not bind to the generated Munch CPUs. Patch
 0082 adds the missing match without changing the SWEET DT compatibility entry.
-The driver still reports the cosmetic name `Kryo 470`, and topology/power
-management is not a Munch-specific implementation.
+The Munch driver reports the correct `Kryo 585` personality; topology and power
+management remain Munch-specific bring-up work.
 
 ## XNU machine-config boundary
 

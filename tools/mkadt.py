@@ -155,9 +155,10 @@ def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dra
         # with CSR_ALLOW_UNRESTRICTED_FS (vm_unix.c shared region checks).
         node('asmb', [ph(), ('lp-sip0', u64(0x6f)), ('lp-sip1', u32(1))])])
 
-    # The donor SWEET profile and the Munch profile both expose Aff1:Aff0
-    # MPIDRs. Munch's actual Kona topology is 4 little + 3 big + 1 prime;
-    # the current XNU patches still treat the CPUs as one generic cluster.
+    # The donor profile and Munch both expose Aff1:Aff0 MPIDRs. Munch's Kona
+    # topology is four A55 efficiency cores plus three A77 big cores and one
+    # A77 prime;
+    # XNU's two-class AMP scheduler groups the latter four as P CPUs.
     # QEMU retains its original single-CPU tree: its MPIDR differs from phone.
     cpu_nodes = []
     for core in range(1 if qemu else 8):
@@ -166,11 +167,13 @@ def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dra
             freq_domain = 0 if core < 4 else 1 if core < 7 else 2
             capacity = 448 if core < 4 else 1023 if core < 7 else 1024
             dynamic_power = 89 if core < 4 else 304 if core < 7 else 386
+            cluster_type = ord('E') if core < 4 else ord('P')
         else:
             cpu_compatible = ('qcom,kryo470', 'ARM,v8')
             freq_domain = None
             capacity = None
             dynamic_power = None
+            cluster_type = 0
         cpu_nodes.append(node(f'cpu{core}', [
             ph(),
             ('device_type', cstr('cpu')),
@@ -178,7 +181,7 @@ def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dra
             ('reg', u32(core << 8)),  # actual MPIDR Aff1:Aff0, NOT logical ID
             ('cpu-id', u32(core)),   # descriptive: XNU assigns IDs by DT order
             ('cluster-id', u32(0)),  # descriptive; see ml_parse_cpu_topology
-            ('cluster-type', u32(0)),  # homogeneous CLUSTER_TYPE_SMP, not AMP
+            ('cluster-type', u32(cluster_type)),
             ('die-cluster-id', u32(0)),
             ('cluster-core-id', u32(core)),
             ('l2-cache-id', u32(core)),  # distinct per-core L2 nodes in live FDT
@@ -223,12 +226,12 @@ def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dra
         node('disp0', [
             ph(),
             ('device_type', cstr('display-subsystem')),
-            ('compatible', cstr('sweet,display') + cstr(display_compatible) if munch else cstr(display_compatible)),
+            ('compatible', cstr(display_compatible)),
             ('canvas-width', u32(display_w)),
             ('canvas-height', u32(display_h)),
         ])])
 
-    fbcon = node('sweet-fbcon', [
+    fbcon = node('munch-fbcon' if munch else 'sweet-fbcon', [
         ph(),
         ('reg', u64(fb, fb_size)),
         ('width', u32(FB_W)),
@@ -262,7 +265,7 @@ def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dra
 
     # Identity of the iPhone X whose userland runs here: compatible[0] is
     # hw.model/hw.target (D22AP), model is hw.machine/hw.product
-    # (iPhone10,3). 'xiaomi,sweet' stays for SweetPlatformExpert matching.
+    # (iPhone10,3); the host-specific platform match stays Munch-only.
     children = [chosen, defaults, cpus, arm_io, fbcon, buttons] + product
     if not qemu and not ram_only and (not munch or ufs_enabled):
         children.append(ufs)
@@ -270,7 +273,7 @@ def build(seed=None, qemu=False, highmem=False, munch=False, dram_base=None, dra
     return node('device-tree', [
         ph(),
         ('compatible', cstr('D22AP') + cstr('iPhone10,3') +
-         (cstr('xiaomi,sweet') + cstr('xiaomi,munch') if munch else cstr('xiaomi,sweet')) +
+         cstr('xiaomi,munch' if munch else 'xiaomi,sweet') +
          cstr('qcom,sm8250' if munch else 'qcom,sm7150') + cstr('AppleARM')),
         ('model', cstr('iPhone10,3')),
         ('target-type', cstr('D22')),

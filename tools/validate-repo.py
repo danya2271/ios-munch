@@ -164,6 +164,84 @@ def validate_munch_build_plumbing():
     return True
 
 
+def validate_munch_adt():
+    import mkadt
+
+    original_product = mkadt.d22ap_product
+    mkadt.d22ap_product = lambda path=None: None
+    try:
+        root = mkadt.build(munch=True, dram_base=0x80000000,
+                           dram_size=0x80000000, seed=bytes(64))
+    finally:
+        mkadt.d22ap_product = original_product
+
+    def prop(node, name):
+        for key, _flags, value in node.props:
+            if key == name:
+                return value
+        return None
+
+    def child(node, name):
+        return next((entry for entry in node.children if entry.name == name), None)
+
+    def number(node, name):
+        value = prop(node, name)
+        return int.from_bytes(value, 'little') if value is not None else None
+
+    errors = []
+    compatible = prop(root, 'compatible') or b''
+    if b'xiaomi,munch\0' not in compatible or b'xiaomi,sweet\0' in compatible:
+        errors.append('root compatible must expose only the Munch platform identity')
+    fbcon = child(root, 'munch-fbcon')
+    if fbcon is None or child(root, 'sweet-fbcon') is not None:
+        errors.append('framebuffer console node must be named munch-fbcon')
+    arm_io = child(root, 'arm-io')
+    disp0 = child(arm_io, 'disp0') if arm_io else None
+    display_compatible = prop(disp0, 'compatible') if disp0 else b''
+    if b'munch,display\0' not in (display_compatible or b'') or b'sweet,display\0' in (display_compatible or b''):
+        errors.append('display node must expose only the Munch compatible')
+
+    cpus = child(root, 'cpus')
+    cpu_nodes = cpus.children if cpus else []
+    expected_types = [ord('E')] * 4 + [ord('P')] * 4
+    expected_domains = [0] * 4 + [1] * 3 + [2]
+    expected_capacities = [448] * 4 + [1023] * 3 + [1024]
+    if len(cpu_nodes) != 8:
+        errors.append(f'expected eight CPU nodes, found {len(cpu_nodes)}')
+    else:
+        for index, cpu in enumerate(cpu_nodes):
+            if number(cpu, 'cluster-type') != expected_types[index]:
+                errors.append(f'cpu{index} has the wrong E/P cluster type')
+            if number(cpu, 'qcom,freq-domain') != expected_domains[index]:
+                errors.append(f'cpu{index} has the wrong Qualcomm frequency domain')
+            if number(cpu, 'capacity-dmips-mhz') != expected_capacities[index]:
+                errors.append(f'cpu{index} has the wrong capacity')
+
+    cpu_source = os.path.join(REPO_ROOT, 'xnu', 'patches',
+                              '0088-munch-rebrand-amp-topology.patch')
+    try:
+        cpu_text = open(cpu_source, errors='replace').read()
+    except OSError as exc:
+        errors.append(f'cannot read Munch CPU patch ({exc})')
+    else:
+        added_cpu_text = '\n'.join(
+            line[1:] for line in cpu_text.splitlines()
+            if line.startswith('+') and not line.startswith('+++'))
+        if 'Cortex-A77' not in added_cpu_text or 'Cortex-A76' in added_cpu_text:
+            errors.append('active Munch CPU profile must identify A77, not A76')
+        if 'Snapdragon 870' not in added_cpu_text or 'Kryo 585' not in added_cpu_text:
+            errors.append('active Munch CPU profile must identify Snapdragon 870/Kryo 585')
+
+    if errors:
+        print(red('[-] Munch ADT validation failed:'))
+        for error in errors:
+            print(f'    - {error}')
+        return False
+
+    print(green('[✓] Munch ADT exposes eight CPUs, E/P classes and Munch-only names'))
+    return True
+
+
 def validate_userdata_safety():
     path = os.path.join(REPO_ROOT, 'tools/munch-log-pull.sh')
     try:
@@ -254,13 +332,14 @@ def main():
     print(bold("=== Running ios-munch Repository Validation ==="))
     ok_patches = validate_patches(a.verbose)
     ok_munch = validate_munch_build_plumbing()
+    ok_munch_adt = validate_munch_adt()
     ok_userdata = validate_userdata_safety()
     ok_live_fdt = validate_live_fdt_helper()
     ok_shim_storage = validate_ram_only_shim()
     ok_python = validate_python_scripts(a.verbose)
     ok_shell = validate_shell_scripts(a.verbose)
 
-    if ok_patches and ok_munch and ok_userdata and ok_live_fdt and ok_shim_storage and ok_python and ok_shell:
+    if ok_patches and ok_munch and ok_munch_adt and ok_userdata and ok_live_fdt and ok_shim_storage and ok_python and ok_shell:
         print(bold(green("\nAll repository integrity checks PASSED successfully!")))
         return 0
     else:
