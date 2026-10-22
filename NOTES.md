@@ -1,5 +1,20 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-22 11:15 +05: UFS ROOT REACHED LAUNCHD; NEXT USERSPACE BOOT
+
+- The earlier "UFS writes failing" conclusion was wrong: the latest read-write
+  boot did write successfully (`SWEET UFS: WRITE lba 0x2c400 +1 == 512 bytes:
+  OK`) and then reached Apple launchd.
+- The `SIGKILL` (`namespace 9 code 0xe`) is the known OS X-config rejection of
+  iOS-platform binaries first observed on 2026-10-15, not a storage failure.
+- New diagnostic payload `munch-ufs-userspace-a1` adds
+  `unentitled_ios_sim_launch=1`, retains `ignition_level=1`, and uses the
+  normal release launchd cache. Payload SHA256
+  `9021a45ae65bba772f27bb9dc5dbeb780e2cb00d55d3e1424c49a39336dca3b9`; boot
+  image SHA256 `404c6381ae30b49ba11dca7d4afdd5be44e8a6ec502d15bff9568537dc95caac`.
+- Continue with temporary `fastboot boot` only. Writes remain restricted to the
+  dedicated `iosroot` partition.
+
 ### HANDOFF 2026-10-22 10:55 +05: HFS+ IOSROOT INSTALLED; RAM BOOT RETRIED
 
 - After explicit user confirmation, verified from OrangeFox that
