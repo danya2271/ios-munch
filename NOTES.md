@@ -51,6 +51,14 @@
   SHA-256, then start the receiver in one terminal before `fastboot boot` in
   another; expect host CDC-ECM detection and `MUNCH USB: configured` before
   relying on the UDP log stream.
+- User confirms the `boot.img` SHA matches the new candidate and repeated the
+  receiver-before-boot sequence, with no change: it still waits for USB
+  Ethernet. Wrong image and command order are therefore ruled out. Kernel
+  `ue0 up` only means its internal ifnet exists; the host has not confirmed
+  CDC-ECM enumeration. Next evidence needed, without rebuilding: capture host
+  `dmesg -w` and `ip monitor link` from before `fastboot boot`, plus the full
+  device `MUNCH USB` sequence (`running`, endpoint setup, connect, ECM, and
+  `configured` messages) up to the black screen/reset.
 
 ### HANDOFF 2026-10-23: DIRECT FRAMEBUFFER DIAGNOSTIC IMAGE READY
 
