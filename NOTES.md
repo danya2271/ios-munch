@@ -1,29 +1,43 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
-### HANDOFF 2026-10-23: FRAMEBUFFER DIAGNOSTIC PATCH PENDING CI
+### HANDOFF 2026-10-23: DIRECT FRAMEBUFFER DIAGNOSTIC IMAGE READY
 
 - Root cause for the console disappearing: patch 0088 sets
   `munch_console_muted` at the start of `present()`, before checking whether a
   valid IOSurface was copied. With `munchfb_noconsole=1`, even a failed/empty
   first swap can hide the console.
-- Commit `c4ff1d9` plus new patch 0092 add a diagnostic
+- Commit `955e8f9` (pushed to `main`) adds patch 0092, which adds a diagnostic
   `munchfb_direct=1` path that calls `present()` immediately in `swap()`,
   bypassing the 10 Hz/30 Hz buffered present. The default buffered path is
   unchanged. The patch also limits SwapEnd logging to 16 records and only
   allows `munchfb_noconsole=1` to mute the console after bytes have actually
   reached the panel surface.
+- CI run `39915798147` built the kernel and completed all build/artifact
+  steps successfully; the GitHub run wrapper still reported `in_progress`
+  during final job completion polling. The ARM64 Mach-O kernel checksum
+  passed: `4015d5b624bb7e7a50d175af885f21493a245339a9440af18fd889bff71fdd2e`.
+  It contains `MUNCH FB: SwapEnd`, `munchfb_direct`, and `MUNCHLOG`.
 - Patch 0092 was verified with `git apply --check` and applied once to the
   exact `iokit/Kernel/arm/MunchFramebuffer.cpp` from CI run
   `39909803029`. It passed review of the resulting `swap()`/`present()` order.
   `python3 tools/validate-repo.py` and `git diff --check` pass.
+- Built a separate UFS RW, 8-CPU diagnostic image at
+  `/home/danya2271/ios-munch-artifacts/run-39915798147/ufs-8cpu-fb-direct-diagnostic/shim-boot.img`.
+  SHA-256: `03f2005a91d634bd015d14b0645060a3f38d05e0241778875dc7c44fc52545ed`.
+  Payload round-trip and DTB equality passed. Arguments include
+  `rd=ufsroot0 iosrootrw=1 cpus=8 munchfb_direct=1 munchfb_hz=30`; they omit
+  `munchfb_noconsole`. This is diagnostic, not a confirmed display fix.
 - Expected log if backboardd reaches IOSurface: `MUNCH FB: SwapEnd` and
   `MUNCH FB: swap ...`. If neither appears, the failure is above framebuffer
   presentation; if they appear but the screen stays blank, inspect the logged
   surface format/geometry. Do not use `munchfb_noconsole=1` for the next
   diagnostic boot.
-- Next: commit/push, wait for a successful CI kernel, then build an 8-CPU
-  UFS RW boot candidate with `rd=ufsroot0 iosrootrw=1 cpus=8
-  munchfb_direct=1 munchfb_hz=30` and no `munchfb_noconsole`.
+- No phone command was run; no UFS, GPT, `iosroot`, or `userdata` contents
+  changed. Next test, only after the user reconnects the device in fastboot:
+  `fastboot boot /home/danya2271/ios-munch-artifacts/run-39915798147/ufs-8cpu-fb-direct-diagnostic/shim-boot.img`.
+  Capture `MUNCH FB: SwapEnd` plus `MUNCH FB: swap` records and whether the
+  screen shows an image. Preserve the current Android bootloader/recovery and
+  all partition backups.
 
 ### HANDOFF 2026-10-23: SCALER CANDIDATE BUILT, DEVICE TEST PENDING
 
