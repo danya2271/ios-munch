@@ -19,10 +19,12 @@
   with the patch applied: 0 of 1 files failed. `tools/validate-repo.py` and
   `git diff --check` pass. CI run `39915798147` itself completed successfully
   in 8m23s; its build-tree artifact was downloaded outside the repository.
-- Next: commit, push, and build with `gh`; then package a temporary
-  UFS RW / 8-CPU image with both `munchfb_direct=1` and
+  Built UFS RW / 8-CPU image with both `munchfb_direct=1` and
   `munchfb_noconsole=1`. This is for `fastboot boot` only; do not flash or
   modify UFS, GPT, `iosroot`, or `userdata`.
+  Next: boot it when the phone appears in fastboot, capture the first
+  `MUNCH FB: SwapEnd`/`MUNCH FB: swap` lines, and report whether the lock
+  screen is visible.
 
 ### HANDOFF 2026-10-23: DIRECT FRAMEBUFFER DIAGNOSTIC IMAGE READY
 
