@@ -24,12 +24,19 @@
   unexpected level-0 source returns false; `munch_touch_init()` consequently
   skips serial-engine initialization. Do not rewrite the shared GCC/DFS clock
   configuration without identifying its correct clock integration.
-- Fastboot enumeration returned no device after this report. The new image is
-  built but not booted; no device storage was changed. Next: start
-  `tools/munch-usbnet.sh /tmp/munch-fb-live.log`, then use `fastboot boot` with
-  the image above. Inspect `MUNCH FB: SwapEnd`, `MUNCH FB: swap`, and
-  `MUNCH USB` lines, and note whether framebuffer text or the lock screen is
-  visible. Temporary boot only; do not flash or modify UFS/GPT/partitions.
+- User reports testing from a separate computer. The new candidate was booted,
+  reached the shown early XNU initialization (`mcache: 8 CPU(s)`), then
+  rebooted into Android. No panic or reset cause is present in the excerpt;
+  there are no shown root-mount, launchd, or framebuffer lines. The build
+  computer's empty fastboot enumeration is unrelated to the test host.
+- The excerpt's `MUNCH USB: ue0 192.168.7.2/24 up` shows the kernel created its
+  USB network interface; it does not by itself confirm the host-side ECM
+  configuration or UDP log stream. The candidate still has `iosrootrw=1` and
+  must remain temporary-boot only; no flashing was done by the build host.
+- Next: on the test computer, inspect the saved log tail at
+  `/tmp/munch-fb-live.log`, especially the final 250 lines and any `panic`,
+  `MACH Reboot`, `MUNCH FB`, `MUNCH USB: configured`, or root-mount messages.
+  Do not build another kernel until the reboot point/reason is known.
 
 ### HANDOFF 2026-10-23: DIRECT FRAMEBUFFER DIAGNOSTIC IMAGE READY
 
