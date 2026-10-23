@@ -24,11 +24,11 @@
   unexpected level-0 source returns false; `munch_touch_init()` consequently
   skips serial-engine initialization. Do not rewrite the shared GCC/DFS clock
   configuration without identifying its correct clock integration.
-- User reports testing from a separate computer. The new candidate was booted,
-  reached the shown early XNU initialization (`mcache: 8 CPU(s)`), then
-  rebooted into Android. No panic or reset cause is present in the excerpt;
-  there are no shown root-mount, launchd, or framebuffer lines. The build
-  computer's empty fastboot enumeration is unrelated to the test host.
+- User reports testing from a separate computer. The new candidate was booted;
+  the display went black and the phone rebooted to Android after the shown
+  early XNU output ending at `mcache: 8 CPU(s)`. The excerpt contains no panic
+  or reset cause and no shown root-mount, launchd, or framebuffer lines. The
+  build computer's empty fastboot enumeration is unrelated to the test host.
 - The excerpt's `MUNCH USB: ue0 192.168.7.2/24 up` shows the kernel created its
   USB network interface; it does not by itself confirm the host-side ECM
   configuration or UDP log stream. The candidate still has `iosrootrw=1` and
