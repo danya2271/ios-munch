@@ -33,10 +33,13 @@
   USB network interface; it does not by itself confirm the host-side ECM
   configuration or UDP log stream. The candidate still has `iosrootrw=1` and
   must remain temporary-boot only; no flashing was done by the build host.
-- Next: on the test computer, inspect the saved log tail at
-  `/tmp/munch-fb-live.log`, especially the final 250 lines and any `panic`,
-  `MACH Reboot`, `MUNCH FB`, `MUNCH USB: configured`, or root-mount messages.
-  Do not build another kernel until the reboot point/reason is known.
+- The test computer reports `/tmp/munch-fb-live.log` does not exist, so the
+  failed boot's USB output was not saved at that path. On the next attempt,
+  start `./munch-usbnet.sh /tmp/munch-fb-live.log` before booting the same
+  image; the script only saves output when given a logfile argument. Then
+  inspect the tail for `panic`, `MACH Reboot`, `MUNCH FB`,
+  `MUNCH USB: configured`, and root-mount messages. Do not build another
+  kernel until the reboot point/reason is known.
 
 ### HANDOFF 2026-10-23: DIRECT FRAMEBUFFER DIAGNOSTIC IMAGE READY
 
