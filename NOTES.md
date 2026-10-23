@@ -40,6 +40,17 @@
   inspect the tail for `panic`, `MACH Reboot`, `MUNCH FB`,
   `MUNCH USB: configured`, and root-mount messages. Do not build another
   kernel until the reboot point/reason is known.
+- The user then ran `fastboot boot boot.img` and started the receiver, which
+  stayed at `waiting for the phone's USB Ethernet` for about 15 seconds before
+  being interrupted. The logfile is opened only after the host detects the
+  CDC-ECM interface, so its absence is expected while waiting. The old
+  `ufs-8cpu-fb-direct-noconsole` image has no `munchusb=2`; only the newer
+  `ufs-8cpu-fb-serial-log` image has it (SHA-256
+  `94358d2dab64f8a467fef0cfc04430cce0226125c40fb696287f5f1504196b8a`). The
+  test-host `boot.img` identity has not yet been verified. Next: verify its
+  SHA-256, then start the receiver in one terminal before `fastboot boot` in
+  another; expect host CDC-ECM detection and `MUNCH USB: configured` before
+  relying on the UDP log stream.
 
 ### HANDOFF 2026-10-23: DIRECT FRAMEBUFFER DIAGNOSTIC IMAGE READY
 
