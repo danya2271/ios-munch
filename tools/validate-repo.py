@@ -191,16 +191,21 @@ def validate_munch_ci_fail_closed():
 
 
 def validate_munch_framebuffer_patch():
-    path = os.path.join(REPO_ROOT, 'xnu/patches',
-                        '0092-munch-framebuffer-direct-diagnostics.patch')
+    paths = (
+        os.path.join(REPO_ROOT, 'xnu/patches',
+                     '0092-munch-framebuffer-direct-diagnostics.patch'),
+        os.path.join(REPO_ROOT, 'xnu/patches',
+                     '0093-munch-framebuffer-retain-direct-frame.patch'),
+    )
     try:
-        text = open(path, errors='replace').read()
+        text = '\n'.join(open(path, errors='replace').read() for path in paths)
     except OSError as exc:
         print(red(f'[-] MUNCH framebuffer validation failed: {exc}'))
         return False
 
     required = ('munchfb_direct', 'present(rec);', 'MUNCH FB: SwapEnd',
-                'copied = true;', 'if (copied && !fConsolePaused)')
+                'copied = true;', 'if (copied && !fConsolePaused)',
+                'memcpy(fPending, rec, MUNCH_FB_SWAP_REC_SIZE);')
     errors = [f'missing framebuffer diagnostic behavior: {needle!r}'
               for needle in required if needle not in text]
     copied_at = text.find('copied = true;')
@@ -214,7 +219,7 @@ def validate_munch_framebuffer_patch():
             print(f'    - {error}')
         return False
 
-    print(green('[✓] MUNCH framebuffer has direct mode and copy-gated console mute'))
+    print(green('[✓] MUNCH framebuffer retains direct frames and gates console mute'))
     return True
 
 

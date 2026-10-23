@@ -1,0 +1,10 @@
+diff --git a/iokit/Kernel/arm/MunchFramebuffer.cpp b/iokit/Kernel/arm/MunchFramebuffer.cpp
+--- a/iokit/Kernel/arm/MunchFramebuffer.cpp
++++ b/iokit/Kernel/arm/MunchFramebuffer.cpp
+@@ -310,3 +310,6 @@ AppleCLCD::swap(const uint8_t *rec)
+ 	if (fDirectPresent) {
++		IOLockLock(fLock);
++		memcpy(fPending, rec, MUNCH_FB_SWAP_REC_SIZE);
++		IOLockUnlock(fLock);
+ 		present(rec);
+ 	} else {

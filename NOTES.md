@@ -1,5 +1,29 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-23: FRAMEBUFFER WAKE REDRAW FIX IN PROGRESS
+
+- Observed: the latest device excerpt confirms backboardd creates a 1080x2400
+  IOSurface, but does not include `MUNCH FB: SwapEnd` or copy-result logs. The
+  excerpt may be truncated, so it does not establish whether framebuffer swaps
+  reach XNU.
+- Observed: the tested direct-diagnostic image omitted
+  `munchfb_noconsole=1`; the XNU console and userspace can therefore write to
+  the same panel memory, explaining the reported intermittent console text.
+  The existing 0092 logic only mutes that console after a successful pixel
+  copy.
+- Changed locally: patch 0093 caches each direct-mode swap in `fPending`, so
+  the existing display-wake redraw has a real latest frame instead of stale
+  zero data. The repo validator checks that this behavior remains present.
+- Verified: patch 0093 applies to the exact `MunchFramebuffer.cpp` from CI run
+  `39915798147` (offset 3 lines). `tools/xnu-cc.py` syntax-compiles that source
+  with the patch applied: 0 of 1 files failed. `tools/validate-repo.py` and
+  `git diff --check` pass. CI run `39915798147` itself completed successfully
+  in 8m23s; its build-tree artifact was downloaded outside the repository.
+- Next: commit, push, and build with `gh`; then package a temporary
+  UFS RW / 8-CPU image with both `munchfb_direct=1` and
+  `munchfb_noconsole=1`. This is for `fastboot boot` only; do not flash or
+  modify UFS, GPT, `iosroot`, or `userdata`.
+
 ### HANDOFF 2026-10-23: DIRECT FRAMEBUFFER DIAGNOSTIC IMAGE READY
 
 - Root cause for the console disappearing: patch 0088 sets
@@ -12,10 +36,9 @@
   unchanged. The patch also limits SwapEnd logging to 16 records and only
   allows `munchfb_noconsole=1` to mute the console after bytes have actually
   reached the panel surface.
-- CI run `39915798147` built the kernel and completed all build/artifact
-  steps successfully; the GitHub run wrapper still reported `in_progress`
-  during final job completion polling. The ARM64 Mach-O kernel checksum
-  passed: `4015d5b624bb7e7a50d175af885f21493a245339a9440af18fd889bff71fdd2e`.
+- CI run `39915798147` completed successfully in 8m23s. The ARM64 Mach-O
+  kernel checksum passed:
+  `4015d5b624bb7e7a50d175af885f21493a245339a9440af18fd889bff71fdd2e`.
   It contains `MUNCH FB: SwapEnd`, `munchfb_direct`, and `MUNCHLOG`.
 - Patch 0092 was verified with `git apply --check` and applied once to the
   exact `iokit/Kernel/arm/MunchFramebuffer.cpp` from CI run
