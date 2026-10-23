@@ -1,56 +1,38 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
-### HANDOFF 2026-10-23: SCALER PATCH ORDER REPAIRED, CI PENDING
+### HANDOFF 2026-10-23: SCALER CANDIDATE BUILT, DEVICE TEST PENDING
 
-- Confirmed mistake: commit `7484cf2` changed patches 0084 and 0088 in addition
-  to adding 0090. Patch 0084 gained an early `AppleM2ScalerCSCDriver`
-  personality; later manual hunk-coordinate edits in 0088 made the replay fail.
-  CI run `39872418050` failed at `iokit/KernelConfigTables.cpp:143` before
-  compilation.
-- Changed locally: restored 0084's original table contents so scaler
-  registration stays in 0091, and corrected the 0088 table hunk to
-  `@@ -123,13 +68,18 @@`. A fresh reconstruction of the post-0087 tree from the
-  41d4dbb CI source artifact accepts 0088, 0089, 0090, and 0091 in order.
-  Patch 0090 also registers `MunchScaler.cpp` in `iokit/conf/files.arm64`;
-  before this fix the new source file was not compiled into the kernel.
-  `python3 tools/validate-repo.py` and `git diff --check` pass. These fixes are
-  not yet committed or pushed; the untracked `--help` file is untouched.
-
-- Device observation: UFS RW boot with 8 CPUs reached active iOS userland.
-  The panel power state works (the display can be turned off and back on by
-  power button), but no Apple logo/lock screen frame appears. This is not a
-  mount failure.
-- Candidate cause: the current UFS cmdline omitted the framebuffer console
-  mute/throttle flags used by the known-good display path. `mkram-boot.sh`
-  now defaults UFS boots to
-  `munchfb_noconsole=1 munchfb_hz=30`, generates an ADT with `--ufs`, and
-  creates an empty payload RAMDisk instead of requiring the diagnostic cpio.
-- Tooling: universal `tools/mkram-boot.sh` now supports `--root ufs|ram`.
-  UFS is default and read/write. RAM mode retains `--cp-macho`, `rd=md0`,
-  and `--ram-only`. Both modes use the upper DRAM bank, 8-CPU defaults,
-  MUNCH identity, and validate the kernel has no `SWEET` strings and contains
-  `MUNCHLOG`. The script still never invokes fastboot.
-- Static test passed with the CI 0089 kernel and live Munch DTB. Candidate:
-  `/tmp/munch-boot-script-ufs-test/shim-boot.img`, SHA-256
-  `721844c18b48b14b5fa16af1e34d81e2853188c6ccc1b7dbc15e5e820b146c85`.
-  Test with temporary `fastboot boot` only; do not flash.
-- Next: commit and push the replay fix, inspect the new GitHub Actions result,
-  then build an 8-CPU UFS temporary boot image from the resulting kernel. Use
-  `fastboot boot` only; do not flash or alter UFS/GPT/userdata.
-- Additional observations: backboardd reports
-  `IOServiceMatchingFailed for: AppleM2ScalerCSCDriver`, and the kernel key
-  helper reports `MUNCH KEYS: read error pon-ok=1 gpio-ok=0 arb-status=0x1`.
-  Treat M2Scaler as a missing userspace/CoreAnimation dependency for
-  surface composition, not as panel power. Keys are a separate SPMI/GPIO
-  arbiter bring-up issue.
-- Debug boot without `munchfb_noconsole` confirms the surface path starts:
-  backboardd creates 1080x2400 IOSurfaces, display power on/off works, and
-  backboardd reaches IOMFB selector 79. It repeatedly fails only when
-  CoreAnimation/IOSurfaceAccelerator asks for `AppleM2ScalerCSCDriver`.
-  The Apple shared cache expects that service for color conversion/scaling.
-  Next: publish a minimal kernel-side AppleM2ScalerCSCDriver service with
-  IOSurfaceAccelerator capability properties or bypass scaler selection in
-  the CPU-rendering path.
+- Commit `c4ff1d9` is pushed to `main`. It touches patches 0084, 0088, and
+  0090: 0084 removes the duplicate early scaler personality, 0088 fixes the
+  table hunk position after the topology edits, and 0090 adds the scaler stub
+  plus its compile-list entry. These 0084/0088 edits repair the failed patch
+  ordering; they are not additional scaler features.
+- CI run `39909803029` for `c4ff1d9abec669c65f88c110f9f18be97867b1a9`
+  completed successfully. The ARM64 Mach-O kernel artifact is
+  `/home/danya2271/ios-munch-artifacts/run-39909803029/kernel.development.munch`,
+  SHA-256 `5ee57145f2a089f96038e2108ad861915a366cdbcfd8df93037eb1d5bf8d949a`.
+  Artifact checksum passed; strings include `MUNCHLOG` and
+  `AppleM2ScalerCSCDriver`, with no `SWEET` string.
+- Built an 8-CPU, UFS-root, read/write temporary boot image using
+  `tools/mkram-boot.sh` and `/tmp/munch-live-20261021-current.dtb` (SHA-256
+  `65f4987ebb592acf11867c22d92e7cd41a7b41ea1e10f96485863b38f7ac646d`).
+  Image: `/home/danya2271/ios-munch-artifacts/run-39909803029/ufs-8cpu-candidate/shim-boot.img`,
+  SHA-256 `e81ba3bf0a1c6f8dc6da346fad67f239f3f8edd446f989315c59629ec67afe8f`.
+  Payload SHA-256 is `56a7602ab6cafb9fc9d1b4135eb189bb2c4edd61f42c3177039ff98f858a8db5`.
+- Verified the Android boot image round-trip, embedded DTB/payload equality,
+  and UFS boot args `cpus=8 rd=ufsroot0 iosrootrw=1 munchfb_noconsole=1
+  munchfb_hz=30`. The generated MUNCH ADT exposes eight CPUs and the UFS host.
+  `python3 tools/validate-repo.py` and `git diff --check` pass.
+- The source live DTB retains `linux,initrd-start/end` at
+  `0xac37e000..0xafffe179`; `mkram-boot.sh` warns about these inherited fields.
+  The range is below the candidate XNU memory window
+  `0x100000000..0x1fcc00000`, so the static overlap check is clear. Runtime
+  ABL handoff of the new payload location is not yet verified.
+- `fastboot devices -l` and `adb devices -l` were empty. No device boot or
+  storage write occurred. Next: with the phone in fastboot, verify it appears
+  as product `munch`, then run only
+  `fastboot boot /home/danya2271/ios-munch-artifacts/run-39909803029/ufs-8cpu-candidate/shim-boot.img`.
+  Do not flash or alter UFS, GPT, `iosroot`, or `userdata`.
 
 ### HANDOFF 2026-10-23: 0089 KERNEL PASSED, SWEETLOG REMOVED, CI RERUNNING
 
