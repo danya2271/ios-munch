@@ -1,12 +1,20 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
-### HANDOFF 2026-10-23: UFS BOOTS TO ACTIVE USERLAND, PRESENTATION FIX CANDIDATE
+### HANDOFF 2026-10-23: SCALER PATCH ORDER REPAIRED, CI PENDING
 
-- The downloaded build tree is post-0088, not post-0087: it already contains all
-  0088 changes, so local full-patch rejection is expected. CI's remaining 0088
-  failure is isolated to the `SweetHIDButtons` hunk because the staged tree has
-  the scaler personality inserted before it. Reconstruct a strict post-0087
-  tree before validating future 0088 offsets.
+- Confirmed mistake: commit `7484cf2` changed patches 0084 and 0088 in addition
+  to adding 0090. Patch 0084 gained an early `AppleM2ScalerCSCDriver`
+  personality; later manual hunk-coordinate edits in 0088 made the replay fail.
+  CI run `39872418050` failed at `iokit/KernelConfigTables.cpp:143` before
+  compilation.
+- Changed locally: restored 0084's original table contents so scaler
+  registration stays in 0091, and corrected the 0088 table hunk to
+  `@@ -123,13 +68,18 @@`. A fresh reconstruction of the post-0087 tree from the
+  41d4dbb CI source artifact accepts 0088, 0089, 0090, and 0091 in order.
+  Patch 0090 also registers `MunchScaler.cpp` in `iokit/conf/files.arm64`;
+  before this fix the new source file was not compiled into the kernel.
+  `python3 tools/validate-repo.py` and `git diff --check` pass. These fixes are
+  not yet committed or pushed; the untracked `--help` file is untouched.
 
 - Device observation: UFS RW boot with 8 CPUs reached active iOS userland.
   The panel power state works (the display can be turned off and back on by
@@ -26,10 +34,9 @@
   `/tmp/munch-boot-script-ufs-test/shim-boot.img`, SHA-256
   `721844c18b48b14b5fa16af1e34d81e2853188c6ccc1b7dbc15e5e820b146c85`.
   Test with temporary `fastboot boot` only; do not flash.
-- Next: boot the candidate and capture whether `MUNCH FB` reports swaps. If
-  swaps occur but the screen is blank, trace backboardd's missing
-  `AppleM2ScalerCSCDriver`/surface composition path. If there are no swaps,
-  inspect `backboardd` display matching and IOSurface handling.
+- Next: commit and push the replay fix, inspect the new GitHub Actions result,
+  then build an 8-CPU UFS temporary boot image from the resulting kernel. Use
+  `fastboot boot` only; do not flash or alter UFS/GPT/userdata.
 - Additional observations: backboardd reports
   `IOServiceMatchingFailed for: AppleM2ScalerCSCDriver`, and the kernel key
   helper reports `MUNCH KEYS: read error pon-ok=1 gpio-ok=0 arb-status=0x1`.

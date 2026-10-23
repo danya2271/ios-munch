@@ -93,3 +93,13 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
 +	return kIOReturnSuccess;
 +}
 +#endif /* MUNCH */
+diff --git a/iokit/conf/files.arm64 b/iokit/conf/files.arm64
+--- a/iokit/conf/files.arm64
++++ b/iokit/conf/files.arm64
+@@ -16,5 +16,6 @@
+ iokit/Kernel/arm/MunchSurface.cpp                                optional iokitcpp
+ iokit/Kernel/arm/MunchFramebuffer.cpp                            optional iokitcpp
+ iokit/Kernel/arm/MunchBattery.cpp                                optional iokitcpp
++iokit/Kernel/arm/MunchScaler.cpp                                 optional iokitcpp
+ iokit/Kernel/arm/hid/MunchHID.cpp                                optional iokitcpp
+ iokit/Kernel/arm/hid/IOHIDEvent.cpp                              optional iokitcpp
