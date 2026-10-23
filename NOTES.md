@@ -1,30 +1,35 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
-### HANDOFF 2026-10-23: FRAMEBUFFER WAKE REDRAW FIX IN PROGRESS
+### HANDOFF 2026-10-23: FRAMEBUFFER LOGGING DIAGNOSTIC READY
 
-- Observed: the latest device excerpt confirms backboardd creates a 1080x2400
-  IOSurface, but does not include `MUNCH FB: SwapEnd` or copy-result logs. The
-  excerpt may be truncated, so it does not establish whether framebuffer swaps
-  reach XNU.
-- Observed: the tested direct-diagnostic image omitted
-  `munchfb_noconsole=1`; the XNU console and userspace can therefore write to
-  the same panel memory, explaining the reported intermittent console text.
-  The existing 0092 logic only mutes that console after a successful pixel
-  copy.
-- Changed locally: patch 0093 caches each direct-mode swap in `fPending`, so
-  the existing display-wake redraw has a real latest frame instead of stale
-  zero data. The repo validator checks that this behavior remains present.
-- Verified: patch 0093 applies to the exact `MunchFramebuffer.cpp` from CI run
-  `39915798147` (offset 3 lines). `tools/xnu-cc.py` syntax-compiles that source
-  with the patch applied: 0 of 1 files failed. `tools/validate-repo.py` and
-  `git diff --check` pass. CI run `39915798147` itself completed successfully
-  in 8m23s; its build-tree artifact was downloaded outside the repository.
-  Built UFS RW / 8-CPU image with both `munchfb_direct=1` and
-  `munchfb_noconsole=1`. This is for `fastboot boot` only; do not flash or
-  modify UFS, GPT, `iosroot`, or `userdata`.
-  Next: boot it when the phone appears in fastboot, capture the first
-  `MUNCH FB: SwapEnd`/`MUNCH FB: swap` lines, and report whether the lock
-  screen is visible.
+- User observation after the previous direct-mode candidate: no image, visible
+  kernel text/logs disappeared, and no `MUNCH FB` lines were found. The
+  excerpt confirms the userland creates an IOSurface, but does not prove that
+  IOMobileFramebuffer SwapEnd reaches XNU.
+- The previous candidate included `munchfb_noconsole=1` but not `munchusb=2`.
+  Patch 0092 mutes visible console output after a framebuffer copy attempt
+  reports copied pixels; the console bytes are still appended to MUNCHLOG.
+  This can explain loss of visible logs, but does not explain or prove a
+  successful panel image. USB log transport was not enabled on that image.
+- Built a new temporary diagnostic candidate using the same CI kernel, MUNCH
+  ADT, and device DTB:
+  `/home/danya2271/ios-munch-artifacts/run-39939285290/ufs-8cpu-fb-serial-log/shim-boot.img`.
+  SHA-256: `94358d2dab64f8a467fef0cfc04430cce0226125c40fb696287f5f1504196b8a`.
+  Args: `cpus=8`, `rd=ufsroot0`, `iosrootrw=1`, `munchfb_direct=1`,
+  `munchfb_hz=30`, `munchusb=2`; deliberately omits
+  `munchfb_noconsole`. Payload and DTB round-trip checks passed. Kernel SHA-256
+  remains `e1d24a9b745dbcb45d454af828a7785ff3bc98c0df2379294a1397b209b36ba3`.
+- The reported `MUNCH TOUCH: DFS level0=0x2601 is not X0/1` is a separate
+  touch-controller clock blocker. In `touch_clocks()`, an active DFS with an
+  unexpected level-0 source returns false; `munch_touch_init()` consequently
+  skips serial-engine initialization. Do not rewrite the shared GCC/DFS clock
+  configuration without identifying its correct clock integration.
+- Fastboot enumeration returned no device after this report. The new image is
+  built but not booted; no device storage was changed. Next: start
+  `tools/munch-usbnet.sh /tmp/munch-fb-live.log`, then use `fastboot boot` with
+  the image above. Inspect `MUNCH FB: SwapEnd`, `MUNCH FB: swap`, and
+  `MUNCH USB` lines, and note whether framebuffer text or the lock screen is
+  visible. Temporary boot only; do not flash or modify UFS/GPT/partitions.
 
 ### HANDOFF 2026-10-23: DIRECT FRAMEBUFFER DIAGNOSTIC IMAGE READY
 
