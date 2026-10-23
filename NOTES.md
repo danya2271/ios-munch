@@ -1,5 +1,30 @@
 # iOS 16 port to POCO F4 (`munch`) - working notes
 
+### HANDOFF 2026-10-23: FRAMEBUFFER DIAGNOSTIC PATCH PENDING CI
+
+- Root cause for the console disappearing: patch 0088 sets
+  `munch_console_muted` at the start of `present()`, before checking whether a
+  valid IOSurface was copied. With `munchfb_noconsole=1`, even a failed/empty
+  first swap can hide the console.
+- Commit `c4ff1d9` plus new patch 0092 add a diagnostic
+  `munchfb_direct=1` path that calls `present()` immediately in `swap()`,
+  bypassing the 10 Hz/30 Hz buffered present. The default buffered path is
+  unchanged. The patch also limits SwapEnd logging to 16 records and only
+  allows `munchfb_noconsole=1` to mute the console after bytes have actually
+  reached the panel surface.
+- Patch 0092 was verified with `git apply --check` and applied once to the
+  exact `iokit/Kernel/arm/MunchFramebuffer.cpp` from CI run
+  `39909803029`. It passed review of the resulting `swap()`/`present()` order.
+  `python3 tools/validate-repo.py` and `git diff --check` pass.
+- Expected log if backboardd reaches IOSurface: `MUNCH FB: SwapEnd` and
+  `MUNCH FB: swap ...`. If neither appears, the failure is above framebuffer
+  presentation; if they appear but the screen stays blank, inspect the logged
+  surface format/geometry. Do not use `munchfb_noconsole=1` for the next
+  diagnostic boot.
+- Next: commit/push, wait for a successful CI kernel, then build an 8-CPU
+  UFS RW boot candidate with `rd=ufsroot0 iosrootrw=1 cpus=8
+  munchfb_direct=1 munchfb_hz=30` and no `munchfb_noconsole`.
+
 ### HANDOFF 2026-10-23: SCALER CANDIDATE BUILT, DEVICE TEST PENDING
 
 - Commit `c4ff1d9` is pushed to `main`. It touches patches 0084, 0088, and

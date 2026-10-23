@@ -1,0 +1,86 @@
+diff --git a/iokit/Kernel/arm/MunchFramebuffer.cpp b/iokit/Kernel/arm/MunchFramebuffer.cpp
+--- a/iokit/Kernel/arm/MunchFramebuffer.cpp
++++ b/iokit/Kernel/arm/MunchFramebuffer.cpp
+@@ -112,5 +112,6 @@
+ 	uint32_t      fSwapID;
+ 	bool          fConsolePaused;
++	bool          fDirectPresent;
+ 	uint8_t       fPending[MUNCH_FB_SWAP_REC_SIZE];     /* latest swap, not yet shown */
+ 	bool          fDirty;
+ 	uint32_t      fFlushTicks;    /* vsync ticks between panel copies */
+@@ -196,5 +197,8 @@
+ 	PE_parse_boot_argn("munchfb_hz", &hz, sizeof(hz));
+ 	fFlushTicks = (hz == 0 || hz >= 60) ? 1 : 60 / hz;
++	int direct = 0;
++	fDirectPresent = PE_parse_boot_argn("munchfb_direct", &direct, sizeof(direct)) &&
++	    direct != 0;
+ 	fVsync->setTimeoutUS(MUNCH_FB_VSYNC_US);
+ 
+ 	setProperty(kIOUserClientClassKey, "IOMobileFramebufferUserClient");
+@@ -287,6 +291,7 @@
+ }
+ 
+ static uint32_t munch_fb_swaps_logged;
++static uint32_t munch_fb_swap_records_logged;
+ static uint64_t munch_fb_swap_count;
+ 
+ /* Copy each enabled layer's surface into the panel memory (no scaling). */
+@@ -301,9 +306,19 @@
+ {
++	if (munch_fb_swap_records_logged < 16) {
++		munch_fb_swap_records_logged++;
++		IOLog("MUNCH FB: SwapEnd %u mask %#x surfaces %u,%u,%u,%u\n",
++		    get32(rec, 0x50), get32(rec, 0x104), get32(rec, 0x54),
++		    get32(rec, 0x58), get32(rec, 0x5c), get32(rec, 0x60));
++	}
++	if (fDirectPresent) {
++		present(rec);
++	} else {
+-	IOLockLock(fLock);
+-	memcpy(fPending, rec, MUNCH_FB_SWAP_REC_SIZE);
+-	fDirty = true;
+-	IOLockUnlock(fLock);
++		IOLockLock(fLock);
++		memcpy(fPending, rec, MUNCH_FB_SWAP_REC_SIZE);
++		fDirty = true;
++		IOLockUnlock(fLock);
++	}
+ 	if ((++munch_fb_swap_count % 1000) == 0) {
+ 		IOLog("MUNCH FB: %llu swaps\n", munch_fb_swap_count);
+ 	}
+ }
+@@ -312,15 +327,6 @@
+ {
+ 	uint32_t mask = get32(rec, 0x104);
++	bool copied = false;
+ 
+ 
+-	if (!fConsolePaused) {
+-		int quiet = 0;
+-		fConsolePaused = true;
+-		if (PE_parse_boot_argn("munchfb_noconsole", &quiet, sizeof(quiet)) && quiet != 0) {
+-			/* Not PE_initialize_console(kPEDisableScreen): its console switch
+-			 * writes the read-only-late cons_ops_index and panics. */
+-			munch_console_muted = 1;
+-		}
+-	}
+-
+ 	for (uint32_t layer = 0; layer < MUNCH_FB_LAYERS; layer++) {
+@@ -395,8 +401,17 @@
+ 				memcpy((void *)(fPixels + (uint64_t)(dy + y) * fRowBytes + (uint64_t)dx * 4),
+ 				    (const void *)(src + s->offset + (uint64_t)(sy + y) * s->bytesPerRow + (uint64_t)sx * 4),
+ 				    (size_t)w * 4);
+ 			}
++			copied = true;
+ 		}
+ 		s->release();
+ 	}
++	if (copied && !fConsolePaused) {
++		int quiet = 0;
++		fConsolePaused = true;
++		if (PE_parse_boot_argn("munchfb_noconsole", &quiet, sizeof(quiet)) && quiet != 0) {
++			/* Keep the console until a valid IOSurface reaches the panel. */
++			munch_console_muted = 1;
++		}
++	}
+ }

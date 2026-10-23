@@ -190,6 +190,34 @@ def validate_munch_ci_fail_closed():
     return True
 
 
+def validate_munch_framebuffer_patch():
+    path = os.path.join(REPO_ROOT, 'xnu/patches',
+                        '0092-munch-framebuffer-direct-diagnostics.patch')
+    try:
+        text = open(path, errors='replace').read()
+    except OSError as exc:
+        print(red(f'[-] MUNCH framebuffer validation failed: {exc}'))
+        return False
+
+    required = ('munchfb_direct', 'present(rec);', 'MUNCH FB: SwapEnd',
+                'copied = true;', 'if (copied && !fConsolePaused)')
+    errors = [f'missing framebuffer diagnostic behavior: {needle!r}'
+              for needle in required if needle not in text]
+    copied_at = text.find('copied = true;')
+    mute_guard_at = text.find('if (copied && !fConsolePaused)')
+    if copied_at < 0 or mute_guard_at < copied_at:
+        errors.append('console mute must follow a successful pixel copy')
+
+    if errors:
+        print(red('[-] MUNCH framebuffer validation failed:'))
+        for error in errors:
+            print(f'    - {error}')
+        return False
+
+    print(green('[✓] MUNCH framebuffer has direct mode and copy-gated console mute'))
+    return True
+
+
 def validate_munch_adt():
     import mkadt
 
@@ -390,6 +418,7 @@ def main():
     ok_patches = validate_patches(a.verbose)
     ok_munch = validate_munch_build_plumbing()
     ok_munch_ci = validate_munch_ci_fail_closed()
+    ok_munch_framebuffer = validate_munch_framebuffer_patch()
     ok_munch_adt = validate_munch_adt()
     ok_userdata = validate_userdata_safety()
     ok_live_fdt = validate_live_fdt_helper()
@@ -397,7 +426,7 @@ def main():
     ok_python = validate_python_scripts(a.verbose)
     ok_shell = validate_shell_scripts(a.verbose)
 
-    if ok_patches and ok_munch and ok_munch_ci and ok_munch_adt and ok_userdata and ok_live_fdt and ok_shim_storage and ok_python and ok_shell:
+    if ok_patches and ok_munch and ok_munch_ci and ok_munch_framebuffer and ok_munch_adt and ok_userdata and ok_live_fdt and ok_shim_storage and ok_python and ok_shell:
         print(bold(green("\nAll repository integrity checks PASSED successfully!")))
         return 0
     else:
