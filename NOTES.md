@@ -59,6 +59,14 @@
   `dmesg -w` and `ip monitor link` from before `fastboot boot`, plus the full
   device `MUNCH USB` sequence (`running`, endpoint setup, connect, ECM, and
   `configured` messages) up to the black screen/reset.
+- Host `dmesg` from the repeated attempt confirms only Xiaomi fastboot
+  (`18d1:4e11`) and Google Android (`18d1:d00d`) enumerate; no MUNCH gadget
+  (`1209:0001`) or CDC-ECM interface appears. At 21:36:37 the device
+  disconnected and Android re-enumerated at 21:36:54. The wait in
+  `munch-usbnet.sh` is therefore expected, not a logfile-path problem. Need
+  the device's USB lines after `MUNCH USB: soft reset`: `running` or endpoint
+  setup failure first, then connect/EP0 requests, `ECM endpoints configured`,
+  and `configured (1)`. Do not rebuild based on host dmesg alone.
 
 ### HANDOFF 2026-10-23: DIRECT FRAMEBUFFER DIAGNOSTIC IMAGE READY
 
