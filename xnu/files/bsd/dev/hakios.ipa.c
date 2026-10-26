@@ -53,13 +53,21 @@ static LCK_MTX_DECLARE(ipa_lock, &ipa_lock_group);
 
 /* ---- the registers ---------------------------------------------------------------------------- */
 
-#define IPA_REGS_PHYS           0x01e40000ull
+/*
+ * Where the IPA and the GSI are. These are the values of the first phone (POCO X5 Pro, SM7325),
+ * which another Qualcomm phone overrides from its own device tree: the "reg" of the node whose
+ * compatible is "qcom,ipa" (reg-names "ipa-base" and "gsi-base"), passed as boot-args soc_ipa_base
+ * and soc_gsi_base (tools/soc-args.py reads them off the phone's fdt). The IPA driver has one
+ * execution environment's worth of GSI registers mapped, from the inter-EE masks to the scratch.
+ */
+#define IPA_REGS_PHYS_DEFAULT   0x01e40000ull
+#define GSI_PHYS_DEFAULT        0x01e04000ull
 #define IPA_REGS_SIZE           0x1000
-#define GSI_PHYS                0x01e04000ull
 #define GSI_FROM                0xc000          /* what is used of the GSI's registers: from the inter-EE masks (0xc020) to the scratch (0x12400) */
 #define GSI_SIZE                0x7000
 
-static vm_offset_t ipa_regs, gsi_regs;         /* gsi_regs maps GSI_PHYS + GSI_FROM */
+static uint64_t ipa_regs_phys = IPA_REGS_PHYS_DEFAULT, gsi_phys = GSI_PHYS_DEFAULT;
+static vm_offset_t ipa_regs, gsi_regs;         /* gsi_regs maps gsi_phys + GSI_FROM */
 
 static inline uint32_t
 ipa_rd(uint32_t offset)
@@ -525,7 +533,7 @@ ipa_command(const char *what, uint8_t opcode, const void *payload, size_t size)
 	uint32_t slot = command.next % command.slots;
 	struct command_done waiting = { .tre = command.tre_ring.phys + slot * ELEMENT_SIZE };
 
-	if (size > command.buffer_size || command.next - command.done >= command.slots) {
+	if (size > command.buffer_size || command.next - command.done >= command.slots - 1) {
 		return false;
 	}
 	memcpy((void *)slot_virt(&command, slot), payload, size);
@@ -643,11 +651,13 @@ receive_event(struct channel *ch, const struct event *e, void *context)
 		}
 		return;
 	}
-	if (slot != ch->next % ch->slots) {
+	/* receives complete in order; ch->done is the next expected slot, ch->next the next to post (slots-1 ahead) */
+	if (slot != ch->done % ch->slots) {
 		if (ch->errors++ < 4) {
-			printf("ipa: %s: slot %u finished while slot %u was expected\n", ch->name, slot, ch->next % ch->slots);
+			printf("ipa: %s: slot %u finished while slot %u was expected\n", ch->name, slot, ch->done % ch->slots);
 		}
 	}
+	ch->done++;
 	buffer = (const uint8_t *)slot_virt(ch, slot);
 	if (length > ch->buffer_size) {
 		length = ch->buffer_size;
@@ -708,7 +718,7 @@ hakios_ipa_transmit(uint8_t mux, const void *packet, size_t length)
 	}
 	lck_mtx_lock(&ipa_lock);
 	channel_events(ch, transmit_event, NULL);
-	if (ch->next - ch->done >= ch->slots) {
+	if (ch->next - ch->done >= ch->slots - 1) {     /* one slot always left free: write==read means empty */
 		ch->dropped++;
 		lck_mtx_unlock(&ipa_lock);
 		return false;
@@ -747,6 +757,13 @@ hakios_ipa_poll(void (*receive)(uint8_t mux, const uint8_t *packet, size_t lengt
 	channel_events(&modem_tx, transmit_event, NULL);
 	lck_mtx_unlock(&ipa_lock);
 	return rc.packets;
+}
+
+void
+hakios_ipa_modem_endpoints(uint32_t *to_modem, uint32_t *from_modem)
+{
+	*to_modem = modem_tx.endpoint;          /* 2: what Linux exports as modem/tx_endpoint_id */
+	*from_modem = modem_rx.endpoint;        /* 16: modem/rx_endpoint_id */
 }
 
 bool
@@ -790,8 +807,10 @@ hakios_ipa_data_setup(void)
 		return false;
 	}
 	if (ipa_regs == 0) {
-		ipa_regs = ml_io_map(IPA_REGS_PHYS, IPA_REGS_SIZE);
-		gsi_regs = ml_io_map(GSI_PHYS + GSI_FROM, GSI_SIZE);
+		PE_parse_boot_argn("soc_ipa_base", &ipa_regs_phys, sizeof(ipa_regs_phys));
+		PE_parse_boot_argn("soc_gsi_base", &gsi_phys, sizeof(gsi_phys));
+		ipa_regs = ml_io_map(ipa_regs_phys, IPA_REGS_SIZE);
+		gsi_regs = ml_io_map(gsi_phys + GSI_FROM, GSI_SIZE);
 	}
 	if (ipa_regs == 0 || gsi_regs == 0) {
 		printf("ipa: the registers cannot be mapped: no data path\n");
@@ -835,7 +854,9 @@ hakios_ipa_data_setup(void)
 		}
 		ch->started = true;
 		if (!ch->to_ipa) {
-			for (uint32_t slot = 0; slot < ch->slots; slot++) {
+			/* one short of the ring: the doorbell is the write pointer, and writing it level with
+			 * the read pointer (base) would mean "empty", not "full" */
+			for (uint32_t slot = 0; slot + 1 < ch->slots; slot++) {
 				receive_post(ch, slot);
 			}
 			channel_doorbell(ch);

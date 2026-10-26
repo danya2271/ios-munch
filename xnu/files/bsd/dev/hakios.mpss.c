@@ -284,7 +284,8 @@ put(struct block *b, const char *name, uint32_t offset, uint32_t value)
 
 /* ---- the shared memory (hakios.wifi.c, step 1) --------------------------------------------------- */
 
-#define SMEM_PHYS               0x80900000UL
+#define SMEM_PHYS_DEFAULT       0x80900000u   /* dt: reg of /soc/qcom,smem */
+static uint32_t smem_phys = SMEM_PHYS_DEFAULT;
 #define SMEM_SIZE               0x00200000u
 #define SMEM_US                 0
 #define SMEM_MPSS               1               /* dt: qcom,remote-pid of qcom,smp2p-modem and qcom,glink/modem */
@@ -330,7 +331,7 @@ static bool
 smem_peek(uint64_t offset, void *to, uint32_t size)
 {
 	if (smem == NULL) {
-		smem = (const volatile uint8_t *)ml_io_map_unmappable(SMEM_PHYS, SMEM_SIZE, VM_WIMG_WCOMB);
+		smem = (const volatile uint8_t *)ml_io_map_unmappable(smem_phys, SMEM_SIZE, VM_WIMG_WCOMB);
 	}
 	if (offset + size > SMEM_SIZE) {
 		return false;
@@ -466,7 +467,7 @@ show_partition(void)
 	}
 	count = smem_items(partition, cacheline, found, 256);
 	printf("mpss: %u: the partition for us and the modem (0 and 1): at %#lx, %#x bytes, of which %#x free; %u items\n", step,
-	    SMEM_PHYS + partition, size, header.free_cached - header.free_uncached, count);
+	    smem_phys + partition, size, header.free_cached - header.free_uncached, count);
 	for (unsigned i = 0; i < count && i < 256;) {
 		int at = 0;
 
@@ -780,7 +781,8 @@ out:
  * the list of its levels that the boot loader's command database keeps (cmd-db.c), the first
  * position at or above the level wanted.
  */
-#define CMD_DB_PHYS             0x80860000UL
+#define CMD_DB_PHYS_DEFAULT     0x80860000u   /* dt: reg of /reserved-memory/cmd_db */
+static uint32_t cmd_db_phys = CMD_DB_PHYS_DEFAULT;
 #define CMD_DB_SIZE             0x20000UL
 
 struct cmd_db_slave {
@@ -824,7 +826,7 @@ rail_position(const char *name, uint32_t level, uint32_t *address)
 	char id[8] = { 0 };
 
 	if (cmd_db == NULL) {
-		cmd_db = (const struct cmd_db_header *)ml_io_map_unmappable(CMD_DB_PHYS, CMD_DB_SIZE, VM_WIMG_WCOMB);
+		cmd_db = (const struct cmd_db_header *)ml_io_map_unmappable(cmd_db_phys, CMD_DB_SIZE, VM_WIMG_WCOMB);
 	}
 	if (!(cmd_db->magic[0] == 0xdb && cmd_db->magic[1] == 0x30 && cmd_db->magic[2] == 0x03 && cmd_db->magic[3] == 0x0c)) {
 		printf("mpss: %u: the boot loader's command database is not there\n", step);
@@ -1042,9 +1044,11 @@ step_survey(void)
 
 /* ---- step 2: the firmware -------------------------------------------------------------------------- */
 
-#define MPSS_MEMORY             0x8b800000u     /* dt: reserved-memory mpss@8b800000, memory-region of qcom,mss@4080000 */
+#define MPSS_MEMORY_DEFAULT     0x8b800000u   /* dt: reserved-memory mpss@..., memory-region of qcom,mss */
+static uint32_t mpss_memory = MPSS_MEMORY_DEFAULT;
 #define MPSS_MEMORY_SIZE        0x0f600000u
-#define PAS_MPSS                4               /* dt: qcom,pas-id */
+#define PAS_MPSS_DEFAULT        4               /* dt: qcom,pas-id of qcom,mss */
+static uint32_t pas_mpss = PAS_MPSS_DEFAULT;
 
 
 /*
@@ -1200,13 +1204,13 @@ step_firmware(void)
 		if (segment.type != 1 || MDT_HASH(segment.flags) || segment.memory_size == 0) {
 			continue;
 		}
-		if (segment.paddr < MPSS_MEMORY || segment.file_size > segment.memory_size ||
-		    (uint64_t)segment.paddr + segment.memory_size > (uint64_t)MPSS_MEMORY + MPSS_MEMORY_SIZE) {
+		if (segment.paddr < mpss_memory || segment.file_size > segment.memory_size ||
+		    (uint64_t)segment.paddr + segment.memory_size > (uint64_t)mpss_memory + MPSS_MEMORY_SIZE) {
 			printf("mpss: %u: segment %u (%#x, %#x bytes) is not within the DSP's memory\n", step, i, segment.paddr,
 			    segment.memory_size);
 			goto fail;
 		}
-		image.segment[image.segments].at = segment.paddr - MPSS_MEMORY;
+		image.segment[image.segments].at = segment.paddr - mpss_memory;
 		image.segment[image.segments].file_size = segment.file_size;
 		image.segment[image.segments].memory_size = segment.memory_size;
 		image.segment[image.segments].file = NULL;
@@ -1229,17 +1233,17 @@ step_firmware(void)
 		highest = segment.paddr + segment.memory_size > highest ? segment.paddr + segment.memory_size : highest;
 		image.segments++;
 	}
-	if (image.segments == 0 || lowest != MPSS_MEMORY || 52 + 32 * count + (uint64_t)hashes != size) {
+	if (image.segments == 0 || lowest != mpss_memory || 52 + 32 * count + (uint64_t)hashes != size) {
 		printf("mpss: %u: not what TrustZone takes: %u segments to load, the lowest at %#x; the header file has %llu bytes, "
 		    "the header %u and the hashes %u\n", step, image.segments, lowest, size, 52 + 32 * count, hashes);
 		goto fail;
 	}
 	image.header = header;
 	image.header_size = size;
-	image.size = ((highest + 0xfff) & ~0xfffu) - MPSS_MEMORY;
+	image.size = ((highest + 0xfff) & ~0xfffu) - mpss_memory;
 	printf("mpss: %u: the image is whole (%s): a header of %llu bytes (%u of hashes), %u segments, %llu bytes of files, %#x "
 	    "bytes of the DSP's %#x from %#x\n", step, from_root ? "from /fw on the root" : "from the small image", size, hashes,
-	    image.segments, files, image.size, MPSS_MEMORY_SIZE, MPSS_MEMORY);
+	    image.segments, files, image.size, MPSS_MEMORY_SIZE, mpss_memory);
 	announce("read the modem's four file systems from the phone's storage into memory of ours (rmtfs below)");
 	{
 		unsigned loaded = rmtfs_load();
@@ -1393,7 +1397,7 @@ dsp_ask_to_stop(uint32_t bound_ms)
 	need(&ipcc);
 	value_at = at + SMP2P_AT_VALUE((uint32_t)entry);
 	printf("mpss: %u: about to ask the DSP to stop: bit 0 of our entry \"%s\" at %#lx, and its SMP2P doorbell\n", step,
-	    OUR_ENTRY_STOP, SMEM_PHYS + value_at);
+	    OUR_ENTRY_STOP, smem_phys + value_at);
 	snprintf(last_write, sizeof(last_write), "step %u asked the modem to stop", step);
 	smem_poke(value_at, ours.entry[entry].value | DSP_STOP);
 	settle();
@@ -1430,7 +1434,7 @@ dsp_shutdown(const char *why)
 		link_stop();
 	}
 	stopped_by_its_word = dsp_ask_to_stop(leaving ? 2000 : 5000);
-	result = scm("to shut the modem down", SCM_PAS_SHUTDOWN, SCM_ONE_VALUE, PAS_MPSS, 0, 0, 0, &answer);
+	result = scm("to shut the modem down", SCM_PAS_SHUTDOWN, SCM_ONE_VALUE, pas_mpss, 0, 0, 0, &answer);
 	if (result != 0 || answer != 0) {
 		printf("mpss: %u: TRUSTZONE DOES NOT SHUT THE MODEM DOWN: the call returns %d, its answer is %#llx\n", step, result,
 		    answer);
@@ -1494,7 +1498,7 @@ step_header(void)
 		__asm__ volatile ("dc civac, %0" : : "r" (line));
 	}
 	settle();
-	result = scm("to take the modem's header", SCM_PAS_INIT_IMAGE, SCM_VALUE_AND_BUFFER, PAS_MPSS, kvtophys(page), 0, 0, &answer);
+	result = scm("to take the modem's header", SCM_PAS_INIT_IMAGE, SCM_VALUE_AND_BUFFER, pas_mpss, kvtophys(page), 0, 0, &answer);
 	if (result != 0 || answer != 0) {
 		printf("mpss: %u: TRUSTZONE DOES NOT TAKE THE HEADER: the call returns %d, its answer is %#llx\n", step, result, answer);
 		return false;
@@ -1502,12 +1506,12 @@ step_header(void)
 	printf("mpss: %u: TRUSTZONE ACCEPTS THE MODEM'S SIGNATURE FROM THIS KERNEL\n", step);
 
 	announce("tell TrustZone where the image will be: the whole of the modem's memory, as Linux does");
-	result = scm("where the image will be", SCM_PAS_MEM_SETUP, SCM_THREE_VALUES, PAS_MPSS, MPSS_MEMORY, MPSS_MEMORY_SIZE, 0, &answer);
+	result = scm("where the image will be", SCM_PAS_MEM_SETUP, SCM_THREE_VALUES, pas_mpss, mpss_memory, MPSS_MEMORY_SIZE, 0, &answer);
 	if (result != 0 || answer != 0) {
 		printf("mpss: %u: TRUSTZONE DOES NOT TAKE THE PLACE: the call returns %d, its answer is %#llx\n", step, result, answer);
 		return false;
 	}
-	printf("mpss: %u: TrustZone takes the place: %#x bytes at %#x (the image takes %#x of them)\n", step, MPSS_MEMORY_SIZE, MPSS_MEMORY,
+	printf("mpss: %u: TrustZone takes the place: %#x bytes at %#x (the image takes %#x of them)\n", step, MPSS_MEMORY_SIZE, mpss_memory,
 	    image.size);
 	return true;
 }
@@ -1576,12 +1580,12 @@ step_image(void)
 	}
 	announce("put the image's segments into the modem's memory (0x8b800000, 246 MB: memory of nobody's until TrustZone starts "
 	    "the modem), with zeroes where a segment is longer than its file, and read them back");
-	dsp_memory = (volatile uint8_t *)ml_io_map_unmappable(MPSS_MEMORY, image.size, VM_WIMG_WCOMB);
+	dsp_memory = (volatile uint8_t *)ml_io_map_unmappable(mpss_memory, image.size, VM_WIMG_WCOMB);
 	if (dsp_memory == NULL) {
 		printf("mpss: %u: the modem's memory cannot be mapped (%#x bytes)\n", step, image.size);
 		return false;
 	}
-	snprintf(last_write, sizeof(last_write), "step %u wrote the image at %#x", step, MPSS_MEMORY);
+	snprintf(last_write, sizeof(last_write), "step %u wrote the image at %#x", step, mpss_memory);
 	began = now_us();
 	for (unsigned s = 0; s < image.segments; s++) {
 		segment_put(dsp_memory, s);
@@ -1692,7 +1696,7 @@ step_our_item(void)
 	our_item = our_item_find();
 	if (our_item != 0) {
 		printf("mpss: %u: item %u is there, at %#lx: a kernel before this one made it, and it is used again\n", step,
-		    ITEM_SMP2P_OURS, SMEM_PHYS + our_item);
+		    ITEM_SMP2P_OURS, smem_phys + our_item);
 	} else {
 		if (!our_item_make(partition, ITEM_SMP2P_OURS, sizeof(struct smp2p))) {
 			return false;
@@ -1702,7 +1706,7 @@ step_our_item(void)
 			printf("mpss: %u: THE ITEM IS NOT FOUND where it was just made\n", step);
 			return false;
 		}
-		printf("mpss: %u: item %u made, at %#lx\n", step, ITEM_SMP2P_OURS, SMEM_PHYS + our_item);
+		printf("mpss: %u: item %u made, at %#lx\n", step, ITEM_SMP2P_OURS, smem_phys + our_item);
 	}
 	/* zeroes; from processor 0 to 1, room for 16 entries, "master-kernel" at zero, feature bit 0; last the version */
 	snprintf(last_write, sizeof(last_write), "step %u filled in our SMP2P item", step);
@@ -1787,7 +1791,8 @@ step_our_item(void)
  * a null pointer, twice of two). Nothing else of the IPA is done here yet: no clock, no tables.
  * modem_ipa_fw=0 leaves it out.
  */
-#define PAS_IPA                 15
+#define PAS_IPA_DEFAULT         15              /* dt: qcom,pas-id of qcom,ipa_fws */
+static uint32_t pas_ipa = PAS_IPA_DEFAULT;
 /*
  * Where the image goes. Android's pil (its dmesg: "yupik_ipa_fws: loading from 0x8b710000 to 0x8b717000")
  * puts it at the ipa_gsi reservation (0x8b710000, 0xa000; gpu_micro_code follows at 0x8b71a000), not at
@@ -1958,10 +1963,12 @@ ipa_hardware_init(void)
  * gives the IPA's streams the mask 0, so each takes a match register of its own, with the mask 0,
  * both sending to the one context.
  */
-#define IPA_STREAM              0x480u
-#define IPA_STREAM_UC           0x482u          /* the IPA's microcontroller: its own match register */
+#define IPA_STREAM_DEFAULT      0x480u
+#define IPA_STREAM_UC_DEFAULT   0x482u          /* the IPA's microcontroller: its own match register */
+static uint32_t ipa_stream = IPA_STREAM_DEFAULT, ipa_stream_uc = IPA_STREAM_UC_DEFAULT;  /* dt: iommus of ipa_smmu_ap and ipa_smmu_uc */
 #define IPA_SPACE_BASE          0x80000000ull   /* a gigabyte from here, as it is */
-#define IPA_IMEM                0x14600000ull   /* the 2 MB block that holds 0x146a8000 */
+#define IPA_IMEM_DEFAULT        0x14600000u   /* the 2 MB block that holds the SoC internal memory (dt: qcom,msm-imem) */
+static uint32_t ipa_imem = IPA_IMEM_DEFAULT;
 static struct block apps_smmu = { "apps smmu", 0x15000000, 0x2000 };
 static struct block apps_smmu_second = { "apps smmu", 0, 0x1000 };
 static struct block apps_smmu_context = { "apps smmu, the IPA's context", 0, 0x1000 };
@@ -2030,7 +2037,7 @@ static bool
 ipa_space_on(void)
 {
 	bool used[256] = { false };
-	uint32_t scr0, idr0, idr1, matches, contexts, sees = 1u << 31 | IPA_STREAM, sees_uc = 1u << 31 | IPA_STREAM_UC;
+	uint32_t scr0, idr0, idr1, matches, contexts, sees = 1u << 31 | ipa_stream, sees_uc = 1u << 31 | ipa_stream_uc;
 	uint64_t *root, *ddr, *soc, ttbr;
 
 	if (ipa_space.on) {
@@ -2095,21 +2102,21 @@ ipa_space_on(void)
 	for (unsigned i = 0; i < 512; i++) {
 		ddr[i] = (IPA_SPACE_BASE + (uint64_t)i * 0x200000) | IPA_BLOCK;
 	}
-	soc[(IPA_IMEM >> 21) & 0x1ff] = IPA_IMEM | IPA_BLOCK_DEVICE;
+	soc[(ipa_imem >> 21) & 0x1ff] = ipa_imem | IPA_BLOCK_DEVICE;
 	root[IPA_SPACE_BASE >> 30] = kvtophys((vm_offset_t)ddr) | IPA_TABLE;
 	/* the rest of DDR (the phone has 6 or 8 GB from 0x80000000), as 1 GB blocks of the root: the data path's rings and
 	 * buffers (hakios.ipa.c) are wherever the kernel's memory is */
 	for (unsigned g = (IPA_SPACE_BASE >> 30) + 1; g < (IPA_SPACE_BASE >> 30) + 8; g++) {
 		root[g] = ((uint64_t)g << 30) | IPA_BLOCK;
 	}
-	root[IPA_IMEM >> 30] = kvtophys((vm_offset_t)soc) | IPA_TABLE;
+	root[ipa_imem >> 30] = kvtophys((vm_offset_t)soc) | IPA_TABLE;
 	FlushPoC_DcacheRegion(ipa_space.tables, 3 * 4096);
 	settle();
 	ttbr = kvtophys(ipa_space.tables) | (uint64_t)ipa_space.context << 48;
 	printf("mpss: ipa: THE SMMU IS ABOUT TO BE WRITTEN: context %u gets our tables (root %#llx: DDR from %#llx as it is, 1 GB, and "
 	    "the SoC's memory at %#llx) and match registers %u and %u send streams %#x and %#x through it (before: smr %#x s2cr %#x, "
-	    "smr %#x s2cr %#x, sctlr %#x)\n", ipa_space.context, ttbr & 0x0000fffffffff000ull, IPA_SPACE_BASE, IPA_IMEM, ipa_space.match,
-	    ipa_space.match_uc, IPA_STREAM, IPA_STREAM_UC, ipa_space.old_smr, ipa_space.old_s2cr, ipa_space.old_smr_uc, ipa_space.old_s2cr_uc,
+	    "smr %#x s2cr %#x, sctlr %#x)\n", ipa_space.context, ttbr & 0x0000fffffffff000ull, IPA_SPACE_BASE, ipa_imem, ipa_space.match,
+	    ipa_space.match_uc, ipa_stream, ipa_stream_uc, ipa_space.old_smr, ipa_space.old_s2cr, ipa_space.old_smr_uc, ipa_space.old_s2cr_uc,
 	    ipa_space.old_sctlr);
 	wr(apps_smmu_context.base + SMMU_CB_SCTLR, 0);
 	wr(apps_smmu_second.base + SMMU_CBA2R(ipa_space.context), SMMU_CBA2R_64_BIT);
@@ -2146,7 +2153,7 @@ ipa_space_on(void)
 	    !(rd(apps_smmu_context.base + SMMU_CB_SCTLR) & 1) || rd(apps_smmu_context.base + SMMU_CB_TTBR0) != (uint32_t)ttbr) {
 		lck_mtx_unlock(&hakios_smmu_lock);
 		printf("mpss: ipa: THE SMMU DID NOT TAKE WHAT WAS WRITTEN: streams %#x and %#x are not both going through context %u (smr %#x "
-		    "s2cr %#x, smr %#x s2cr %#x, sctlr %#x)\n", IPA_STREAM, IPA_STREAM_UC, ipa_space.context,
+		    "s2cr %#x, smr %#x s2cr %#x, sctlr %#x)\n", ipa_stream, ipa_stream_uc, ipa_space.context,
 		    rd(apps_smmu.base + SMMU_SMR(ipa_space.match)), rd(apps_smmu.base + SMMU_S2CR(ipa_space.match)),
 		    rd(apps_smmu.base + SMMU_SMR(ipa_space.match_uc)), rd(apps_smmu.base + SMMU_S2CR(ipa_space.match_uc)),
 		    rd(apps_smmu_context.base + SMMU_CB_SCTLR));
@@ -2200,10 +2207,19 @@ ipa_firmware_load(void)
 	if (!option("modem_ipa_smmu_off")) {
 		ipa_space_on();
 	}
-	header = root_file("image/yupik_ipa_fws.mdt", &header_size);
-	if (header == NULL) {
-		printf("mpss: %u: no fw/image/yupik_ipa_fws.mdt: the IPA's firmware is not loaded\n", step);
-		return false;
+	{
+		/* the IPA's firmware file is SoC-specific (dt: qcom,firmware-name of qcom,ipa_fws; "yupik_ipa_fws"
+		 * on the first phone, something else on another SoC); soc_ipa_fw= overrides the name */
+		char fw[80], path[96];
+
+		strlcpy(fw, "yupik_ipa_fws", sizeof(fw));
+		PE_parse_boot_argn("soc_ipa_fw", fw, sizeof(fw));
+		snprintf(path, sizeof(path), "image/%s.mdt", fw);
+		header = root_file(path, &header_size);
+		if (header == NULL) {
+			printf("mpss: %u: no fw/%s: the IPA's firmware is not loaded\n", step, path);
+			return false;
+		}
 	}
 	count = header_size >= 52 ? header[44] | header[45] << 8 : 0;
 	if (memcmp(header, "\177ELF\1", 5) != 0 || count == 0 || count > 8 || 52 + 32 * count > header_size) {
@@ -2264,12 +2280,12 @@ ipa_firmware_load(void)
 		__asm__ volatile ("dc civac, %0" : : "r" (line));
 	}
 	settle();
-	result = scm("to take the IPA's header", SCM_PAS_INIT_IMAGE, SCM_VALUE_AND_BUFFER, PAS_IPA, kvtophys(page), 0, 0, &answer);
+	result = scm("to take the IPA's header", SCM_PAS_INIT_IMAGE, SCM_VALUE_AND_BUFFER, pas_ipa, kvtophys(page), 0, 0, &answer);
 	if (result != 0 || answer != 0) {
 		printf("mpss: %u: TRUSTZONE DOES NOT TAKE THE IPA'S HEADER (%d, %#llx)\n", step, result, answer);
 		goto out;
 	}
-	result = scm("where the IPA's image will be", SCM_PAS_MEM_SETUP, SCM_THREE_VALUES, PAS_IPA, ipa_fw_memory, size, 0, &answer);
+	result = scm("where the IPA's image will be", SCM_PAS_MEM_SETUP, SCM_THREE_VALUES, pas_ipa, ipa_fw_memory, size, 0, &answer);
 	if (result != 0 || answer != 0) {
 		printf("mpss: %u: TRUSTZONE DOES NOT TAKE THE IPA'S PLACE (%d, %#llx)\n", step, result, answer);
 		goto out;
@@ -2290,7 +2306,7 @@ ipa_firmware_load(void)
 	}
 	settle();
 	ml_io_unmap((vm_offset_t)memory, size);
-	result = scm("to authenticate the IPA's image and start it", SCM_PAS_AUTH_AND_RESET, SCM_ONE_VALUE, PAS_IPA, 0, 0, 0, &answer);
+	result = scm("to authenticate the IPA's image and start it", SCM_PAS_AUTH_AND_RESET, SCM_ONE_VALUE, pas_ipa, 0, 0, 0, &answer);
 	if (result != 0 || answer != 0) {
 		printf("mpss: %u: TRUSTZONE DOES NOT START THE IPA'S FIRMWARE (%d, %#llx)\n", step, result, answer);
 		goto out;
@@ -2380,7 +2396,7 @@ ipa_firmware_stop(void)
 {
 	uint64_t answer = ~0ull;
 
-	(void)scm("to shut the IPA's firmware down", SCM_PAS_SHUTDOWN, SCM_ONE_VALUE, PAS_IPA, 0, 0, 0, &answer);
+	(void)scm("to shut the IPA's firmware down", SCM_PAS_SHUTDOWN, SCM_ONE_VALUE, pas_ipa, 0, 0, 0, &answer);
 	if (!leaving) {
 		ipa_space_off();
 		ipa_clock(false);
@@ -2443,7 +2459,7 @@ step_start(void)
 		lck_mtx_unlock(&dsp_lock);
 		return false;
 	}
-	result = scm("to authenticate the modem's image and start it", SCM_PAS_AUTH_AND_RESET, SCM_ONE_VALUE, PAS_MPSS, 0, 0, 0,
+	result = scm("to authenticate the modem's image and start it", SCM_PAS_AUTH_AND_RESET, SCM_ONE_VALUE, pas_mpss, 0, 0, 0,
 	    &answer);
 	doorbell.since = started = now_us();
 	image_written = false;
@@ -2646,7 +2662,7 @@ glink_reset(void)
 		return;
 	}
 	printf("mpss: %u: GLINK's descriptor at %#lx: our queue read to %#x and written to %#x, the DSP's read to %#x and written "
-	    "to %#x\n", step, SMEM_PHYS + descriptor, smem_word(descriptor + GLINK_OUR_TAIL), smem_word(descriptor + GLINK_OUR_HEAD),
+	    "to %#x\n", step, smem_phys + descriptor, smem_word(descriptor + GLINK_OUR_TAIL), smem_word(descriptor + GLINK_OUR_HEAD),
 	    smem_word(descriptor + GLINK_THEIR_TAIL), smem_word(descriptor + GLINK_THEIR_HEAD));
 	if (smem_word(descriptor + GLINK_OUR_HEAD) != 0 || smem_word(descriptor + GLINK_THEIR_TAIL) != 0) {
 		printf("mpss: %u: about to write our two marks there (+4, +8): 0\n", step);
@@ -3610,7 +3626,7 @@ rmtfs_load(void)
  * no-map: nothing of ours uses it, and the CDSP is never started here), through an uncached
  * window, as the modem reads it.
  */
-#define RMTFS_BUFFER_PA         0x9c700000ull
+#define RMTFS_BUFFER_PA_DEFAULT 0x9c700000ull   /* dt: a window into reserved-memory cdsp@... (the CDSP is not started here) */
 
 static bool
 rmtfs_buffer_make(void)
@@ -3618,7 +3634,7 @@ rmtfs_buffer_make(void)
 	if (rmtfs_window != NULL) {
 		return true;
 	}
-	rmtfs_buffer_pa = RMTFS_BUFFER_PA;
+	rmtfs_buffer_pa = RMTFS_BUFFER_PA_DEFAULT;
 	PE_parse_boot_argn("modem_buffer", &rmtfs_buffer_pa, sizeof(rmtfs_buffer_pa));      /* (another region, to try) */
 	rmtfs_window = (volatile uint8_t *)ml_io_map_unmappable((vm_offset_t)rmtfs_buffer_pa, RMTFS_BUFFER_SIZE, VM_WIMG_WCOMB);
 	if (rmtfs_window == NULL) {
@@ -4997,8 +5013,8 @@ step_queues(void)
 	head = smem_word(glink.descriptor + GLINK_THEIR_HEAD);
 	tail = smem_word(glink.descriptor + GLINK_THEIR_TAIL);
 	printf("mpss: %u: our queue: %u bytes at %#lx, written to %#x, read by the DSP to %#x; the DSP's: %u bytes at %#lx, written "
-	    "to %#x, read by us to %#x\n", step, glink.ours_size, SMEM_PHYS + glink.ours, smem_word(glink.descriptor + GLINK_OUR_HEAD),
-	    smem_word(glink.descriptor + GLINK_OUR_TAIL), glink.theirs_size, SMEM_PHYS + glink.theirs, head, tail);
+	    "to %#x, read by us to %#x\n", step, glink.ours_size, smem_phys + glink.ours, smem_word(glink.descriptor + GLINK_OUR_HEAD),
+	    smem_word(glink.descriptor + GLINK_OUR_TAIL), glink.theirs_size, smem_phys + glink.theirs, head, tail);
 	for (uint32_t at = 0, shown = 0; at + sizeof(message) <= head && head < glink.theirs_size && tail == 0 && shown < 8; shown++) {
 		char name[33] = "";
 		uint32_t length = sizeof(message);
@@ -5320,26 +5336,62 @@ static bool keep;                       /* (defined below: the DSP and the link 
 #define WDS_START_NETWORK_INTERFACE 0x0020
 #define WDS_GET_CURRENT_SETTINGS 0x002d
 #define WDS_BIND_MUX_DATA_PORT  0x00a2
+#define WDS_SET_IP_FAMILY       0x004d
 #define QMI_WDA                 0x1a
 #define WDA_SET_DATA_FORMAT     0x0020
+#define QMI_DPM                 0x2f            /* Data Port Mapper */
+#define DPM_OPEN_PORT           0x0020
 #define DATA_ENDPOINT_EMBEDDED  4               /* the IPA, "interface" 1: where the packets of this session go (as ModemManager binds it) */
 #define DATA_ENDPOINT_INTERFACE 1
 #define DATA_MUX                1               /* the QMAP mux id (hakios.cell.c carries mux 1) */
-static struct hakios_qrtr_port *wds_port, *wda_port;
-static uint32_t wds_node, wds_port_number, wda_node, wda_port_number;
+static struct hakios_qrtr_port *wds_port, *wda_port, *dpm_port;
+static uint32_t wds_node, wds_port_number, wda_node, wda_port_number, dpm_node, dpm_port_number;
 static volatile bool wds_started, wds_up, wds_bound, wda_set;
+static volatile bool dpm_done, dpm_open, wda_sent, wda_done;  /* the port mapped, the data format asked and answered */
+static uint64_t data_setup_began;       /* when WDS was first seen: the mapping and the format get 20 s before the bind goes ahead */
 static volatile bool wds_bind_sent, wds_start_pending;
 static uint64_t wds_last_try;           /* when the bind or the session was last sent, for the retry */
 static uint32_t wds_handle;
 static void wds_send_start(void);
 
 /*
- * Before the session: the modem is told how the packets of the embedded port (the IPA) are
- * framed -- raw IP in QMAP, without checksum offload, aggregated up to 16 packets or 14 KB
- * downlink -- (WDA Set Data Format 0x20, as ModemManager does for the IPA), and our WDS client is
- * bound to QMAP mux 1 of that port (WDS Bind Mux Data Port 0xa2), so that this session's packets
- * are the ones with mux 1 that hakios.ipa.c sends and receives.
+ * Before the session, the modem is told where its data goes and how it is framed, in the order
+ * ModemManager follows for a modem behind the IPA (its port for the "ipa" network driver):
+ *
+ *   1. DPM Open Port (Data Port Mapper, service 0x2f, 0x20): the hardware data port -- the embedded
+ *      endpoint, interface 1, and the IPA endpoints it runs on. The modem's receiving end is our
+ *      transmit endpoint (2) and its transmitting end our receive endpoint (16), which is how Linux
+ *      exports them (ipa_sysfs.c: modem/tx_endpoint_id, rx_endpoint_id) and MM hands them over.
+ *      Without this the modem knows no embedded port: WDA answers InvalidOperation, the mux bind
+ *      Internal, the session InvalidOperation -- what cycles 38 to 41 got.
+ *   2. WDA Set Data Format (0x1a, 0x20) on that port: raw IP in QMAP (v1: no checksum headers, as
+ *      hakios.ipa.c programs the endpoints), at most 16 packets or 14 KB per downlink aggregate.
+ *   3. WDS Bind Mux Data Port, Set IP Family, Start Network Interface: wds_advance() below.
+ *
+ * Each step goes on when the one before has been answered, or after 20 s without an answer.
+ * modem_dpm_off=1 / modem_wda_off=1: those steps left out.
  */
+static void
+wda_send_format(void)
+{
+	/* raw IP, QMAP both ways, downlink at most 16 packets or 14 KB per aggregate, on the embedded port */
+	uint8_t request[7 + 7 + 7 + 7 + 7 + 7 + 11] = { 0, 0x43, 0, WDA_SET_DATA_FORMAT & 0xff, WDA_SET_DATA_FORMAT >> 8, 0, 0,
+		0x11, 4, 0, 2, 0, 0, 0,
+		0x12, 4, 0, 5, 0, 0, 0,
+		0x13, 4, 0, 5, 0, 0, 0,
+		0x15, 4, 0, 16, 0, 0, 0,
+		0x16, 4, 0, 0x00, 0x38, 0, 0,
+		0x17, 8, 0, DATA_ENDPOINT_EMBEDDED, 0, 0, 0, DATA_ENDPOINT_INTERFACE, 0, 0, 0 };
+
+	if (wda_sent || wda_port == NULL || wda_port_number == 0) {
+		return;
+	}
+	wda_sent = true;
+	request[5] = sizeof(request) - 7;
+	tell("mpss: wda: about to set the data format of the embedded port: raw IP in QMAP, no checksum offload\n");
+	qrtr_send(wda_port, wda_node, wda_port_number, request, sizeof(request));
+}
+
 static void
 wda_receive(__unused void *context, __unused uint32_t node, __unused uint32_t port, const void *data, size_t length)
 {
@@ -5360,8 +5412,10 @@ wda_receive(__unused void *context, __unused uint32_t node, __unused uint32_t po
 	if ((v = qmi_tlv(m, length, 0x12, &size)) != NULL && size >= 4) { ul = (uint32_t)(v[0] | v[1] << 8 | v[2] << 16 | v[3] << 24); }
 	if ((v = qmi_tlv(m, length, 0x13, &size)) != NULL && size >= 4) { dl = (uint32_t)(v[0] | v[1] << 8 | v[2] << 16 | v[3] << 24); }
 	wda_set = result == 0;
-	tell("mpss: wda: the data format %s: result %u error %u; link layer %u (2: raw IP), aggregation up %u down %u (5: QMAP)\n",
-	    result == 0 ? "is set" : "IS REFUSED", result, error, link, ul, dl);
+	wda_done = true;
+	tell("mpss: wda: THE DATA FORMAT %s: result %u error %u; link layer %u (2: raw IP), aggregation up %u down %u (5: QMAP)\n",
+	    result == 0 ? "IS SET" : "IS REFUSED", result, error, link, ul, dl);
+	wds_advance();
 }
 
 static void
@@ -5372,22 +5426,66 @@ wda_server(__unused void *context, bool arrived, uint32_t service, __unused uint
 		return;
 	}
 	if (arrived) {
-		/* raw IP, QMAP both ways, downlink at most 16 packets or 14 KB per aggregate, on the embedded port */
-		uint8_t request[7 + 7 + 7 + 7 + 7 + 7 + 11] = { 0, 0x43, 0, WDA_SET_DATA_FORMAT & 0xff, WDA_SET_DATA_FORMAT >> 8, 0, 0,
-			0x11, 4, 0, 2, 0, 0, 0,
-			0x12, 4, 0, 5, 0, 0, 0,
-			0x13, 4, 0, 5, 0, 0, 0,
-			0x15, 4, 0, 16, 0, 0, 0,
-			0x16, 4, 0, 0x00, 0x38, 0, 0,
-			0x17, 8, 0, DATA_ENDPOINT_EMBEDDED, 0, 0, 0, DATA_ENDPOINT_INTERFACE, 0, 0, 0 };
-
 		wda_node = node;
 		wda_port_number = port;
-		request[5] = sizeof(request) - 7;
-		tell("mpss: wda: about to set the data format of the embedded port: raw IP in QMAP, no checksum offload\n");
-		qrtr_send(wda_port, node, port, request, sizeof(request));
+		if (dpm_done || option("modem_dpm_off")) {
+			wda_send_format();
+		}
 	} else if (node == wda_node && port == wda_port_number) {
 		wda_node = wda_port_number = 0;
+	}
+}
+
+static void
+dpm_receive(__unused void *context, __unused uint32_t node, __unused uint32_t port, const void *data, size_t length)
+{
+	const uint8_t *m = data;
+	uint16_t size = 0;
+	const uint8_t *v;
+	uint32_t result = ~0u, error = ~0u;
+
+	if (length < 7 || m[0] != 2 || (uint16_t)(m[3] | m[4] << 8) != DPM_OPEN_PORT) {
+		return;
+	}
+	probe_dump("dpm", m, length);
+	if ((v = qmi_tlv(m, length, 2, &size)) != NULL && size >= 4) {
+		result = (uint32_t)(v[0] | v[1] << 8);
+		error = (uint32_t)(v[2] | v[3] << 8);
+	}
+	dpm_open = result == 0;
+	dpm_done = true;
+	tell("mpss: dpm: THE EMBEDDED DATA PORT %s: result %u error %u\n", dpm_open ? "IS OPEN" : "IS NOT OPENED", result, error);
+	wda_send_format();
+}
+
+static void
+dpm_server(__unused void *context, bool arrived, uint32_t service, __unused uint32_t version, __unused uint32_t instance, uint32_t node,
+    uint32_t port)
+{
+	if (service != QMI_DPM) {
+		return;
+	}
+	if (arrived) {
+		uint32_t to_modem = 2, from_modem = 16;
+		/* TLV 0x11, the hardware data ports: a one-byte count, then per port the endpoint type, the interface
+		 * number, the modem's receiving endpoint (ours that sends) and its transmitting one (ours that receives) */
+		uint8_t request[7 + 3 + 1 + 16] = { 0, 0x45, 0, DPM_OPEN_PORT & 0xff, DPM_OPEN_PORT >> 8, 20, 0, 0x11, 17, 0, 1 };
+		unsigned at = 11;
+
+		hakios_ipa_modem_endpoints(&to_modem, &from_modem);
+		dpm_node = node;
+		dpm_port_number = port;
+#define PUT32(x) do { request[at++] = (uint8_t)(x); request[at++] = (uint8_t)((x) >> 8); request[at++] = (uint8_t)((x) >> 16); request[at++] = (uint8_t)((x) >> 24); } while (0)
+		PUT32(DATA_ENDPOINT_EMBEDDED);
+		PUT32(DATA_ENDPOINT_INTERFACE);
+		PUT32(to_modem);
+		PUT32(from_modem);
+#undef PUT32
+		tell("mpss: dpm: about to open the embedded data port (interface %u, the modem receives on IPA endpoint %u and sends on %u)\n",
+		    DATA_ENDPOINT_INTERFACE, to_modem, from_modem);
+		qrtr_send(dpm_port, node, port, request, sizeof(request));
+	} else if (node == dpm_node && port == dpm_port_number) {
+		dpm_node = dpm_port_number = 0;
 	}
 }
 
@@ -5442,8 +5540,22 @@ wds_receive(__unused void *context, __unused uint32_t node, __unused uint32_t po
 		wds_bound = result == 0;
 		tell("mpss: wds: the client %s to mux %u of the embedded port (result %u, error %u); the session waits for registration%s\n",
 		    wds_bound ? "is bound" : "IS NOT BOUND", DATA_MUX, result, error, wds_bound ? "" : " (started all the same)");
+		{
+			/* the client's IP family: IPv4 (WDS Set IP Family 0x4d), as MM does before starting */
+			uint8_t family[11] = { 0, 0x46, 0, WDS_SET_IP_FAMILY & 0xff, WDS_SET_IP_FAMILY >> 8, 4, 0, 0x01, 1, 0, 4 };
+
+			qrtr_send(wds_port, wds_node, wds_port_number, family, sizeof(family));
+		}
 		wds_last_try = now_us();        /* give the session a moment after the bind */
 		wds_advance();
+	} else if (m[0] == 2 && message == WDS_SET_IP_FAMILY) {
+		uint32_t result = ~0u, error = ~0u;
+
+		if ((v = qmi_tlv(m, length, 2, &size)) != NULL && size >= 4) {
+			result = (uint32_t)(v[0] | v[1] << 8);
+			error = (uint32_t)(v[2] | v[3] << 8);
+		}
+		tell("mpss: wds: the IP family (IPv4) %s (result %u, error %u)\n", result == 0 ? "is set" : "is not set", result, error);
 	} else if (m[0] == 2 && message == WDS_GET_CURRENT_SETTINGS) {
 		uint32_t ip = 0, gw = 0, mask = 0, dns1 = 0, dns2 = 0, mtu = 0;
 		char a[20], g[20], d1[20], d2[20], mk[20];
@@ -5498,9 +5610,13 @@ wds_open(void)
 			qrtr_lookup(wds_port, QMI_WDS, 0, 0);
 		}
 	}
-	/* WDA Set Data Format is for USB/PCIe rmnet; the embedded IPA's format is set by the IPA
-	 * driver (INIT_DRIVER), so WDA returns InvalidOperation here. Opt in with modem_wda=1. */
-	if (wda_port == NULL && option("modem_wda") && !option("modem_data_off")) {
+	if (dpm_port == NULL && !option("modem_dpm_off") && !option("modem_data_off")) {
+		dpm_port = qrtr_open(dpm_receive, dpm_server, NULL);
+		if (dpm_port != NULL) {
+			qrtr_lookup(dpm_port, QMI_DPM, 0, 0);
+		}
+	}
+	if (wda_port == NULL && !option("modem_wda_off") && !option("modem_data_off")) {
 		wda_port = qrtr_open(wda_receive, wda_server, NULL);
 		if (wda_port != NULL) {
 			qrtr_lookup(wda_port, QMI_WDA, 0, 0);
@@ -5525,6 +5641,19 @@ wds_advance(void)
 
 	if (wds_port == NULL || wds_port_number == 0 || wds_up) {
 		return;
+	}
+	if (data_setup_began == 0) {
+		data_setup_began = now_us();
+	}
+	/* the port mapping and the data format first (or 20 s for them); a WDA that never came is not waited for */
+	if (!wds_bind_sent && now_us() - data_setup_began < 20000000ull) {
+		if (!option("modem_dpm_off") && !dpm_done) {
+			return;
+		}
+		if (!option("modem_wda_off") && wda_port_number != 0 && !wda_done) {
+			wda_send_format();      /* (if DPM answered before WDA was there) */
+			return;
+		}
 	}
 	/* bind once (unless modem_data_nobind), before or after registration */
 	if (!wds_bind_sent && !option("modem_data_nobind")) {
@@ -5578,7 +5707,13 @@ wds_close(void)
 		qrtr_close(wda_port);
 		wda_port = NULL;
 	}
-	wds_node = wds_port_number = wda_node = wda_port_number = 0;
+	if (dpm_port != NULL) {
+		qrtr_close(dpm_port);
+		dpm_port = NULL;
+	}
+	wds_node = wds_port_number = wda_node = wda_port_number = dpm_node = dpm_port_number = 0;
+	dpm_done = dpm_open = wda_sent = wda_done = false;
+	data_setup_began = 0;
 	wds_started = wds_up = wds_bound = wda_set = false;
 	wds_bind_sent = wds_start_pending = wds_registered = false;
 	wds_last_try = 0;
@@ -6164,6 +6299,47 @@ whole_thread(__unused void *parameter, __unused wait_result_t result)
 	thread_terminate(current_thread());
 }
 
+/*
+ * The SoC addresses of another Qualcomm phone, from boot-args, over the first phone's built-in
+ * values. Everything the modem and the IPA touch is here: the register blocks mapped at run time
+ * (the AOSS and IPCC mailboxes, the RPMh controller, the shared-memory hardware lock, the IPA and
+ * GSI registers and the IPA's local memory, the application processors' SMMU) and the few
+ * addresses kept as values (shared memory, the command DB, the modem's memory, the SoC's internal
+ * memory). A port passes soc_<name>=0x... for each that differs; tools/soc-args.py reads them off
+ * the phone's own device tree. Anything not given keeps the built-in value, so the first phone
+ * needs no arguments. (The RMTFS buffer has its own argument, modem_buffer.)
+ */
+static void
+soc_override(void)
+{
+	static const struct { const char *arg; struct block *block; } blocks[] = {
+		{ "soc_aoss", &aoss }, { "soc_ipcc", &ipcc }, { "soc_rsc", &rsc }, { "soc_smem_lock", &smem_lock },
+		{ "soc_ipa_regs", &ipa_regs }, { "soc_ipa_sram", &ipa_sram }, { "soc_gsi_ee0", &gsi_ee0 }, { "soc_apps_smmu", &apps_smmu },
+	};
+	unsigned said = 0;
+
+	for (unsigned i = 0; i < sizeof(blocks) / sizeof(blocks[0]); i++) {
+		uint32_t phys = 0;
+
+		if (PE_parse_boot_argn(blocks[i].arg, &phys, sizeof(phys)) && phys != 0 && blocks[i].block->base == 0) {
+			blocks[i].block->phys = phys;
+			said++;
+		}
+	}
+	PE_parse_boot_argn("soc_smem", &smem_phys, sizeof(smem_phys));
+	PE_parse_boot_argn("soc_cmd_db", &cmd_db_phys, sizeof(cmd_db_phys));
+	PE_parse_boot_argn("soc_mpss_mem", &mpss_memory, sizeof(mpss_memory));
+	PE_parse_boot_argn("soc_imem", &ipa_imem, sizeof(ipa_imem));
+	PE_parse_boot_argn("soc_ipa_stream", &ipa_stream, sizeof(ipa_stream));
+	PE_parse_boot_argn("soc_ipa_stream_uc", &ipa_stream_uc, sizeof(ipa_stream_uc));
+	PE_parse_boot_argn("soc_pas_mpss", &pas_mpss, sizeof(pas_mpss));
+	PE_parse_boot_argn("soc_pas_ipa", &pas_ipa, sizeof(pas_ipa));
+	if (said != 0 || smem_phys != SMEM_PHYS_DEFAULT || mpss_memory != MPSS_MEMORY_DEFAULT) {
+		printf("mpss: SoC addresses from boot-args: %u register blocks; shared memory %#x, command DB %#x, the modem's "
+		    "memory %#x, the SoC's internal memory %#x\n", said, smem_phys, cmd_db_phys, mpss_memory, ipa_imem);
+	}
+}
+
 /* Called while the system starts (bsd/dev/hakios.input.c), after the Wi-Fi's start has been set going. */
 void
 hakios_mpss_init(void)
@@ -6179,6 +6355,7 @@ hakios_mpss_init(void)
 		printf("mpss: modem=1 and modem_step=N are for the phone's modem, and this is not the phone\n");
 		return;
 	}
+	soc_override();
 	if (last_step == 0) {
 		/* all of it, on a thread of its own, and left up */
 		last_step = STEPS;

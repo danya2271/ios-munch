@@ -32,6 +32,7 @@
  *     answered, with that program's layers.
  */
 #include <CoreFoundation/CoreFoundation.h>
+#include <time.h>
 #include <IOKit/IOKitLib.h>
 #include <dispatch/dispatch.h>
 #include <dlfcn.h>
@@ -307,6 +308,23 @@ update_signal_item(id self, SEL sel, long item, void *data, id sim, void *getter
 	 * registration) at least one bar is forced so the icon is visibly present rather than empty.
 	 * modem_bars_off=1 (as a sysctl) is not honoured; set kern.hakios.cellular_up=0 to hide it.
 	 */
+	/*
+	 * The kernel's NAS state alternates between two reports -- "registered, signal not read" and
+	 * "not registered, -86 dBm" -- so at the moments it says registered the dBm reads 0. The last
+	 * real reading (within a minute) stands in for it.
+	 */
+	{
+		static int last_dbm;
+		static time_t last_dbm_at;
+		time_t now = time(NULL);
+
+		if (dbm < 0) {
+			last_dbm = dbm;
+			last_dbm_at = now;
+		} else if (last_dbm < 0 && now - last_dbm_at < 60) {
+			dbm = last_dbm;
+		}
+	}
 	shown = bars;
 	if (shown <= 0 && dbm < 0) {
 		shown = dbm >= -95 ? 4 : dbm >= -105 ? 3 : dbm >= -115 ? 2 : 1;   /* derive from dBm when bars is 0 */
@@ -368,9 +386,59 @@ update_service_item(id self, SEL sel, long item, void *data, id sim, id other, v
 	}
 }
 
+/*
+ * The bars are drawn by UIKit's signal view, whose "signal mode" says how: inactive (all bars grey),
+ * searching, or active (the bars that count dark). iOS's cellular stack (CommCenter, not here)
+ * puts it in active mode once there is service; without it the bars stay grey whatever their
+ * number. So for the cellular signal view (not the Wi-Fi one), while the kernel says the modem is
+ * registered, the mode is made active. The modes seen are said in the log once each.
+ */
+static void (*original_set_signal_mode)(id self, SEL sel, long mode);
+static long cellular_active_mode = 2;  /* _UIStatusBarSignalView: 0 inactive, 1 searching, 2 active */
+
+static void
+set_signal_mode(id self, SEL sel, long mode)
+{
+	static unsigned said_modes;
+	const char *name = object_getClassName(self);
+	bool cellular = name != NULL && strstr(name, "Cellular") != NULL;
+	long wanted = mode;
+
+	if (cellular && mode < 8 && !(said_modes & (1u << mode))) {
+		said_modes |= 1u << mode;
+		say("hakios: cellular: %s asked for signal mode %ld\n", name, mode);
+	}
+	if (cellular && sysctl_int("kern.hakios.cellular_registered") > 0 && mode != cellular_active_mode) {
+		wanted = cellular_active_mode;
+	}
+	original_set_signal_mode(self, sel, wanted);
+}
+
+static void
+signal_view_hook(void)
+{
+	static const char *const classes[] = { "_UIStatusBarCellularSignalView", "_UIStatusBarSignalView" };
+
+	for (unsigned c = 0; c < sizeof(classes) / sizeof(classes[0]); c++) {
+		Class cls = objc_getClass(classes[c]);
+		Method method = cls ? class_getInstanceMethod(cls, sel_registerName("setSignalMode:")) : NULL;
+
+		if (method == NULL) {
+			say("hakios: cellular: no -[%s setSignalMode:]\n", classes[c]);
+			continue;
+		}
+		original_set_signal_mode = (void (*)(id, SEL, long))method_getImplementation(method);
+		method_setImplementation(method, (IMP)set_signal_mode);
+		say("hakios: cellular: -[%s setSignalMode:] replaced (types \"%s\"): active while the kernel says registered\n",
+		    classes[c], method_getTypeEncoding(method));
+		return;         /* the base class's method serves the subclasses */
+	}
+}
+
 static void
 cellular_hook(void)
 {
+	signal_view_hook();
 	{
 		const char *service_selector = "_updateServiceItem:withData:SIMInfo:otherSIMInfo:serviceStringGetter:serviceStringSetter:"
 		    "serviceCrossfadeStringGetter:serviceCrossfadeStringSetter:serviceContentTypeGetter:serviceContentTypeSetter:"
