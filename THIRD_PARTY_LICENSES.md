@@ -10,6 +10,7 @@ This supersedes the summary in `NOTICE`, which stays as the short, canonical lis
 
 | Component | Path | Origin | License | Notes |
 |---|---|---|---|---|
+| F4 UEFI overlay derived from UMI | `devices/poco-f4/uefi/` | JopangJovan UMI port `6b6fb2b`; Project Mu contributors | APSL-2.0 for UMI-specific code; retained BSD-2-Clause-Patent notices for Project Mu files | vendor modules extracted locally, not redistributed |
 | XNU modifications | `xnu/hakios.patch`, `xnu/files/` | derivative of Apple XNU | APSL 2.0 (`LICENSE.APSL`) | base tag `xnu-8796.121.2`, fetched by `xnu/apply.sh` |
 | libdeflate | `xnu/files/bsd/miscfs/apfs/libdeflate/` | Eric Biggers | MIT | see its `COPYING` |
 | libzbitmap | `xnu/files/bsd/miscfs/apfs/libzbitmap/`, `xnu-deps/build/lzbitmap/` | Corellium LLC (port of eafer/libzbitmap) | GPL-2.0+ OR MIT | used under MIT |

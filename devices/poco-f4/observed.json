@@ -1,0 +1,595 @@
+{
+  "schema_version": 1,
+  "status": "observed; not boot validated",
+  "model": "Qualcomm Technologies, Inc. xiaomi munch",
+  "memory": [
+    {
+      "base": "0x80000000",
+      "size": "0x3cc00000",
+      "end_exclusive": "0xbcc00000"
+    },
+    {
+      "base": "0xc0000000",
+      "size": "0x140000000",
+      "end_exclusive": "0x200000000"
+    }
+  ],
+  "reserved_memory": [
+    {
+      "path": "/reserved-memory/adsp_region",
+      "ranges": [],
+      "dynamic_size": "0xc00000",
+      "no_map": false,
+      "reusable": true
+    },
+    {
+      "path": "/reserved-memory/cdsp_region",
+      "ranges": [],
+      "dynamic_size": "0x400000",
+      "no_map": false,
+      "reusable": true
+    },
+    {
+      "path": "/reserved-memory/cdsp_secure_heap@8e100000",
+      "ranges": [
+        {
+          "base": "0x8e100000",
+          "size": "0x4600000",
+          "end_exclusive": "0x92700000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/cnss_wlan_region",
+      "ranges": [],
+      "dynamic_size": "0x1400000",
+      "no_map": false,
+      "reusable": true
+    },
+    {
+      "path": "/reserved-memory/cont_splash_region@9c000000",
+      "ranges": [
+        {
+          "base": "0x9c000000",
+          "size": "0x2300000",
+          "end_exclusive": "0x9e300000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": false,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/ddr-stats-reg@c3f001c",
+      "ranges": [
+        {
+          "base": "0xc3f001c",
+          "size": "0x4",
+          "end_exclusive": "0xc3f0020"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/dfps_data_region@9e300000",
+      "ranges": [
+        {
+          "base": "0x9e300000",
+          "size": "0x100000",
+          "end_exclusive": "0x9e400000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": false,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/disp_rdump_region@9c000000",
+      "ranges": [
+        {
+          "base": "0xb0400000",
+          "size": "0x200000",
+          "end_exclusive": "0xb0600000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/hyp_region@80000000",
+      "ranges": [
+        {
+          "base": "0x80000000",
+          "size": "0x600000",
+          "end_exclusive": "0x80600000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/linux,cma",
+      "ranges": [],
+      "dynamic_size": "0x8000000",
+      "no_map": false,
+      "reusable": true
+    },
+    {
+      "path": "/reserved-memory/mailbox_region",
+      "ranges": [],
+      "dynamic_size": "0x20000",
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/mem_dump_region",
+      "ranges": [],
+      "dynamic_size": "0x2800000",
+      "no_map": false,
+      "reusable": true
+    },
+    {
+      "path": "/reserved-memory/pil_adsp_region@8bb00000",
+      "ranges": [
+        {
+          "base": "0x8bb00000",
+          "size": "0x2500000",
+          "end_exclusive": "0x8e000000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/pil_camera_region@86200000",
+      "ranges": [
+        {
+          "base": "0x86200000",
+          "size": "0x500000",
+          "end_exclusive": "0x86700000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/pil_cdsp_region@87800000",
+      "ranges": [
+        {
+          "base": "0x87800000",
+          "size": "0x1400000",
+          "end_exclusive": "0x88c00000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/pil_cvp_region@87300000",
+      "ranges": [
+        {
+          "base": "0x87300000",
+          "size": "0x500000",
+          "end_exclusive": "0x87800000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/pil_gpu_region@8681a000",
+      "ranges": [
+        {
+          "base": "0x8681a000",
+          "size": "0x2000",
+          "end_exclusive": "0x8681c000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/pil_ipa_fw_region@86800000",
+      "ranges": [
+        {
+          "base": "0x86800000",
+          "size": "0x10000",
+          "end_exclusive": "0x86810000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/pil_ipa_gsi_region@86810000",
+      "ranges": [
+        {
+          "base": "0x86810000",
+          "size": "0xa000",
+          "end_exclusive": "0x8681a000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/pil_npu_region@86900000",
+      "ranges": [
+        {
+          "base": "0x86900000",
+          "size": "0x500000",
+          "end_exclusive": "0x86e00000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/pil_slpi_region@88c00000",
+      "ranges": [
+        {
+          "base": "0x88c00000",
+          "size": "0x2f00000",
+          "end_exclusive": "0x8bb00000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/pil_spss_region@8e000000",
+      "ranges": [
+        {
+          "base": "0x8e000000",
+          "size": "0x100000",
+          "end_exclusive": "0x8e100000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/pil_video_region@86e00000",
+      "ranges": [
+        {
+          "base": "0x86e00000",
+          "size": "0x500000",
+          "end_exclusive": "0x87300000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/pil_wlan_fw_region@86700000",
+      "ranges": [
+        {
+          "base": "0x86700000",
+          "size": "0x100000",
+          "end_exclusive": "0x86800000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/qseecom_region",
+      "ranges": [],
+      "dynamic_size": "0x1400000",
+      "no_map": false,
+      "reusable": true
+    },
+    {
+      "path": "/reserved-memory/qseecom_ta_region",
+      "ranges": [],
+      "dynamic_size": "0x1000000",
+      "no_map": false,
+      "reusable": true
+    },
+    {
+      "path": "/reserved-memory/ramoops",
+      "ranges": [
+        {
+          "base": "0xb0000000",
+          "size": "0x100000",
+          "end_exclusive": "0xb0100000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": false,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/removed_region@80b00000",
+      "ranges": [
+        {
+          "base": "0x80b00000",
+          "size": "0x5300000",
+          "end_exclusive": "0x85e00000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/res_xbl_uefi_log_region",
+      "ranges": [
+        {
+          "base": "0x80880000",
+          "size": "0x14000",
+          "end_exclusive": "0x80894000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/reserved-memory@80860000",
+      "ranges": [
+        {
+          "base": "0x80860000",
+          "size": "0x20000",
+          "end_exclusive": "0x80880000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/rpm-ddr-stats@c300000",
+      "ranges": [
+        {
+          "base": "0xc300000",
+          "size": "0x1000",
+          "end_exclusive": "0xc301000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/rpm-stats-reg@c3f0004",
+      "ranges": [
+        {
+          "base": "0xc3f0004",
+          "size": "0x4",
+          "end_exclusive": "0xc3f0008"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/rpmh-master-stats@b221200",
+      "ranges": [
+        {
+          "base": "0xb221200",
+          "size": "0x60",
+          "end_exclusive": "0xb221260"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/sdsp_region",
+      "ranges": [],
+      "dynamic_size": "0x800000",
+      "no_map": false,
+      "reusable": true
+    },
+    {
+      "path": "/reserved-memory/secure_display_region",
+      "ranges": [],
+      "dynamic_size": "0xa400000",
+      "no_map": false,
+      "reusable": true
+    },
+    {
+      "path": "/reserved-memory/smem_region@80900000",
+      "ranges": [
+        {
+          "base": "0x80900000",
+          "size": "0x200000",
+          "end_exclusive": "0x80b00000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/sp_region",
+      "ranges": [],
+      "dynamic_size": "0x1000000",
+      "no_map": false,
+      "reusable": true
+    },
+    {
+      "path": "/reserved-memory/tzlog@146bf720",
+      "ranges": [
+        {
+          "base": "0x146bf720",
+          "size": "0x3000",
+          "end_exclusive": "0x146c2720"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    },
+    {
+      "path": "/reserved-memory/user_contig_region",
+      "ranges": [],
+      "dynamic_size": "0x1000000",
+      "no_map": false,
+      "reusable": true
+    },
+    {
+      "path": "/reserved-memory/xbl_aop_region@80700000",
+      "ranges": [
+        {
+          "base": "0x80600000",
+          "size": "0x260000",
+          "end_exclusive": "0x80860000"
+        }
+      ],
+      "dynamic_size": null,
+      "no_map": true,
+      "reusable": false
+    }
+  ],
+  "cpus": [
+    {
+      "path": "/cpus/cpu@0",
+      "mpidr": "0x0",
+      "capacity_dmips_mhz": 448
+    },
+    {
+      "path": "/cpus/cpu@100",
+      "mpidr": "0x100",
+      "capacity_dmips_mhz": 448
+    },
+    {
+      "path": "/cpus/cpu@200",
+      "mpidr": "0x200",
+      "capacity_dmips_mhz": 448
+    },
+    {
+      "path": "/cpus/cpu@300",
+      "mpidr": "0x300",
+      "capacity_dmips_mhz": 448
+    },
+    {
+      "path": "/cpus/cpu@400",
+      "mpidr": "0x400",
+      "capacity_dmips_mhz": 1023
+    },
+    {
+      "path": "/cpus/cpu@500",
+      "mpidr": "0x500",
+      "capacity_dmips_mhz": 1023
+    },
+    {
+      "path": "/cpus/cpu@600",
+      "mpidr": "0x600",
+      "capacity_dmips_mhz": 1023
+    },
+    {
+      "path": "/cpus/cpu@700",
+      "mpidr": "0x700",
+      "capacity_dmips_mhz": 1024
+    }
+  ],
+  "psci": {
+    "method": [
+      "smc"
+    ],
+    "compatible": [
+      "arm,psci-1.0"
+    ]
+  },
+  "gic": {
+    "path": "/soc/interrupt-controller@17a00000",
+    "ranges": [
+      {
+        "base": "0x17a00000",
+        "size": "0x10000",
+        "end_exclusive": "0x17a10000"
+      },
+      {
+        "base": "0x17a60000",
+        "size": "0x100000",
+        "end_exclusive": "0x17b60000"
+      }
+    ],
+    "redistributor_stride": "0x20000"
+  },
+  "touch": {
+    "path": "/soc/spi@990000/focaltech@0",
+    "bus": "/soc/spi@990000",
+    "spi_max_hz": 6000000,
+    "display_coords_raw": [
+      0,
+      0,
+      10800,
+      24000
+    ],
+    "max_touches": 10,
+    "focaltech,reset-gpio": {
+      "controller": "/soc/pinctrl@f000000",
+      "specifier": [
+        33,
+        0
+      ]
+    },
+    "focaltech,irq-gpio": {
+      "controller": "/soc/pinctrl@f000000",
+      "specifier": [
+        39,
+        8200
+      ]
+    },
+    "vdd-supply": {
+      "path": "/soc/rsc@18200000/rpmh-regulator-ldoc10/regulator-pm8150a-l10",
+      "name": "pm8150a_l10",
+      "min_uv": 3000000,
+      "max_uv": 3312000
+    },
+    "vcc_i2c-supply": {
+      "path": "/soc/rsc@18200000/rpmh-regulator-ldoc1/regulator-pm8150a-l1",
+      "name": "pm8150a_l1",
+      "min_uv": 1800000,
+      "max_uv": 1800000
+    }
+  },
+  "timer": {
+    "clock_hz": 19200000,
+    "interrupt_cells": [
+      1,
+      13,
+      65288,
+      1,
+      14,
+      65288,
+      1,
+      11,
+      65288,
+      1,
+      12,
+      65288
+    ]
+  },
+  "selected_panel": "qcom,mdss_dsi_l11r_38_08_0a_dsc_cmd",
+  "limitations": [
+    "Android DT does not describe all resident UEFI allocations.",
+    "Reserved splash memory does not establish the active scanout address or stride.",
+    "Payload and FD addresses require the matching XBL configuration and EFI memory map.",
+    "Touch protocol and coordinate scaling require matching driver source."
+  ]
+}

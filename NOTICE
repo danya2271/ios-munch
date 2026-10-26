@@ -3,6 +3,11 @@ Third-party components in or used by HakiOS
 
 In the repository:
 
+- F4 UEFI source overlay, devices/poco-f4/uefi/: adapted from JopangJovan's UMI
+  port (6b6fb2b0c5a1720496ec71e88c95d2a45a0046a4). Project Mu derived files
+  retain their BSD-2-Clause-Patent notices; UMI-specific additions inherit
+  APSL-2.0. See devices/poco-f4/uefi/README.md. Vendor modules are extracted locally.
+
 - XNU (Apple): the kernel sources are fetched by xnu/apply.sh from github.com/apple-oss-distributions/xnu;
   our patch and files are a derivative work under the Apple Public Source License 2.0 (LICENSE.APSL).
 - libdeflate (Eric Biggers), xnu/files/bsd/miscfs/apfs/libdeflate/: MIT, see its COPYING.

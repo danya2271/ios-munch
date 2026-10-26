@@ -1,0 +1,17 @@
+{
+  "controller": "FT3658U",
+  "runtime_id": "0x5652",
+  "firmware_version_display": "28",
+  "spi_mode": 0,
+  "spi_max_hz": 6000000,
+  "reset_tlmm_gpio": 33,
+  "irq_tlmm_gpio": 39,
+  "linux_gpio_base": 1100,
+  "coordinate_max_exclusive": [
+    10800,
+    24000
+  ],
+  "multitouch_slots": 10,
+  "external_firmware_files_found": false,
+  "source_archive_sha256": "6d6308a422a225bcda15c5b69d67e908300c62ea10762bcca10d2c2b4919461d"
+}

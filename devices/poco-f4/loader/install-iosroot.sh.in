@@ -1,0 +1,39 @@
+#!/system/bin/sh
+# Replace only the dedicated munch iosroot partition with the verified APFS image.
+set -eu
+set -o pipefail
+case "${1:-}" in --check|--apply) ;; *) echo 'Usage: sh install.sh --check|--apply'; exit 2 ;; esac
+[ "$(id -u)" = 0 ] || { echo 'Run as root in Android or recovery.' >&2; exit 1; }
+[ "$(getprop ro.product.device)" = munch ] || { echo 'This installer requires munch.' >&2; exit 1; }
+cd "$(dirname "$0")"
+for tool in readlink blockdev sha256sum dd; do command -v "$tool" >/dev/null || exit 1; done
+target=$(readlink -f /dev/block/by-name/iosroot)
+[ "$target" = /dev/block/sda35 ] && [ -b "$target" ] || {
+    echo 'Unexpected iosroot mapping; refusing to write.' >&2; exit 1;
+}
+[ "$(cat /sys/class/block/sda35/partition)" = 35 ] || exit 1
+if awk '$1 == "/dev/block/sda35" || $1 ~ /\/by-name\/iosroot$/ {found=1} END {exit !found}' /proc/mounts; then
+    echo 'iosroot is mounted; unmount it first.' >&2; exit 1
+fi
+for holder in /sys/class/block/sda35/holders/*; do
+    [ ! -e "$holder" ] || { echo 'iosroot has an active device-mapper holder.' >&2; exit 1; }
+done
+expected_size=@SYSTEM_SIZE@
+expected_sha=@SYSTEM_SHA256@
+[ "$(wc -c < system.apfs | tr -d ' ')" = "$expected_size" ] || {
+    echo 'Wrong system.apfs size.' >&2; exit 1;
+}
+capacity=$(blockdev --getsize64 "$target")
+case "$capacity" in ''|*[!0-9]*) exit 1 ;; esac
+[ "$capacity" -ge "$expected_size" ] || { echo 'iosroot is too small.' >&2; exit 1; }
+printf '%s  system.apfs\n' "$expected_sha" | sha256sum -c -
+echo "Verified iOS 16.5 20F66 image: $expected_size bytes; target: $target ($capacity bytes)."
+[ "$1" = --apply ] || { echo 'CHECK PASSED. No partition was modified.'; exit 0; }
+echo 'Replacing the old iosroot contents. Android boot/system/userdata are not targets.'
+dd if=system.apfs of="$target" bs=4194304 conv=fsync
+sync
+echo 'Reading the written image back for SHA-256 verification.'
+actual=$(dd if="$target" bs=4096 count=@SYSTEM_BLOCKS@ | sha256sum)
+actual=${actual%% *}
+[ "$actual" = "$expected_sha" ] || { echo 'READBACK FAILED. Do not boot the new image.' >&2; exit 1; }
+echo 'INSTALL AND READBACK PASSED. Use the matching munch-ios165-ramboot.img.'

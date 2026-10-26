@@ -1,0 +1,163 @@
+--- a/loader.c
++++ b/loader.c
+@@ -330,51 +330,11 @@
+ static void
+ write_logs(const char *klog, uint64_t klog_len)
+ {
+-	efi_block_io *bio = find_log_partition();
+-
++	/* F4 checkpoint probe: logs stay in RAM and on the console. */
+ 	compose_logs(klog, klog_len);
+-	if (bio == NULL) {
+-		/* No log partition (QEMU): echo the returned kernel log on the console instead. */
+-		if (klog != NULL) {
+-			print("\n== KERNEL LOG ==\n");
+-			for (uint64_t i = 0; i < klog_len; i++) {
+-				put_char(klog[i]);
+-			}
+-			print("\n== END OF LOG ==\n");
+-		}
+-		return;
+-	}
+-	uint64_t bs = bio->media->block_size;
+-	uint64_t len = (staged_len + 1 + bs - 1) / bs * bs;
+-	efi_status ws, rs = 0;
+-	int same = 0;
+-
+-	/* only through UEFI's own transfer list (see hc_take_back) */
+-	if (!hc_list_is_uefis()) {
+-		if (hc_log_skips++ < 2) {
+-			hc_print_state("log not written");
+-			print("log: NOT WRITTEN to logdump: UEFI's transfer list is not the one in the controller\n");
+-		}
+-		compose_logs(klog, klog_len);
+-		return;
+-	}
+-	ws = bio->write_blocks(bio, bio->media->media_id, 0, len, out_buf);
+-
+-	if (!EFI_ERROR(ws)) {
+-		bio->flush_blocks(bio);
+-		/*
+-		 * And read back: that the log is in the partition is what a run of the kernel's own UFS
+-		 * driver must leave possible (the controller is shared with this one). The line goes into
+-		 * the copy the host fetches over USB, not into the partition, which already has the rest.
+-		 */
+-		if (len <= sizeof(block_buffer)) {
+-			rs = bio->read_blocks(bio, bio->media->media_id, 0, len, block_buffer);
+-			same = !EFI_ERROR(rs) && memcmp(block_buffer, out_buf, len) == 0;
+-		}
+-	}
+-	print("log: %d bytes written to logdump (%x), read back %s (%x)\n", len, ws,
+-	    EFI_ERROR(ws) ? "not tried" : same ? "the same" : "DIFFERENT", rs);
+-	compose_logs(klog, klog_len);
++	if (klog != NULL) {
++		for (uint64_t i = 0; i < klog_len; i++) put_char(klog[i]);
++	}
+ }
+ 
+ static void
+@@ -551,12 +511,20 @@
+ 	.small_cores = 0x0f,
+ };
+ 
++/* Verified F4 GOP and DT parameters; no Redwood watchdog or charger calls. */
++static const struct platform platform_munch = {
++	.name = "munch", .io_base = 0x00400000, .io_size = 0x3FC00000,
++	.gic_dist = 0x17A00000, .gic_redist = 0x17A60000,
++	.cores = 8, .core_shift = 8, .small_cores = 0x0f,
++};
++
+ /* ------------------------------------------------------------------------ */
+ 
+ static void
+ reboot(void)
+ {
+-	hc_take_back("before the reset");
++	print("MUNCH checkpoint probe finished. Photograph the result; reboot in 90 seconds.\n");
++	for (unsigned i = 0; i < 90; i++) BS->stall(1000000);
+ 	flush_log();
+ 	ST->rt->reset_system(0 /* EfiResetCold */, 0, 0, NULL);
+ 	for (;;) {
+@@ -2732,9 +2700,14 @@
+ 		print("no kernel in payload\n");
+ 		return 0;
+ 	}
+-	if (!have_checkpoint) {
+-		checkpoint = pi.checkpoint;
+-	}
++	/* Fixed diagnostic payloads; mode 57 permits only a small RAM root. */
++	if (pi.usb_mode || pi.forced_base || ((pi.checkpoint == 57 || pi.checkpoint == 58) ? (!pi.ramdisk || !pi.ramdisk_size || pi.ramdisk_size > (pi.checkpoint == 58 ? 0x03e00000 : 65536)) : (pi.ramdisk || pi.ramdisk_size)) ||
++	    ((pi.checkpoint < 1 || pi.checkpoint > 12) && pi.checkpoint != 21 && pi.checkpoint != 31 && pi.checkpoint != 32 && pi.checkpoint != 34 && pi.checkpoint != 35 && pi.checkpoint != 40 && pi.checkpoint != 41 && pi.checkpoint != 50 && pi.checkpoint != 51 && pi.checkpoint != 52 && pi.checkpoint != 53 && pi.checkpoint != 54 && pi.checkpoint != 55 && pi.checkpoint != 56 && pi.checkpoint != 57 && pi.checkpoint != 58) || !str_eq(pi.cmdline, pi.checkpoint == 58 ? "-v cpus=1 loader_return_after=600" : "-v cpus=1 loader_return_after=8")) {
++		print("MUNCH: rejected non-checkpoint payload\n");
++		return 0;
++	}
++	(void)have_checkpoint;
++	checkpoint = pi.checkpoint;
+ 	const uint8_t *kernel = pi.kernel;
+ 	const struct mach_header_64 *mh = (const struct mach_header_64 *)kernel;
+ 	if (mh->magic != MH_MAGIC_64) {
+@@ -2852,7 +2825,8 @@
+ 		if (starts_with(c, "bootcpu=") && (c == pi.cmdline || c[-1] == ' ') && c[8] >= '0' && c[8] <= '7') {
+ 			kernel_mpidr = (uint64_t)(c[8] - '0') << PLAT->core_shift;
+ 		}
+-		more_cores |= (starts_with(c, "cpus=") || starts_with(c, "cpumask=")) && (c == pi.cmdline || c[-1] == ' ');
++		/* This probe publishes only the current CPU, even with cpus=1 present. */
++		more_cores = 0;
+ 		battery_requested |= starts_with(c, "battery=1") && (c == pi.cmdline || c[-1] == ' ') &&
+ 		    (c[9] == 0 || c[9] == ' ');
+ 		torch_requested |= starts_with(c, "torch=") && (c == pi.cmdline || c[-1] == ' ') && c[6] >= '1' && c[6] <= '9';
+@@ -3921,36 +3895,34 @@
+ 	print("CurrentEL=%x MIDR=%x MMFR0=%x CNTFRQ=%d image=%x\n", READ_SYSREG(CurrentEL) >> 2, READ_SYSREG(MIDR_EL1),
+ 	    READ_SYSREG(ID_AA64MMFR0_EL1), READ_SYSREG(CNTFRQ_EL0), (uint64_t)(uintptr_t)&__ImageBase);
+ 
+-	PLAT = &platform_qemu_virt;
+-	if (EFI_ERROR(BS->locate_protocol(&gop_guid, NULL, (void **)&GOP)) || GOP->mode == NULL ||
+-	    GOP->mode->info == NULL || GOP->mode->fb_base == 0) {
+-		GOP = NULL;                     /* no display (QEMU without -device ramfb) */
+-	} else {
+-		SCREEN.base = GOP->mode->fb_base;
+-		SCREEN.width = GOP->mode->info->width;
+-		SCREEN.height = GOP->mode->info->height;
+-		SCREEN.stride = GOP->mode->info->pixels_per_scanline * 4;
+-		if (SCREEN.base == 0xE1000000ULL) {
+-			PLAT = &platform_redwood;
+-		} else {
+-			ramfb_phone_screen();
+-		}
+-		print("display %d x %d at %x\n", (uint64_t)SCREEN.width, (uint64_t)SCREEN.height, SCREEN.base);
+-	}
++	PLAT = &platform_munch;
++	if (EFI_ERROR(BS->locate_protocol(&gop_guid, NULL, (void **)&GOP)) ||
++	    GOP == NULL || GOP->mode == NULL || GOP->mode->info == NULL ||
++	    GOP->mode->fb_base != 0x9C000000ULL || GOP->mode->info->width != 1080 ||
++	    GOP->mode->info->height != 2400 || GOP->mode->info->pixels_per_scanline != 1080 ||
++	    GOP->mode->info->pixel_format != 1) {
++		print("MUNCH: expected verified F4 GOP; refusing handoff\n");
++		return EFI_ERROR_BIT | 3;
++	}
++	SCREEN.base = GOP->mode->fb_base;
++	SCREEN.width = GOP->mode->info->width;
++	SCREEN.height = GOP->mode->info->height;
++	SCREEN.stride = GOP->mode->info->pixels_per_scanline * 4;
++	print("display %d x %d at %x\n", (uint64_t)SCREEN.width, (uint64_t)SCREEN.height, SCREEN.base);
+ 	print("platform %s\n", PLAT->name);
+ 
+ 	install_exception_hook();
+ 	wdt_arm();
+ 
+ 	int have_payload = parse_payload(&pi, 0);
+-	if (have_payload && pi.usb_mode && usb_start()) {
+-		flush_log();
+-		usb_command_loop();
++	if (have_payload && pi.usb_mode) {
++		print("MUNCH: USB loader commands are disabled in the checkpoint probe\n");
++		return EFI_ERROR_BIT | 3;
+ 	}
+ 
+ 	/* One-shot mode: run the kernel that came with the image, then reset. */
+ 	if (have_payload) {
+-		run_kernel(0, 0);
++		run_kernel(1, pi.checkpoint);
+ 	}
+ 	reboot();
+ 	return 0;

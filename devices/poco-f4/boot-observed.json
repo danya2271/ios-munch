@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "slot": "b",
+  "images": {
+    "boot": {
+      "size": 201326592,
+      "sha256": "5acaffdfef5bde9463b3ebe9517725b1311d4b4dfe53e7da28204aa62db187ee"
+    },
+    "vendor_boot": {
+      "size": 100663296,
+      "sha256": "3d4b228ce5fbcf240a847a591f1353c3a0e7962450e5c2615ae3a635c61709e9"
+    },
+    "dtbo": {
+      "size": 33554432,
+      "sha256": "e40d99f1f9f222b8fc97a6f462683269b2c92840cadcab32405e4bde2f81ac26"
+    },
+    "xbl": {
+      "size": 8388608,
+      "sha256": "1535264ea3b12c3aa5d06bd697fdc4df210c8089a63672e92a5d10cfcef86f2e"
+    }
+  },
+  "boot": {
+    "header_version": 3,
+    "header_size": 1580,
+    "page_size": 4096,
+    "kernel_size": 29036568,
+    "ramdisk_size": 28963046,
+    "os_version_raw": "0x1a000194",
+    "kernel_arm64_image_magic": true
+  },
+  "vendor_boot": {
+    "header_version": 3,
+    "page_size": 4096,
+    "header_size": 2112,
+    "vendor_ramdisk_size": 2347,
+    "dtb_offset": 8192,
+    "dtb_size": 460338,
+    "kernel_address_raw": "0x8000",
+    "ramdisk_address_raw": "0x1000000",
+    "dtb_address_raw": "0x1f00000"
+  },
+  "dtbo": {
+    "version": 0,
+    "total_size": 441832,
+    "entries": [
+      {
+        "size": 441768,
+        "offset": 64,
+        "id": 0,
+        "revision": 0
+      }
+    ]
+  },
+  "limitations": [
+    "Installed images may include previous root or ios-sweet modifications.",
+    "Header v3 on Android does not prove which temporary UEFI image formats ABL accepts."
+  ]
+}

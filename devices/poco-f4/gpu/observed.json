@@ -1,0 +1,55 @@
+{
+  "device": "munch",
+  "hardware_tested": false,
+  "properties": {
+    "chip_id": [
+      "0x6050002"
+    ],
+    "gpu_registers": [
+      "0x3d00000",
+      "0x40000",
+      "0x3d61000",
+      "0x800",
+      "0x3de0000",
+      "0x10000",
+      "0x3d8b000",
+      "0x2000",
+      "0x6900000",
+      "0x80000"
+    ],
+    "gpucc_registers": [
+      "0x3d90000",
+      "0x9000"
+    ],
+    "gmu_registers": [
+      "0x3d6a000",
+      "0x30000",
+      "0xb290000",
+      "0x10000",
+      "0xb490000",
+      "0x10000"
+    ],
+    "zap_reserved_memory": [
+      "0x0",
+      "0x8681a000",
+      "0x0",
+      "0x2000"
+    ],
+    "gmu_kernel_stream_and_mask": [
+      "0x5",
+      "0x400"
+    ],
+    "gfx3d_user_stream_and_mask": [
+      "0x0",
+      "0x401"
+    ]
+  },
+  "gpucc_compatible": "qcom,gpucc-kona syscon",
+  "remaining": [
+    "device-local A650 firmware",
+    "munch clock/power-level validation",
+    "kernel A650 driver and matching userland ABI",
+    "Mesa-enabled helper image",
+    "device startup/draw/shutdown tests"
+  ]
+}
