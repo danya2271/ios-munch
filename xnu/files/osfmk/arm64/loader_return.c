@@ -75,6 +75,7 @@ static uint32_t loader_log_ring_at;      /* where the next character goes in the
 static bool     loader_log_wrapped;
 static bool     loader_log_linear;       /* the pieces have been put in order: only appending from now on */
 static char     loader_log_scratch[LOADER_LOG_RING];
+static uint64_t loader_log_total;
 
 /*
  * Characters come from every processor, and from interrupt handlers on top of whatever was
@@ -138,6 +139,7 @@ loader_log_line(const char *line)
 static void
 loader_log_put_locked(char c)
 {
+	loader_log_total++;
 	if (loader_log_linear || loader_log_len < LOADER_LOG_HEAD) {
 		if (loader_log_len < LOADER_LOG_SIZE) {
 			loader_log[loader_log_len++] = c;
@@ -152,6 +154,71 @@ loader_log_put_locked(char c)
 			loader_log_len = LOADER_LOG_HEAD + loader_log_ring_at;
 		}
 	}
+}
+
+/* Reader API for the optional Munch USB live-log channel. Positions are monotonic even after the
+ * in-memory head/ring has wrapped; a reader that is too far behind starts at the oldest retained byte. */
+uint64_t
+loader_log_position(void)
+{
+	uint64_t daif, position;
+	bool locked = false;
+
+	daif = __builtin_arm_rsr64("DAIF");
+	__builtin_arm_wsr("DAIFSet", DAIFSC_IRQF | DAIFSC_FIQF);
+	for (uint32_t tries = 0; !locked && tries < 10000000; tries++) {
+		locked = os_atomic_cmpxchg(&loader_log_lock, 0, 1, acquire);
+	}
+	position = loader_log_total;
+	if (locked) {
+		os_atomic_store(&loader_log_lock, 0, release);
+	}
+	__builtin_arm_wsr64("DAIF", daif);
+	return position;
+}
+
+uint32_t
+loader_log_copy(uint64_t *position, char *out, uint32_t maximum)
+{
+	uint64_t daif, total, oldest, start, ring_oldest;
+	uint32_t count;
+	bool locked = false;
+
+	if (position == NULL || out == NULL || maximum == 0) {
+		return 0;
+	}
+	daif = __builtin_arm_rsr64("DAIF");
+	__builtin_arm_wsr("DAIFSet", DAIFSC_IRQF | DAIFSC_FIQF);
+	for (uint32_t tries = 0; !locked && tries < 10000000; tries++) {
+		locked = os_atomic_cmpxchg(&loader_log_lock, 0, 1, acquire);
+	}
+	total = loader_log_total;
+	oldest = total > LOADER_LOG_SIZE ? total - LOADER_LOG_SIZE : 0;
+	if (*position < oldest) {
+		*position = oldest;
+	}
+	start = *position;
+	count = (uint32_t)((total - start) < maximum ? total - start : maximum);
+	ring_oldest = total > LOADER_LOG_HEAD + LOADER_LOG_RING ? total - LOADER_LOG_RING : LOADER_LOG_HEAD;
+	for (uint32_t i = 0; i < count; i++) {
+		uint64_t sequence = start + i;
+		uint32_t index;
+
+		if (sequence < LOADER_LOG_HEAD) {
+			index = (uint32_t)sequence;
+		} else if (total <= LOADER_LOG_HEAD + LOADER_LOG_RING) {
+			index = LOADER_LOG_HEAD + (uint32_t)(sequence - LOADER_LOG_HEAD);
+		} else {
+			index = LOADER_LOG_HEAD + (loader_log_ring_at + (uint32_t)(sequence - ring_oldest)) % LOADER_LOG_RING;
+		}
+		out[i] = loader_log[index];
+	}
+	*position = start + count;
+	if (locked) {
+		os_atomic_store(&loader_log_lock, 0, release);
+	}
+	__builtin_arm_wsr64("DAIF", daif);
+	return count;
 }
 
 /* Oldest first: the head, a note about what was dropped, then the ring from its oldest character. */

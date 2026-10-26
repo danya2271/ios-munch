@@ -26,6 +26,7 @@
 static uint32_t touch_lat = 2;          /* 2: not yet looked up */
 
 extern void loader_log_line(const char *line);
+extern void munch_usb_probe(void);
 
 /*
  * A "tl:" line, for the kernel's drivers: into the loader's log as it is written -- the kernel's own
@@ -221,6 +222,7 @@ hakios_input_init(void)
 	hakios_battery_init();
 	hakios_ufs_init();
 	hakios_net_init();
+	munch_usb_probe();
 	hakios_adreno_init();
 	hakios_wifi_init();
 	hakios_adsp_init();

@@ -51,7 +51,13 @@ if touch.count('IOSleep(16);') != 1:
     raise ValueError('Unexpected touch polling loop')
 touch = touch.replace('IOSleep(16);', f'IOSleep({a.touch_poll_ms});')
 early_path = a.tree / 'osfmk/arm64/loader_return.c'
+loader_source = (root / 'xnu/files/osfmk/arm64/loader_return.c').read_text()
 early = early_path.read_text()
+if 'loader_log_copy(' not in early:
+    if ('if (PE_parse_boot_argn("bootcpu", &own_core, sizeof(own_core))) {' not in early and
+            'if (0) { /* munch current-core handoff: PE is not initialized here. */' not in early):
+        raise ValueError('Refusing to replace independently modified loader_return.c')
+    early = loader_source
 old_query = 'if (PE_parse_boot_argn("bootcpu", &own_core, sizeof(own_core))) {'
 new_query = 'if (0) { /* munch current-core handoff: PE is not initialized here. */'
 if early.count(old_query) == 1:
@@ -60,6 +66,20 @@ elif early.count(new_query) != 1:
     raise ValueError('Unexpected early bootcpu query')
 early_path.write_text(early)
 existing.write_bytes(gpu)
+
+usb = (root / 'xnu/files/bsd/dev/hakios.usb.c').read_bytes()
+usb_target = a.tree / 'bsd/dev/hakios.usb.c'
+if usb_target.exists() and usb_target.read_bytes() not in (usb,):
+    raise ValueError('Refusing to overwrite independently modified Munch USB source')
+usb_target.write_bytes(usb)
+files_target = a.tree / 'bsd/conf/files'
+files = files_target.read_text()
+usb_entry = 'bsd/dev/hakios.usb.c\t\tstandard\n'
+if usb_entry not in files:
+    marker = 'bsd/dev/hakios.net.c\t\tstandard\n'
+    if files.count(marker) != 1:
+        raise ValueError('Cannot register the Munch USB source in bsd/conf/files')
+    files_target.write_text(files.replace(marker, marker + usb_entry, 1))
 
 buttons = (root / 'xnu/files/bsd/dev/hakios.buttons.c').read_bytes()
 buttons_target = a.tree / 'bsd/dev/hakios.buttons.c'
@@ -89,6 +109,7 @@ fb_target.write_bytes(fb_patched if a.te_staging else fb_base)
 report = {'xnu_base': base, 'umi_reference': '6b6fb2b0c5a1720496ec71e88c95d2a45a0046a4',
           'early_return_source_sha256': sha(early.encode()), 'gpu_source_sha256': sha(gpu),
           'buttons_source_sha256': sha(buttons),
+          'usb_source_sha256': sha(usb),
           'touch_source_sha256': sha(touch.encode()),
           'touch_header_sha256': sha(header), 'gpu_patch_sha256': sha((here / 'umi-a650.patch').read_bytes()),
           'native_touch_bootarg': 'touchscreen=1', 'legacy_touch_bootarg': 'munch_touch=1',

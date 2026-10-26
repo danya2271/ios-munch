@@ -79,6 +79,8 @@ PACK_ARGS=(
     "${GPU_ARGS[@]}"
 )
 [ "${MUNCH_TOUCH:-1}" = 1 ] || PACK_ARGS+=(--no-touch)
+[ "${MUNCH_GPU_DIAGNOSTICS:-0}" = 1 ] && PACK_ARGS+=(--gpu-diagnostics)
+[ "${MUNCH_USB:-0}" = 1 ] && PACK_ARGS+=(--usb-debug)
 [ "${MUNCH_VERBOSE:-0}" = 1 ] && PACK_ARGS+=(--verbose)
 [ -n "${MUNCH_EXTRA_CMDLINE:-}" ] && PACK_ARGS+=(--extra-cmdline "$MUNCH_EXTRA_CMDLINE")
 

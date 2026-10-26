@@ -185,7 +185,8 @@ def make_cpio(work):
     return path
 
 
-def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, gpu, verbose, extra):
+def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, gpu,
+         gpu_diagnostics, usb_debug, verbose, extra):
     if cpus not in (1, 8):
         raise ValueError('Only 1 or 8 CPUs are supported')
     config = validate_ios_config(ios_config_path)
@@ -206,7 +207,14 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
     else:
         cmdline = '-v cpus=1 touchscreen=1 buttons=1 loader_return_after=600'
     if gpu:
-        cmdline += ' gpu=1'
+        # Start at UMI's lowest declared OPP while the hardware profile is being verified.
+        # gpu_va is required by the Mesa/freedreno bridge before it can hand IOSurface buffers
+        # to the kernel.
+        cmdline += ' gpu=1 adreno_speed=1 gpu_va=1'
+        if gpu_diagnostics:
+            cmdline += ' gpu_log=1 gpu_exact=1'
+    if usb_debug:
+        cmdline += ' munchusb=2 munchusblog=1'
     if verbose and '-v' not in cmdline.split():
         cmdline = '-v ' + cmdline
     if extra:
@@ -251,6 +259,7 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
                         '--ramdisk', str(ramdisk), '-o', str(output)], check=True)
         report = {**metadata, 'mode': 'iosroot-source-kernel', 'cmdline': cmdline,
                   'requested_cpu_count': cpus, 'touchscreen': touch, 'gpu_requested': gpu,
+                  'gpu_diagnostics': gpu_diagnostics, 'usb_debug': usb_debug,
                   'gpu_firmware_external': True, 'ios_version': config['version'], 'ios_build': config['build'],
                   'iosroot_system_sha256': config['system']['sha256'], 'iosroot_system_size': config['system']['size'],
                   'iosroot_helper_sha256': config['root']['sha256'], 'kernel_sha256': digest(kernel),
@@ -272,9 +281,12 @@ if __name__ == '__main__':
     parser.add_argument('--cpus', type=int, choices=[1, 8], default=8)
     parser.add_argument('--no-touch', dest='touch', action='store_false')
     parser.add_argument('--no-gpu', dest='gpu', action='store_false')
+    parser.add_argument('--gpu-diagnostics', action='store_true')
+    parser.add_argument('--usb-debug', action='store_true')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--extra-cmdline', default='')
     parser.set_defaults(touch=True, gpu=True)
     args = parser.parse_args()
     pack(args.fd.resolve(), args.dtb.resolve(), args.kernel.resolve(), args.ios_config.resolve(),
-         args.output.resolve(), args.cpus, args.touch, args.gpu, args.verbose, args.extra_cmdline)
+         args.output.resolve(), args.cpus, args.touch, args.gpu, args.gpu_diagnostics,
+         args.usb_debug, args.verbose, args.extra_cmdline)
