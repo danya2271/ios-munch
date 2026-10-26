@@ -14,7 +14,7 @@ and extracted vendor resources remain local under ignored workspace artifacts.
   the FocalTech SPI node. Its root model remains the generic Kona model; the
   live DT additionally contains bootloader/runtime changes.
 
-These are installed images and may contain root or ios-sweet changes. Android's
+These are installed images and may contain root or ios-munch changes. Android's
 header version does not establish which temporary boot-image formats ABL accepts.
 Do not package the UMI boot image unchanged or flash these dumps as part of bring-up.
 

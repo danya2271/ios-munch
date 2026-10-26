@@ -58,7 +58,7 @@ def inspect(directory, slot):
             raise ValueError('Invalid DTBO entry')
         entries.append({'size': size, 'offset': offset, 'id': board_id, 'revision': revision})
     result['dtbo'] = {'version': version, 'total_size': total, 'entries': entries}
-    result['limitations'] = ['Installed images may include previous root or ios-sweet modifications.',
+    result['limitations'] = ['Installed images may include previous root or ios-munch modifications.',
                              'Header v3 on Android does not prove which temporary UEFI image formats ABL accepts.']
     return result
 

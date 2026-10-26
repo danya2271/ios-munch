@@ -52,7 +52,7 @@
     ]
   },
   "limitations": [
-    "Installed images may include previous root or ios-sweet modifications.",
+    "Installed images may include previous root or ios-munch modifications.",
     "Header v3 on Android does not prove which temporary UEFI image formats ABL accepts."
   ]
 }

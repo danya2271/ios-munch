@@ -70,7 +70,7 @@ An F4 port must explicitly address those paths before any boot image is offered.
 
 ## System staging
 
-The earlier ios-sweet installation was reported as iOS 16.7. Initial diagnostics
+The earlier ios-munch installation was reported as iOS 16.7. Initial diagnostics
 preserved it. The owner subsequently authorized replacing the dedicated iosroot
 contents for a fresh iOS 16.5 attempt. The generated installer targets only the
 verified munch mapping iosroot -> /dev/block/sda35, checks image hashes and target
