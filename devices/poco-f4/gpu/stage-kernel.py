@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage the UMI A650 adaptation and native munch touch in a prepared XNU tree."""
+"""Stage the Munch A650, button, touch, and display sources in prepared XNU."""
 import argparse
 import hashlib
 import json
@@ -60,6 +60,14 @@ elif early.count(new_query) != 1:
     raise ValueError('Unexpected early bootcpu query')
 early_path.write_text(early)
 existing.write_bytes(gpu)
+
+buttons = (root / 'xnu/files/bsd/dev/hakios.buttons.c').read_bytes()
+buttons_target = a.tree / 'bsd/dev/hakios.buttons.c'
+old_buttons = '63bd20a4ae9fc8f93f7cedecdfd05087fd2a4b50b21d554899baa8b0dc880197'
+if buttons_target.read_bytes() not in (buttons,) and sha(buttons_target.read_bytes()) != old_buttons:
+    raise ValueError('Refusing to overwrite independently modified Munch button source')
+buttons_target.write_bytes(buttons)
+
 (a.tree / 'bsd/dev/hakios.goodix.c').write_text(touch)
 header = (here.parent / 'touch/ft3658u-protocol.h').read_bytes()
 (a.tree / 'bsd/dev/ft3658u-protocol.h').write_bytes(header)
@@ -80,6 +88,7 @@ fb_target.write_bytes(fb_patched if a.te_staging else fb_base)
 (a.tree / 'iokit/Kernel/munch-te-frame.h').write_bytes((here.parent / 'display/te-frame.h').read_bytes())
 report = {'xnu_base': base, 'umi_reference': '6b6fb2b0c5a1720496ec71e88c95d2a45a0046a4',
           'early_return_source_sha256': sha(early.encode()), 'gpu_source_sha256': sha(gpu),
+          'buttons_source_sha256': sha(buttons),
           'touch_source_sha256': sha(touch.encode()),
           'touch_header_sha256': sha(header), 'gpu_patch_sha256': sha((here / 'umi-a650.patch').read_bytes()),
           'native_touch_bootarg': 'touchscreen=1', 'legacy_touch_bootarg': 'munch_touch=1',

@@ -202,9 +202,9 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
     if cpus == 8:
         cmdline = ('root_apfs=ufs_darwin ufs=2 apfs_volume=ufs_darwin bootcpu=7 '
                    'cpus=8 cpufreq=1 small_cores=2 small_cores_after=0 touchscreen=1 '
-                   'loader_return_after=600')
+                   'buttons=1 loader_return_after=600')
     else:
-        cmdline = '-v cpus=1 touchscreen=1 loader_return_after=600'
+        cmdline = '-v cpus=1 touchscreen=1 buttons=1 loader_return_after=600'
     if gpu:
         cmdline += ' gpu=1'
     if verbose and '-v' not in cmdline.split():

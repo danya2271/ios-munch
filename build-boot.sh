@@ -53,7 +53,7 @@ FD="$MUNCH_MU_ROOT/Build/munchPkg/${TARGET}_CLANGPDB/FV/SILICIUM_UEFI.fd"
 
 OUTPUT=${MUNCH_BOOT_IMAGE:-$MUNCH_BUILD_DIR/munch-iosroot.img}
 GPU_ARGS=()
-case "${MUNCH_GPU:-auto}" in
+case "${MUNCH_GPU:-1}" in
     1)
         munch_prepare_gpu_firmware
         GPU_ARGS=()

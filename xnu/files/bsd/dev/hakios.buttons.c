@@ -1,13 +1,13 @@
 /*
- * The buttons of the POCO X5 Pro (redwood) -- power, volume up, volume down -- as a source of
- * button records for /dev/hakios-touch (sys/hakios.input.h). Only with boot-arg buttons=1:
- * every address below belongs to this phone.
+ * The buttons of the POCO F4 (munch) -- power, volume up, volume down -- as a source of button
+ * records for /dev/hakios-touch (sys/hakios.input.h). Only with boot-arg buttons=1: every address
+ * below belongs to this phone.
  *
  * None of the three is a pin of the SoC. They are inputs of two of the power management chips:
- *   power        KPDPWR_N of the power-on block ("PON") of the PMK8350
+ *   power        KPDPWR_N of the power-on block ("PON") of the PM8150
  *   volume down  RESIN_N of the same block
- *   volume up    GPIO6 of the PM7325, pulled up; the key pulls it low
- * Both chips sit on the SPMI bus (slaves 0 and 1), and the way to that bus is the SoC's "PMIC
+ *   volume up    GPIO6 of the PM8150, pulled up; the key pulls it low
+ * All three inputs sit on SPMI slave 0, and the way to that bus is the SoC's "PMIC
  * arbiter": it owns the bus and gives each of the systems on the chip (this one, the modem, the
  * always-on processor, TrustZone...) a set of registers per PMIC peripheral -- a "channel" -- to
  * ask for a transfer with. Reads go through the "observer" channels, which every system has for
@@ -39,8 +39,9 @@
  *   5  watch them                                       (the default)
  *
  * Register layouts: Linux drivers/spmi/spmi-pmic-arb.c (arbiter version 5),
- * drivers/input/misc/pm8941-pwrkey.c (the "pmk8350" kind), drivers/pinctrl/qcom/pinctrl-spmi-gpio.c,
- * and the phone's own device tree (qcom,spmi@c440000, pon_hlos@1300, gpio_keys).
+ * drivers/input/misc/qpnp-power-on.c (the PM8150 primary PON block),
+ * drivers/pinctrl/qcom/pinctrl-spmi-gpio.c, and the phone's own device tree
+ * (qcom,spmi@c440000, qcom,power-on@800, gpio_keys).
  */
 #include <kern/clock.h>
 #include <kern/locks.h>
@@ -149,8 +150,8 @@ struct peripheral {
 	uint16_t        channel;
 	bool            found;
 };
-static struct peripheral pon = { .name = "the PMK8350's power-on block", .id = 0x013 };          /* registers 0x1300 of slave 0 */
-static struct peripheral pin = { .name = "GPIO6 of the PM7325", .id = 0x18d };                   /* registers 0x8d00 of slave 1 */
+static struct peripheral pon = { .name = "the PM8150's power-on block", .id = 0x008 };          /* registers 0x0800 of slave 0 */
+static struct peripheral pin = { .name = "GPIO6 of the PM8150", .id = 0x0c0 };                  /* registers 0xc000 of slave 0 */
 
 /* How the reads have gone: said once a minute. */
 static struct {
@@ -220,7 +221,7 @@ find_channel(struct peripheral *p, uint32_t channels)
 			continue;
 		}
 		owner = rd(arb_cnfg + ARB_OWNER(n)) & 7;
-		printf("buttons: channel %u is %s (%#x); written by system %u%s\n", n, p->name, map, owner,
+		printf("MUNCH KEYS: channel %u is %s (%#x); written by system %u%s\n", n, p->name, map, owner,
 		    (map & ARB_CHANNEL_INTERRUPTS) ? ", which also gets its interrupts" : "");
 		if (!p->found || owner == ARB_SYSTEM) {
 			p->found = true;
@@ -228,7 +229,7 @@ find_channel(struct peripheral *p, uint32_t channels)
 		}
 	}
 	if (!p->found) {
-		printf("buttons: no channel of the arbiter is %s (slave %u, peripheral %#x)\n", p->name, p->id >> 8, p->id & 0xff);
+		printf("MUNCH KEYS: no channel of the arbiter is %s (slave %u, peripheral %#x)\n", p->name, p->id >> 8, p->id & 0xff);
 	}
 }
 
@@ -245,11 +246,11 @@ find_channel(struct peripheral *p, uint32_t channels)
 #define REG_INT_LATCHED         0x18
 #define REG_INT_PENDING         0x19
 
-/* the power-on block, of the kind that is split in two ("generation 3"): this is its half for the operating system */
+/* the primary PM8150 power-on block */
 #define PON_TYPE                0x01
-#define PON_SUBTYPE_HLOS        0x09
-#define PON_KPDPWR              0x80            /* in the status and in the interrupt registers */
-#define PON_RESIN               0x40
+#define PON_SUBTYPE_PRIMARY     0x01
+#define PON_KPDPWR              0x01            /* QPNP_PON_KPDPWR_N_SET */
+#define PON_RESIN               0x02            /* QPNP_PON_RESIN_N_SET */
 
 /* a GPIO of the low or medium voltage kind */
 #define GPIO_TYPE               0x10
@@ -305,7 +306,7 @@ button_look(struct button *b, bool pressed)
 	if (!b->live) {
 		if (!pressed) {
 			b->live = true;
-			printf("buttons: %s is released now: believed from here on\n", b->name);
+			printf("MUNCH KEYS: %s is released now: believed from here on\n", b->name);
 		}
 		return;
 	}
@@ -317,10 +318,10 @@ button_look(struct button *b, bool pressed)
 	if (pressed) {
 		b->since = now;
 		b->presses++;
-		printf("buttons: %s PRESSED at %s\n", b->name, when);
+		printf("MUNCH KEYS: %s PRESSED at %s\n", b->name, when);
 	} else {
 		absolutetime_to_nanoseconds(now - b->since, &held);
-		printf("buttons: %s released at %s, after %llu ms\n", b->name, when, held / NSEC_PER_MSEC);
+		printf("MUNCH KEYS: %s released at %s, after %llu ms\n", b->name, when, held / NSEC_PER_MSEC);
 	}
 	hakios_touch_post(pressed ? HAKIOS_BUTTON_DOWN : HAKIOS_BUTTON_UP, b->record, 0, 0);
 }
@@ -340,7 +341,7 @@ buttons_poll(void)
 			button_look(&volume_down, status & PON_RESIN);
 		} else if (said < 8) {
 			said++;
-			printf("buttons: reading %s: %s\n", pon.name, problem);
+			printf("MUNCH KEYS: reading %s: %s\n", pon.name, problem);
 		}
 	}
 	if (volume_up.usable) {
@@ -349,7 +350,7 @@ buttons_poll(void)
 			button_look(&volume_up, !(status & GPIO_LEVEL));
 		} else if (said < 8) {
 			said++;
-			printf("buttons: reading %s: %s\n", pin.name, problem);
+			printf("MUNCH KEYS: reading %s: %s\n", pin.name, problem);
 		}
 	}
 }
@@ -364,15 +365,15 @@ identify(const struct peripheral *p, uint8_t type, uint8_t subtype_from, uint8_t
 	if (!p->found) {
 		return false;
 	}
-	printf("buttons: next: read the type of %s through channel %u (2 registers, 0x%02x04)\n", p->name, p->channel, p->id & 0xff);
+	printf("MUNCH KEYS: next: read the type of %s through channel %u (2 registers, 0x%02x04)\n", p->name, p->channel, p->id & 0xff);
 	problem = spmi_read(p, REG_TYPE, is, 2);
 	if (problem != NULL) {
-		printf("buttons: %s: %s\n", p->name, problem);
+		printf("MUNCH KEYS: %s: %s\n", p->name, problem);
 		return false;
 	}
-	printf("buttons: %s says type %#x, subtype %#x (the read took %llu us)\n", p->name, is[0], is[1], bus.last_ns / 1000);
+	printf("MUNCH KEYS: %s says type %#x, subtype %#x (the read took %llu us)\n", p->name, is[0], is[1], bus.last_ns / 1000);
 	if (is[0] != type || is[1] < subtype_from || is[1] > subtype_to) {
-		printf("buttons: ... which is not what this driver knows (type %#x, subtype %#x to %#x): left alone\n", type,
+		printf("MUNCH KEYS: ... which is not what this driver knows (type %#x, subtype %#x to %#x): left alone\n", type,
 		    subtype_from, subtype_to);
 		return false;
 	}
@@ -386,16 +387,16 @@ pon_inputs(void)
 	const char *problem;
 	uint8_t r[8], more[2];
 
-	printf("buttons: next: read the status and the interrupt setup of %s (registers 0x1310 to 0x1319)\n", pon.name);
+	printf("MUNCH KEYS: next: read the status and the interrupt setup of %s (registers 0x0810 to 0x0819)\n", pon.name);
 	problem = spmi_read(&pon, REG_RT_STATUS, r, 8);
 	if (problem == NULL) {
 		problem = spmi_read(&pon, REG_INT_LATCHED, more, 2);
 	}
 	if (problem != NULL) {
-		printf("buttons: %s: %s\n", pon.name, problem);
+		printf("MUNCH KEYS: %s: %s\n", pon.name, problem);
 		return;
 	}
-	printf("buttons: power-on block: status %#x (power %s, volume down %s); interrupts: edge %#x, high %#x, low %#x, "
+	printf("MUNCH KEYS: power-on block: status %#x (power %s, volume down %s); interrupts: edge %#x, high %#x, low %#x, "
 	    "enabled %#x, latched %#x, pending %#x\n", r[0], (r[0] & PON_KPDPWR) ? "HELD" : "released",
 	    (r[0] & PON_RESIN) ? "HELD" : "released", r[REG_INT_SET_TYPE - REG_RT_STATUS], r[REG_INT_POLARITY_HIGH - REG_RT_STATUS],
 	    r[REG_INT_POLARITY_LOW - REG_RT_STATUS], r[REG_INT_ENABLED - REG_RT_STATUS], more[0], more[1]);
@@ -412,24 +413,24 @@ pin_input(void)
 	uint8_t c[8], status = 0;
 	unsigned mode, pull;
 
-	printf("buttons: next: read the setup and the level of %s (registers 0x8d40 to 0x8d47, 0x8d10)\n", pin.name);
+	printf("MUNCH KEYS: next: read the setup and the level of %s (registers 0xc040 to 0xc047, 0xc010)\n", pin.name);
 	problem = spmi_read(&pin, GPIO_REG_MODE, c, 8);
 	if (problem == NULL) {
 		problem = spmi_read(&pin, REG_RT_STATUS, &status, 1);
 	}
 	if (problem != NULL) {
-		printf("buttons: %s: %s\n", pin.name, problem);
+		printf("MUNCH KEYS: %s: %s\n", pin.name, problem);
 		return;
 	}
 	mode = c[0] & 3;
 	pull = c[GPIO_REG_PULL - GPIO_REG_MODE] & 7;
-	printf("buttons: volume up's pin: mode %u (%s), supply %u, pull %u (%s), %s; registers 0x40.. = %02x %02x %02x %02x %02x %02x "
+	printf("MUNCH KEYS: volume up's pin: mode %u (%s), supply %u, pull %u (%s), %s; registers 0x40.. = %02x %02x %02x %02x %02x %02x "
 	    "%02x %02x; level %s\n", mode, mode == 0 ? "input" : mode == 1 ? "output" : mode == 2 ? "input and output" : "analog",
 	    c[GPIO_REG_SUPPLY - GPIO_REG_MODE] & 7, pull, pull < 4 ? "up" : pull == 4 ? "down" : "none",
 	    (c[GPIO_REG_ENABLE - GPIO_REG_MODE] & 0x80) ? "enabled" : "DISABLED", c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7],
 	    (status & GPIO_LEVEL) ? "high (released)" : "LOW (held)");
 	if (mode != 0 || pull >= 4 || !(c[GPIO_REG_ENABLE - GPIO_REG_MODE] & 0x80)) {
-		printf("buttons: volume up's pin is not an enabled input with a pull-up. Making it one is a write to the PMIC, "
+		printf("MUNCH KEYS: volume up's pin is not an enabled input with a pull-up. Making it one is a write to the PMIC, "
 		    "which this driver does not do: volume up is left alone\n");
 		return;
 	}
@@ -440,7 +441,7 @@ pin_input(void)
 static void
 say_summary(void)
 {
-	printf("buttons: so far %u presses of power, %u of volume up, %u of volume down; now%s%s%s%s; %llu reads of the bus, "
+	printf("MUNCH KEYS: so far %u presses of power, %u of volume up, %u of volume down; now%s%s%s%s; %llu reads of the bus, "
 	    "%llu us each (the longest %llu), %llu failed\n", power.presses, volume_up.presses, volume_down.presses,
 	    power.down ? " power" : "", volume_up.down ? " volume-up" : "", volume_down.down ? " volume-down" : "",
 	    (power.down || volume_up.down || volume_down.down) ? " held" : " none held", bus.reads,
@@ -453,16 +454,16 @@ buttons_thread(void *parameter, __unused wait_result_t result)
 	uint32_t steps = (uint32_t)(uintptr_t)parameter, version, channels;
 	bool pon_known, pin_known;
 
-	printf("buttons: step 1: map the PMIC arbiter (%#lx, %#lx, %#lx) and read its version\n", ARB_CORE_PHYS, ARB_CNFG_PHYS,
+	printf("MUNCH KEYS: step 1: map the PMIC arbiter (%#lx, %#lx, %#lx) and read its version\n", ARB_CORE_PHYS, ARB_CNFG_PHYS,
 	    ARB_OBSERVER_PHYS);
 	arb_core = ml_io_map(ARB_CORE_PHYS, ARB_CORE_SIZE);
 	arb_cnfg = ml_io_map(ARB_CNFG_PHYS, ARB_CNFG_SIZE);
 	arb_observer = ml_io_map(ARB_OBSERVER_PHYS, ARB_OBSERVER_SIZE);
 	version = rd(arb_core + ARB_VERSION);
 	channels = rd(arb_core + ARB_FEATURES) & 0x7ff;
-	printf("buttons: PMIC arbiter version %#x, %u channels\n", version, channels);
+	printf("MUNCH KEYS: PMIC arbiter version %#x, %u channels\n", version, channels);
 	if (version < ARB_VERSION_5 || version >= ARB_VERSION_7) {
-		printf("buttons: this driver knows version 5 of the arbiter only: no buttons\n");
+		printf("MUNCH KEYS: this driver knows version 5 of the arbiter only: no buttons\n");
 		goto out;
 	}
 	if (channels == 0 || channels > ARB_MAX_CHANNELS) {
@@ -472,21 +473,21 @@ buttons_thread(void *parameter, __unused wait_result_t result)
 		goto out;
 	}
 
-	printf("buttons: step 2: look through the arbiter's table for the channels of the two peripherals\n");
+	printf("MUNCH KEYS: step 2: look through the arbiter's table for the channels of the two peripherals\n");
 	find_channel(&pon, channels);
 	find_channel(&pin, channels);
 	if (steps < 3) {
 		goto out;
 	}
 
-	printf("buttons: step 3: the first transfers on the SPMI bus\n");
-	pon_known = identify(&pon, PON_TYPE, PON_SUBTYPE_HLOS, PON_SUBTYPE_HLOS);
+	printf("MUNCH KEYS: step 3: the first transfers on the SPMI bus\n");
+	pon_known = identify(&pon, PON_TYPE, PON_SUBTYPE_PRIMARY, PON_SUBTYPE_PRIMARY);
 	pin_known = identify(&pin, GPIO_TYPE, GPIO_SUBTYPE_LV, GPIO_SUBTYPE_MV_VIN3);
 	if (steps < 4) {
 		goto out;
 	}
 
-	printf("buttons: step 4: how the keys' inputs are set up\n");
+	printf("MUNCH KEYS: step 4: how the keys' inputs are set up\n");
 	if (pon_known) {
 		pon_inputs();
 	}
@@ -494,11 +495,11 @@ buttons_thread(void *parameter, __unused wait_result_t result)
 		pin_input();
 	}
 	if (!power.usable && !volume_up.usable) {
-		printf("buttons: nothing that can be read: no buttons\n");
+		printf("MUNCH KEYS: nothing that can be read: no buttons\n");
 		goto out;
 	}
 	if (power.last || volume_down.last || volume_up.last) {
-		printf("buttons: a key reads as held before anything was watched:%s%s%s. It is not reported until it has been "
+		printf("MUNCH KEYS: a key reads as held before anything was watched:%s%s%s. It is not reported until it has been "
 		    "seen released\n", power.last ? " power" : "", volume_up.last ? " volume-up" : "",
 		    volume_down.last ? " volume-down" : "");
 	}
@@ -510,7 +511,7 @@ buttons_thread(void *parameter, __unused wait_result_t result)
 		goto out;
 	}
 
-	printf("buttons: step 5: watching%s%s%s, every %u ms: power is the side button\n", power.usable ? " power" : "",
+	printf("MUNCH KEYS: step 5: watching%s%s%s, every %u ms: power is the side button\n", power.usable ? " power" : "",
 	    volume_up.usable ? " volume-up" : "", volume_down.usable ? " volume-down" : "", POLL_MS);
 	for (unsigned tick = 1;; tick++) {
 		buttons_poll();
@@ -519,14 +520,14 @@ buttons_thread(void *parameter, __unused wait_result_t result)
 			say_summary();
 		}
 		if (bus.failed >= 1000 && bus.failed * 2 > bus.reads) {
-			printf("buttons: more than half of %llu reads have failed: giving up\n", bus.reads);
+			printf("MUNCH KEYS: more than half of %llu reads have failed: giving up\n", bus.reads);
 			break;
 		}
 		delay_for_interval(POLL_MS, NSEC_PER_MSEC);
 	}
 out:
 	if (steps < 5) {
-		printf("buttons: stopping here (buttons_steps=%u)\n", steps);
+		printf("MUNCH KEYS: stopping here (buttons_steps=%u)\n", steps);
 	}
 	thread_terminate(current_thread());
 }

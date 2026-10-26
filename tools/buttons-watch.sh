@@ -1,6 +1,6 @@
 #!/bin/bash
 # While a run is in progress on the phone: follow what the kernel's log says about the buttons
-# (the driver's "buttons:" lines, backboardd's "[Button]" lines, button presses a script makes
+# (the driver's "MUNCH KEYS:" lines, backboardd's "[Button]" lines, button presses a script makes
 # with rwtouch), print each new line, and take pictures of the screen after every press -- one at
 # once and one two seconds later -- so that a session in which somebody presses the phone's keys
 # also shows what iOS made of them (a volume key: the volume indicator; the side button: the
@@ -16,7 +16,7 @@ cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
 PHONE=${XDG_RUNTIME_DIR:-/tmp}/darwin-hakios-phone
 out=${1:-logs/buttons-$(date +%H%M%S)}
 mkdir -p "$out"
-pattern='^buttons: |\[Button\] [A-Za-z]+ page|^\$ /redwood/bin/rwtouch .*button |Set Blanked'
+pattern='^MUNCH KEYS: |\[Button\] [A-Za-z]+ page|^\$ /redwood/bin/rwtouch .*button |Set Blanked'
 press='PRESSED|rwtouch .*button '
 shots=0 started= again=0 last=
 running() { ! flock -n "$PHONE.run" true 2>/dev/null; }
@@ -45,7 +45,7 @@ while running; do
 		if printf '%s\n' "$new" | grep -q -E "$press"; then
 			shots=$((shots + 1))
 			name=$(printf '%s\n' "$new" | grep -E "$press" | tail -1 |
-				sed -E 's/^buttons: (.*) PRESSED.*/\1/; s/^.*button ([a-z]+).*/script-\1/; s/ /-/g')
+				sed -E 's/^MUNCH KEYS: (.*) PRESSED.*/\1/; s/^.*button ([a-z]+).*/script-\1/; s/ /-/g')
 			picture ""
 			again=$(( $(date +%s) + 2 ))
 		fi

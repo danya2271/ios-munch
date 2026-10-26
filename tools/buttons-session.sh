@@ -42,7 +42,7 @@ echo "=== In about 20 s the lock screen appears, at about 35 s it is swiped away
 echo "=== FROM THE MOMENT THE HOME SCREEN (the icons) IS THERE the keys can be pressed."
 echo
 sleep 2
-tools/buttons-watch.sh "$out" | grep --line-buffered -v -E '^buttons: (step [1-4]|next:|channel|PMIC arbiter|the PMK8350|GPIO6 of)'
+tools/buttons-watch.sh "$out" | grep --line-buffered -v -E '^MUNCH KEYS: (step [1-4]|next:|channel|PMIC arbiter|the PM8150|GPIO6 of)'
 wait
 cat "$out/run.out"
 log=$(sed -n 's/.*\[\(logs\/[^]]*\)\].*/\1/p' "$out/run.out" | tail -1)
@@ -55,14 +55,14 @@ fi
 
 echo
 echo "=== what the driver saw (the kernel's log, $out/run.log) ==="
-grep -a -E '^buttons: (power-on block|volume up.s pin|step 5|.*(PRESSED|released at)|so far|reading|a key reads|more than half)' "$out/run.log" | cut -c1-230
+grep -a -E '^MUNCH KEYS: (power-on block|volume up.s pin|step 5|.*(PRESSED|released at)|so far|reading|a key reads|more than half)' "$out/run.log" | cut -c1-230
 echo
 echo "=== what iOS's event system made of it (backboardd) ==="
 grep -a -E '\[Button\] [A-Za-z]+ page|Set Blanked' "$out/run.log" | sed -E 's/^[0-9-]+ //; s/\+0[0-9]+ backboardd\[[0-9:]+\]//' | cut -c1-120
 echo
 for key in power "volume up" "volume down"; do
 	printf '%-12s %s presses, %s releases seen by the driver\n' "$key:" \
-		"$(grep -a -c "^buttons: $key PRESSED" "$out/run.log")" "$(grep -a -c "^buttons: $key released at" "$out/run.log")"
+		"$(grep -a -c "^MUNCH KEYS: $key PRESSED" "$out/run.log")" "$(grep -a -c "^MUNCH KEYS: $key released at" "$out/run.log")"
 done
 printf 'backboardd:  %s lock, %s volume-up, %s volume-down button events (a press and a release are two)\n' \
 	"$(grep -a -c '\[Button\] Lock page' "$out/run.log")" "$(grep -a -c '\[Button\] VolumeIncrement page' "$out/run.log")" \

@@ -43,7 +43,7 @@ munch_prepare_gpu_firmware() {
 }
 
 munch_prepare_requested_gpu_firmware() {
-    case "${MUNCH_GPU:-auto}" in
+    case "${MUNCH_GPU:-1}" in
         0) ;;
         1|auto) munch_prepare_gpu_firmware ;;
         *) munch_die 'MUNCH_GPU must be auto, 0, or 1' ;;
@@ -230,6 +230,9 @@ munch_prepare_xbl() {
 
 munch_prepare_dtb() {
     local dtb=${MUNCH_DTB:-$MUNCH_BUILD_DIR/munch.dtb}
+    if [ ! -f "$dtb" ] && [ -f "$MUNCH_ROOT/research/munch-live.dtb" ]; then
+        dtb="$MUNCH_ROOT/research/munch-live.dtb"
+    fi
     [ -f "$dtb" ] || munch_die "live Munch DTB is required: set MUNCH_DTB=/path/to/merged-munch.dtb"
     command -v fdtget >/dev/null 2>&1 || munch_die "missing host tool: fdtget"
     MUNCH_DTB=$(cd "$(dirname "$dtb")" && pwd)/$(basename "$dtb")
