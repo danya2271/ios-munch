@@ -40,6 +40,9 @@ import os
 import plistlib
 import sys
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'tools')))
+from munch_debloat import is_protected, load_profile, should_remove, validate_source, verify_output
+
 # Substrings of labels -- and two things to know before adding to this list or believing anything in it.
 #
 # A daemon here may be misbehaving BECAUSE OF ANOTHER ENTRY, so the tuple cannot be judged one line at a
@@ -229,6 +232,13 @@ DENY = tuple(word for word in DENY if word not in os.environ.get('ALLOW', '').sp
 
 args = sys.argv[1:]
 rest = '--rest' in args
+profile = None
+if '--profile' in args:
+    i = args.index('--profile')
+    if i + 1 >= len(args):
+        raise SystemExit('--profile requires a JSON profile path')
+    profile = load_profile(args[i + 1])
+    del args[i:i + 2]
 root_volume = None              # the listing of the whole iOS volume, when that volume is the root
 if '--root-volume' in args:
     i = args.index('--root-volume')
@@ -236,6 +246,11 @@ if '--root-volume' in args:
     del args[i:i + 2]
 args = [a for a in args if a != '--rest']
 src_root, dest, labels = args[0], args[1], args[2:]
+if profile:
+    try:
+        validate_source(profile, src_root)
+    except ValueError as error:
+        raise SystemExit(f"mkjobs.py: invalid debloat profile: {error}") from error
 oslog = os.environ.get('OSLOG', '').split()
 src = f'{src_root}/System/Library/LaunchDaemons'
 # A program in a cryptex -- on a device a volume of its own, grafted at /System/Cryptexes/NAME (eight of
@@ -265,6 +280,9 @@ def present(program):
 angels = f'{src_root}/System/Library/LaunchAngels'
 os.makedirs(dest, exist_ok=True)
 for label in labels:
+    if profile and should_remove(label, profile):
+        print(f'  job {label}: skipped by debloat profile {profile["name"]}')
+        continue
     with open(f'{src}/{label}.plist', 'rb') as f:
         job = plistlib.load(f)
     job['StandardErrorPath'] = '/dev/console'
@@ -287,7 +305,9 @@ if rest:
         rest_jobs += [(angels, name) for name in sorted(os.listdir(angels))]
     for directory, name in rest_jobs:
         label = name[:-len('.plist')]
-        if not name.endswith('.plist') or label in labels or any(word in label for word in DENY):
+        if (not name.endswith('.plist') or label in labels
+                or (any(word in label for word in DENY) and not (profile and is_protected(label, profile)))
+                or (profile and should_remove(label, profile))):
             continue
         with open(f'{directory}/{name}', 'rb') as f:
             job = plistlib.load(f)
@@ -304,3 +324,10 @@ if rest:
             plistlib.dump(job, f, fmt=plistlib.FMT_BINARY)
         count += 1
     print(f'  ... and {count} more jobs, started on demand only')
+
+if profile:
+    try:
+        verify_output(profile, dest)
+    except ValueError as error:
+        raise SystemExit(f"mkjobs.py: debloat verification failed: {error}") from error
+    print(f'  debloat: {profile["name"]}; protected capability jobs are not profile-removed')

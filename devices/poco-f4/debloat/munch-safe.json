@@ -1,0 +1,51 @@
+{
+  "name": "munch-safe",
+  "description": "Remove optional telemetry and diagnostics jobs without deleting iOS capabilities.",
+  "remove_labels": [
+    "com.apple.analyticsd",
+    "com.apple.diagnosticextensionsd",
+    "com.apple.hangreporter",
+    "com.apple.hangtracerd",
+    "com.apple.iosdiagnosticsd",
+    "com.apple.metrickitd",
+    "com.apple.osanalytics.osanalyticshelper",
+    "com.apple.pluginkit.pkreporter",
+    "com.apple.rtcreportingd",
+    "com.apple.signpost.signpost_reporter",
+    "com.apple.UsageTrackingAgent",
+    "com.apple.wifianalyticsd"
+  ],
+  "protected_labels": [
+    "com.apple.CommCenter",
+    "com.apple.CommCenter-noncellular",
+    "com.apple.CommCenterMobileHelper",
+    "com.apple.CommCenterRootHelper",
+    "com.apple.appstored",
+    "com.apple.bluetoothd",
+    "com.apple.bluetoothuserd",
+    "com.apple.fairplayd.H2",
+    "com.apple.installcoordination_proxy",
+    "com.apple.installcoordinationd",
+    "com.apple.medialibraryd",
+    "com.apple.mediaserverd",
+    "com.apple.mobile.installd",
+    "com.apple.mobile_installation_proxy",
+    "com.apple.safarifetcherd",
+    "com.apple.storekitd",
+    "com.apple.wifid"
+  ],
+  "required_paths": [
+    "/usr/sbin/wifid",
+    "/usr/sbin/bluetoothd",
+    "/usr/libexec/bluetoothuserd",
+    "/usr/sbin/mediaserverd",
+    "/System/Library/Frameworks/CoreTelephony.framework/Support/CommCenter",
+    "/System/Library/Frameworks/CoreTelephony.framework/Support/CommCenterRootHelper",
+    "/System/Library/PrivateFrameworks/MusicLibrary.framework/Support/medialibraryd",
+    "/usr/libexec/installd",
+    "/usr/libexec/mobile_installation_proxy",
+    "/System/Library/PrivateFrameworks/AppStoreDaemon.framework/Support/appstored",
+    "/System/Library/PrivateFrameworks/InstallCoordination.framework/Support/installcoordinationd",
+    "/System/Library/Frameworks/StoreKit.framework/Support/storekitd"
+  ]
+}

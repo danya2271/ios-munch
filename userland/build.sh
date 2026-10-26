@@ -11,6 +11,11 @@
 #                      JOBS="..."   labels of the stock iOS launchd jobs to load (default: IOS_JOBS)
 #                      REST=1       ... and the rest of them, started only when asked for (see mkjobs.py)
 #                      WIFID=0      without wifid, iOS's Wi-Fi daemon, which is in by default (see below)
+#                      MUNCH_DEBLOAT=0  keep the full selected launchd job set; otherwise apply the
+#                                   device profile at ../devices/poco-f4/debloat/munch-safe.json. The profile
+#                                   removes optional telemetry/diagnostics jobs only; it never deletes binaries,
+#                                   frameworks, cryptex files, or hardware firmware.
+#                      MUNCH_DEBLOAT_PROFILE=<file>  override the device debloat profile JSON
 #                      OSLOG="..."  labels of the jobs whose os_log output goes to the console ("all": every
 #                                   one of JOBS; default: only the window server, which says little)
 #                      INJECT="..." the programs started with a library of ours, "LIBRARY NAME..." per line
@@ -85,6 +90,17 @@ LD="-Wl,-e,_start -Wl,-pagezero_size,0x100000000"
 DYN="xnu-clang -arch arm64 -isysroot ${THEOS:-$HOME/theos}/sdks/iPhoneOS16.5.sdk -O1"
 IOS=../sysimage
 CACHE=$IOS/20F66__iPhone10,3_6
+REPO_ROOT=$(cd .. && pwd)
+MUNCH_DEBLOAT=${MUNCH_DEBLOAT-1}
+MUNCH_DEBLOAT_PROFILE=${MUNCH_DEBLOAT_PROFILE:-$REPO_ROOT/devices/poco-f4/debloat/munch-safe.json}
+case "$MUNCH_DEBLOAT" in
+	0|1) ;;
+	*) echo 'build.sh: MUNCH_DEBLOAT must be 0 or 1' >&2; exit 1 ;;
+esac
+[ "$MUNCH_DEBLOAT" = 0 ] || [ -f "$MUNCH_DEBLOAT_PROFILE" ] || {
+	echo "build.sh: debloat profile not found: $MUNCH_DEBLOAT_PROFILE" >&2
+	exit 1
+}
 # sysimage/rootfs and sysimage/cryptex must be this copy's own directories of hard links, the way
 # tools/new-workspace.sh makes them. A symlink to another copy's tree makes sysroot a symlink too, because
 # cp -a does not follow one, and then every rm -rf and mv below edits the shared extraction in place. That
@@ -386,9 +402,11 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 	# and not by what select-system.py extracted here (--root-volume; seven jobs turn on the difference,
 	# fairplayd among them).
 	cp com.hakios.demo.plist com.hakios.wifi.plist root/LaunchDaemons/
-	VOLUME=""
-	[ -n "$FLASHBOOT" ] && [ -f $IOS/rootfs.slt ] && VOLUME="--root-volume $IOS/rootfs.slt"
-	[ -n "$IOS_JOBS" ] && OSLOG=${OSLOG-com.apple.backboardd} ./mkjobs.py ${REST:+--rest} $VOLUME $IOS/rootfs root/LaunchDaemons $IOS_JOBS
+	MKJOBS_ARGS=()
+	[ -n "$REST" ] && MKJOBS_ARGS+=(--rest)
+	[ -n "$FLASHBOOT" ] && [ -f "$IOS/rootfs.slt" ] && MKJOBS_ARGS+=(--root-volume "$IOS/rootfs.slt")
+	[ "$MUNCH_DEBLOAT" = 1 ] && MKJOBS_ARGS+=(--profile "$MUNCH_DEBLOAT_PROFILE")
+	[ -n "$IOS_JOBS" ] && OSLOG=${OSLOG-com.apple.backboardd} ./mkjobs.py "${MKJOBS_ARGS[@]}" "$IOS/rootfs" root/LaunchDaemons $IOS_JOBS
 fi
 # firmware of the phone's own hardware, where somebody has pulled it from the phone's Android into ../fw-gpu
 # (it is the vendor's and never in the repository): the kernel's GPU bring-up, bsd/dev/hakios.adreno.c, finds it in fw/

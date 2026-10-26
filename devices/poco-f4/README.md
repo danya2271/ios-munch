@@ -20,6 +20,33 @@ observed. Exact launch/runtime logs have not yet been captured.
 observed.json records selected facts from rooted Android's live DT. Raw captures,
 vendor firmware and downloaded/generated iOS files stay outside git.
 
+## Debloated system image
+
+The source build enables the device's safe launchd profile by default:
+
+```sh
+./build.sh
+```
+
+`devices/poco-f4/debloat/munch-safe.json` removes optional telemetry and
+diagnostics jobs from the generated job tree. It does not delete iOS binaries,
+frameworks, cryptexes, Safari files, IPA-installation components, or hardware
+firmware. Wi-Fi, Bluetooth, media, installation, StoreKit, FairPlay, and modem
+jobs are protected from this profile. Hardware support still depends on the
+corresponding kernel driver and firmware being present.
+
+To build the same image without this filtering:
+
+```sh
+MUNCH_DEBLOAT=0 ./build.sh
+```
+
+To test another profile without changing the repository default:
+
+```sh
+MUNCH_DEBLOAT_PROFILE=/path/to/profile.json ./build.sh
+```
+
 ## Reproduce the device summary
 
 From the repository root:
