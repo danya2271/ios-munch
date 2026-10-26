@@ -37,9 +37,12 @@ needle = '    void *thread = 0;'
 if touch.count(needle) != 1:
     raise ValueError('Unexpected touch entry')
 touch = touch.replace(needle, '    extern int PE_parse_boot_argn(const char *, void *, int);\n'
-                      '    unsigned enabled = 0;\n'
-                      '    if (!PE_parse_boot_argn("munch_touch", &enabled, sizeof(enabled)) || !enabled) return;\n' + needle, 1)
-touch = '/* Native munch build: enabled only with munch_touch=1 and verified loader power handoff. */\n' + touch
+                  '    unsigned enabled = 0;\n'
+                  '    if (!PE_parse_boot_argn("touchscreen", &enabled, sizeof(enabled)) || !enabled) {\n'
+                  '        enabled = 0;\n'
+                  '        if (!PE_parse_boot_argn("munch_touch", &enabled, sizeof(enabled)) || !enabled) return;\n'
+                  '    }\n' + needle, 1)
+touch = '/* Native munch build: enabled by touchscreen=1 (munch_touch=1 is retained for probes). */\n' + touch
 existing.write_bytes(gpu)
 (a.tree / 'bsd/dev/hakios.goodix.c').write_text(touch)
 header = (here.parent / 'touch/ft3658u-protocol.h').read_bytes()
@@ -47,7 +50,7 @@ header = (here.parent / 'touch/ft3658u-protocol.h').read_bytes()
 report = {'xnu_base': base, 'umi_reference': '6b6fb2b0c5a1720496ec71e88c95d2a45a0046a4',
           'gpu_source_sha256': sha(gpu), 'touch_source_sha256': sha(touch.encode()),
           'touch_header_sha256': sha(header), 'gpu_patch_sha256': sha((here / 'umi-a650.patch').read_bytes()),
-          'native_touch_bootarg': 'munch_touch=1', 'hardware_tested': False}
+          'native_touch_bootarg': 'touchscreen=1', 'legacy_touch_bootarg': 'munch_touch=1', 'hardware_tested': False}
 a.report.parent.mkdir(parents=True, exist_ok=True)
 a.report.write_text(json.dumps(report, indent=2) + '\n')
 print('Staged A650 GPU and native munch touch; base prebuilt and installed APFS unchanged')

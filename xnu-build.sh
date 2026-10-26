@@ -1,6 +1,10 @@
 #!/bin/bash
 # Build XNU for redwood on Linux. Extra make args are passed through.
 source "$(dirname "${BASH_SOURCE[0]}")/xnu-env.sh"
+if [ "${MUNCH_STAGE:-0}" = 1 ]; then
+  python3 "$DARWIN_REDWOOD/devices/poco-f4/gpu/stage-kernel.py" "$XNU_SRC" \
+    --report "${MUNCH_STAGE_REPORT:-$XNU_SRC/BUILD/munch-stage.json}"
+fi
 cd "$XNU_SRC" || exit 1
 # The Wi-Fi driver's object (tools/mk-ath11k.sh) is linked into the kernel when it is there; make
 # does not see it change, so the linked kernel is thrown away when it has.

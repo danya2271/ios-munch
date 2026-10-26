@@ -42,7 +42,7 @@ images:
 kernel:
 	[ -d xnu-src/xnu-8796.121.2 ] || xnu/apply.sh
 	[ -x xnu-deps/host/bin/xnu-clang ] || xnu-deps/setup.sh
-	./xnu-build.sh -j$(JOBS) -k
+	MUNCH_STAGE=$(if $(filter poco-f4,$(DEVICE)),1,0) ./xnu-build.sh -j$(JOBS) -k
 
 loader:
 	xnuloader/build.sh

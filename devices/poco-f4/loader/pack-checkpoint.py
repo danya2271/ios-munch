@@ -191,7 +191,7 @@ def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_c
         hello = Path(ios['root']['path']).read_bytes()
         if len(hello) > 0x03e00000 or hello[32:36] != b'NXSB':
             raise ValueError('Expected a small APFS helper RAM root')
-        cmdline = ('cpus=8 small_cores_after=0 loader_return_after=600' if cpus == 8
+        cmdline = ('cpus=8 small_cores=2 small_cores_after=0 loader_return_after=600' if cpus == 8
                    else '-v cpus=1 loader_return_after=600')
     fd = fd_path.read_bytes()
     metadata = json.loads(fd_path.with_suffix(fd_path.suffix + '.munch.json').read_text())
