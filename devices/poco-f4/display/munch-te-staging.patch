@@ -1,0 +1,117 @@
+--- a/iokit/Kernel/MiniIOMobileFramebuffer.cpp
++++ b/iokit/Kernel/MiniIOMobileFramebuffer.cpp
+@@ -38,0 +39,2 @@
++#include "munch-te-frame.h"
++extern "C" vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
+@@ -155,0 +158 @@
++static TUNABLE(uint32_t, gMunchTE, "munch_te", 0);
+@@ -230,0 +234,4 @@
++	uint8_t *       fFront;                 /* opt-in: real boot framebuffer; fBase is the staging image */
++	volatile uint32_t * fTEInput;
++	uint64_t        fTEPeriod, fCopyBudget;
++	unsigned        fTEWarnings;
+@@ -295,0 +303,2 @@
++	uint64_t waitForTE(void);
++	void flushStaging(uint64_t edge);
+@@ -317,0 +327,72 @@
++/* A bounded, passive TE wait. Validate the inherited ~60-Hz mode first.
++ * The pin and its mux are read only; no TLMM interrupt or display programming.
++ */
++uint64_t
++IOMobileFramebuffer::waitForTE(void)
++{
++	if (!fTEInput) return 0;
++	uint64_t edges[4], deadline, now;
++	unsigned needed = fTEPeriod ? 1 : 4, count = 0, polls = 0;
++	clock_interval_to_deadline(fTEPeriod ? 25 : 100, NSEC_PER_MSEC, &deadline);
++	unsigned previous = *fTEInput & 1;
++	do {
++		unsigned high = *fTEInput & 1;
++		now = mach_absolute_time();
++		if (high && !previous) edges[count++] = now;
++		previous = high;
++	} while (count < needed && now < deadline && ++polls < 16000000);
++	if (count != needed) {
++		if (fTEWarnings++ < 3) IOLog("MUNCH TE: missing pulse; serial staging fallback for this frame\n");
++		if (!fTEPeriod || fTEWarnings >= 3) fTEInput = NULL;
++		return 0;
++	}
++	if (!fTEPeriod) {
++		uint64_t p[3] = {edges[1]-edges[0], edges[2]-edges[1], edges[3]-edges[2]}, ns;
++		for (unsigned i = 1; i < 3; i++) for (unsigned j = i; j && p[j] < p[j-1]; j--) {
++			uint64_t t = p[j]; p[j] = p[j-1]; p[j-1] = t;
++		}
++		absolutetime_to_nanoseconds(p[1], &ns);
++		if (!munch_te_period_valid(ns)) {
++			IOLog("MUNCH TE: period %llu ns is outside the validated 60-Hz mode; staging only\n", ns);
++			fTEInput = NULL; return 0;
++		}
++		fTEPeriod = p[1];
++		IOLog("MUNCH TE: period %llu ns; transfer offset 14000 us (stock 60-Hz DT budget)\n", ns);
++	}
++	return edges[needed-1];
++}
++
++/* All layer/scaling workers have finished before this single front copy.
++ * The 14-ms phase is the stock panel's transfer-time budget, not a hardware
++ * page flip. Late/missing TE and an insufficient copy window are reported.
++ */
++void
++IOMobileFramebuffer::flushStaging(uint64_t edge)
++{
++	if (!fFront) return;
++	uint64_t delay, target = 0;
++	nanoseconds_to_absolutetime(14 * NSEC_PER_MSEC, &delay);
++	if (edge && fCopyBudget >= fTEPeriod - delay) {
++		IOLog("MUNCH TE: measured copy does not fit the transfer gap; TE pacing disabled\n");
++		fTEInput = NULL; edge = 0;
++	}
++	if (edge) {
++		target = munch_te_copy_time(edge, mach_absolute_time(), fTEPeriod, delay, fCopyBudget);
++		if (!target) {
++			edge = waitForTE();
++			if (edge) target = munch_te_copy_time(edge, mach_absolute_time(), fTEPeriod, delay, fCopyBudget);
++		}
++		if (!target && fTEWarnings++ < 3) IOLog("MUNCH TE: copy budget does not fit; serial staging fallback\n");
++	}
++	if (target) clock_delay_until(target);
++	uint64_t began = mach_absolute_time();
++	memcpy(fFront, fBase, (size_t)fRowBytes * fPanelHeight);
++	__asm__ volatile("dsb sy" ::: "memory");
++	uint64_t elapsed = mach_absolute_time() - began;
++	if (elapsed > fCopyBudget) fCopyBudget = elapsed;
++	if (fSwapsShown < 8) {
++		uint64_t ns; absolutetime_to_nanoseconds(elapsed, &ns);
++		IOLog("MUNCH TE: front copy %llu us, phased %u\n", ns/1000, target != 0);
++	}
++}
++
+@@ -423,0 +505,21 @@
++	if (gMunchTE && munch_te_geometry(fPanelWidth, fPanelHeight, fRowBytes)) {
++		IORegistryEntry * io = IORegistryEntry::fromPath("/arm-io", gIODTPlane);
++		OSData * type = io ? OSDynamicCast(OSData, io->getProperty("device_type")) : NULL;
++		bool munch = type && type->getLength() == 6 && memcmp(type->getBytesNoCopy(), "munch", 6) == 0;
++		if (io) io->release();
++		if (munch) {
++			vm_offset_t pads = ml_io_map(0x0f940000, 0x4000);
++			uint32_t cfg = pads ? *(volatile uint32_t *)(pads + 0x2000) : 0;
++			if (pads && (cfg & 0x3c) == 4 && !(cfg & 0x200)) {
++				size_t bytes = (size_t)fRowBytes * fPanelHeight;
++				uint8_t * staging = IONewZero(uint8_t, bytes);
++				if (staging) {
++					fFront = fBase; fBase = staging;
++					fTEInput = (volatile uint32_t *)(pads + 0x2004);
++					nanoseconds_to_absolutetime(2 * NSEC_PER_MSEC, &fCopyBudget);
++					IOLog("MUNCH TE: staging %zu bytes; GPIO66 input; no display register writes\n", bytes);
++				}
++			}
++		}
++		if (!fFront) IOLog("MUNCH TE: staging prerequisites unavailable; original presentation retained\n");
++	}
+@@ -943,0 +1046 @@
++	uint64_t te_edge = fFront ? waitForTE() : 0;
+@@ -945 +1048 @@
+-	if (gOnTheBeat) {
++	if (gOnTheBeat && !te_edge) {
+@@ -1041,0 +1145 @@
++	flushStaging(te_edge);

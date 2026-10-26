@@ -131,7 +131,7 @@ def startup_checkpoint_kernel(original, checkpoint):
     return bytes(patched)
 
 
-def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_config=None, touch=False, cpus=1):
+def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_config=None, touch=False, cpus=1, native_gpu_config=None):
     if cpus not in (1, 8) or (cpus != 1 and checkpoint != 58):
         raise ValueError('Eight-core mode is supported only for the iOS profile')
     if touch and (checkpoint != 58 or not no_early_bootargs):
@@ -142,14 +142,26 @@ def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_c
     root = here.parents[2]
     uefi = here.parent / 'uefi'
     source = root / 'xnuloader/loader.c'
-    kernel = (root / 'prebuilt/mach.development.bcm2837').read_bytes()
+    native = None
+    if native_gpu_config is not None:
+        native = json.loads(native_gpu_config.read_text())
+        if checkpoint != 58 or cpus != 8 or not touch or not no_early_bootargs or native.get('profile') not in ('munch-a650-diagnostic-22', 'munch-a650-ios-gpu'):
+            raise ValueError('Native A650 config requires the reviewed touch/eight-CPU diagnostic profile')
+        kernel = Path(native['kernel']['path']).read_bytes()
+        if hashlib.sha256(kernel).hexdigest() != native['kernel']['sha256']:
+            raise ValueError('Native kernel hash mismatch')
+        source_report = Path(native['source_report']['path']).read_bytes()
+        if hashlib.sha256(source_report).hexdigest() != native['source_report']['sha256']:
+            raise ValueError('Native source report hash mismatch')
+    else:
+        kernel = (root / 'prebuilt/mach.development.bcm2837').read_bytes()
     sha = lambda data: hashlib.sha256(data).hexdigest()
-    if sha(source.read_bytes()) != LOADER_SHA or sha(kernel) != KERNEL_SHA:
+    if sha(source.read_bytes()) != LOADER_SHA or (sha(kernel) != KERNEL_SHA if native is None else len(kernel) != native['kernel']['size']):
         raise ValueError('Loader or kernel revision differs from the reviewed checkpoint baseline')
     if kernel[:4] != b'\xcf\xfa\xed\xfe' or b'XNULDRST' not in kernel:
         raise ValueError('Expected the patched ARM64 Mach-O kernel with loader return slot')
     touch_report = None
-    if touch:
+    if touch and native is None:
         import importlib.util
         spec = importlib.util.spec_from_file_location('munch_touch_overlay', here.parent / 'touch/kernel-overlay.py')
         module = importlib.util.module_from_spec(spec)
@@ -161,7 +173,8 @@ def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_c
     if no_early_bootargs:
         if checkpoint not in (10, 11, 12, 21, 31, 32, 34, 35, 40, 41, 50, 51, 52, 53, 54, 55, 56, 57, 58):
             raise ValueError('Early boot-argument bypass is reviewed only for checkpoints 10, 11, 12, 21, 31, 32, 34, 35, 40, 41, 50, 51, 52, 53, 54, 55, 56, 57 and 58')
-        kernel = no_early_bootargs_kernel(kernel)
+        if native is None:
+            kernel = no_early_bootargs_kernel(kernel)
     if checkpoint in (50, 51, 52, 53, 54, 55, 56):
         kernel = startup_checkpoint_kernel(kernel, checkpoint)
     hello = None
@@ -188,11 +201,47 @@ def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_c
                 digest = hashlib.file_digest(stream, 'sha256').hexdigest()
             if path.stat().st_size != info['size'] or digest != info['sha256']:
                 raise ValueError('iOS config hash/size mismatch: ' + key)
+        if native is not None and native['profile'] == 'munch-a650-ios-gpu':
+            info = native['graphics_report']
+            graphics_bytes = Path(info['path']).read_bytes()
+            if sha(graphics_bytes) != info['sha256']:
+                raise ValueError('Graphics report hash mismatch')
+            graphics = json.loads(graphics_bytes)
+            if (graphics['mesa_version'] != '25.0.7' or graphics['driver'] != 'freedreno' or
+                    graphics['service'] != 'HakiosGPU' or graphics['helper']['sha256'] != ios['root']['sha256']):
+                raise ValueError('GPU helper does not match the Mesa/service profile')
         hello = Path(ios['root']['path']).read_bytes()
         if len(hello) > 0x03e00000 or hello[32:36] != b'NXSB':
             raise ValueError('Expected a small APFS helper RAM root')
         cmdline = ('cpus=8 small_cores=2 small_cores_after=0 loader_return_after=600' if cpus == 8
                    else '-v cpus=1 loader_return_after=600')
+        if native is not None:
+            if native['profile'] == 'munch-a650-ios-gpu':
+                if native.get('revision', 0) < 4:
+                    raise ValueError('iOS GPU requires the device-proven SCM resume kernel')
+                speed = native.get('gpu_speed_index', 1)
+                if speed not in (1, 5):
+                    raise ValueError('Only reviewed A650 305/587 MHz selections are supported')
+                hz = native.get('compositor_hz', 60)
+                seconds = native.get('return_after_seconds', 600)
+                sync = native.get('sync_frame_clock', False)
+                if hz not in (60, 120) or seconds not in (0, 600) or type(sync) is not bool:
+                    raise ValueError('Unsupported compositor/session profile')
+                extra = ('fb_hz=120 ' if hz == 120 else '') + ('ca_vbl=1 glwait=1 ' if sync else '')
+                verbose = native.get('verbose_console', False)
+                if type(verbose) is not bool:
+                    raise ValueError('verbose_console must be boolean')
+                te = native.get('display_te', False)
+                if type(te) is not bool or (te and not json.loads(source_report).get('display_te_staging')):
+                    raise ValueError('TE requires the reviewed staging kernel')
+                extra += 'munch_te=1 ' if te else ''
+                cmdline = (f'cpus=8 small_cores_after=0 munch_touch=1 gpu=1 adreno_speed={speed} '
+                           + extra + f'loader_return_after={seconds}')
+                if verbose:
+                    cmdline = '-v ' + cmdline
+            else:
+                cmdline = ('-v cpus=8 small_cores_after=0 munch_touch=1 adreno=22 adreno_speed=1 '
+                           'adreno_pause=0 adreno_watch=20 adreno_return=1 loader_return_after=120')
     fd = fd_path.read_bytes()
     metadata = json.loads(fd_path.with_suffix(fd_path.suffix + '.munch.json').read_text())
     if (metadata.get('target') != 'munch' or metadata.get('diagnostic_revision') != (3 if checkpoint == 58 else 2) or
@@ -207,6 +256,26 @@ def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_c
         shutil.copy2(root / 'xnuloader/efi.h', work / 'efi.h')
         subprocess.run(['patch', '--batch', '--forward', '-p1', '-i', str(here / 'checkpoint-loader.patch')],
                        cwd=work, check=True)
+        if native is not None and native.get('loader_quiet', False):
+            if type(native['loader_quiet']) is not bool or native.get('loader_bottom_console', False):
+                raise ValueError('Quiet loader requires a boolean flag and no bottom console')
+            loader_source = (work / 'loader.c').read_text()
+            if loader_source.count('static int screen_quiet;') != 1:
+                raise ValueError('Unexpected loader console gate')
+            (work / 'loader.c').write_text(loader_source.replace('static int screen_quiet;',
+                'static int screen_quiet = 1; /* munch: retain RAM log without screen output */', 1))
+        if native is not None and native.get('loader_bottom_console', False):
+            if type(native['loader_bottom_console']) is not bool:
+                raise ValueError('loader_bottom_console must be boolean')
+            loader_source = (work / 'loader.c').read_text()
+            loader_source = loader_source.replace('static int screen_quiet;',
+                'static int screen_quiet;\n#include "bottom-console.inc"', 1)
+            loader_source = loader_source.replace('if (ST->con_out != NULL && !screen_quiet) {',
+                'if (munch_console && !screen_quiet) { munch_console_char(c); return; }\n'
+                '\tif (ST->con_out != NULL && !screen_quiet) {', 1)
+            loader_source = loader_source.replace('ST = st;', 'ST = st;\n\tmunch_console_init();', 1)
+            (work / 'loader.c').write_text(loader_source)
+            shutil.copy2(here / 'bottom-console.inc', work / 'bottom-console.inc')
         if cpus == 8:
             loader_source = (work / 'loader.c').read_text()
             old = '\t\t/* This probe publishes only the current CPU, even with cpus=1 present. */\n\t\tmore_cores = 0;'
@@ -215,6 +284,22 @@ def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_c
             if loader_source.count(old) != 1 or loader_source.count(guard) != 1:
                 raise ValueError('Unexpected single-core publication or payload guard')
             loader_source = loader_source.replace(old, new, 1).replace(guard, '"' + cmdline + '"', 1)
+            if native is not None:
+                allocation = '\tuint64_t rd_pa = kern_hi;'
+                reservation = ('\t/* Dedicated low metadata page, inside the kernel static extent. */\n'
+                               '\tuint64_t scm_pa = kern_hi, scm_size = 4 * PAGE_SIZE_MAX;\n'
+                               '\tif (scm_pa >= 0x100000000ULL || scm_pa + scm_size > 0x100000000ULL ||\n'
+                               '\t    scm_pa + scm_size > phys_base + RESIDENT_RD_OFFSET) {\n'
+                               '\t\tprint("MUNCH: no low SCM reservation fits\\n"); return 0;\n\t}\n'
+                               '\tmemset((void *)scm_pa, 0, scm_size);\n'
+                               '\tprint("MUNCH SCM reserved page: %x size %x\\n", scm_pa, scm_size);\n'
+                               '\tuint64_t rd_pa = kern_hi + scm_size;')
+                chosen = '\tdt_begin(&w, "chosen");'
+                if loader_source.count(allocation) != 1 or loader_source.count(chosen) != 1:
+                    raise ValueError('Unexpected native metadata reservation hook')
+                loader_source = loader_source.replace(allocation, reservation, 1)
+                loader_source = loader_source.replace('if (kern_hi + rd_size > res_pa)', 'if (rd_pa + rd_size > res_pa)', 1)
+                loader_source = loader_source.replace(chosen, chosen + '\n\tuint64_t scm_metadata[2] = {scm_pa, scm_size};\n\tdt_prop(&w, "munch-scm-metadata", scm_metadata, sizeof(scm_metadata));', 1)
             (work / 'loader.c').write_text(loader_source)
         if ios is not None:
             identity = Path(ios['identity']['path']).read_bytes()
@@ -276,7 +361,8 @@ def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_c
                         '-o', str(work / 'shim.o')], check=True)
         subprocess.run(['aarch64-linux-gnu-objcopy', '-O', 'binary', str(work / 'shim.o'),
                         str(work / 'shim.bin')], check=True)
-        blob = (work / 'shim.bin').read_bytes() + fd + payload
+        shim = (work / 'shim.bin').read_bytes()
+        blob = shim + fd + payload
         blob += b'\0' * (-len(blob) % 16)
         image_kernel = work / 'kernel'
         image_kernel.write_bytes(gzip.compress(blob, mtime=0) + dtb_path.read_bytes())
@@ -293,13 +379,14 @@ def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_c
                   'loader_overlay_sha256': sha((here / 'checkpoint-loader.patch').read_bytes()),
                   'published_cpu_count': 1 if cpus == 1 else None, 'requested_cpu_count': cpus,
                   'cpu_publication': 'current-core-only' if cpus == 1 else 'PSCI-affinity-filtered-up-to-eight',
-                  'verbose_console': cpus == 1, 'skip_early_bootcpu_query': no_early_bootargs,
+                  'verbose_console': '-v' in cmdline.split(), 'skip_early_bootcpu_query': no_early_bootargs,
                   'loader_source_sha256': LOADER_SHA, 'kernel_baseline_sha256': KERNEL_SHA, 'kernel_sha256': sha(kernel),
                   'loader_sha256': sha(loader), 'image_sha256': sha(output.read_bytes()),
-                  'image_size': output.stat().st_size, 'dtb_sha256': sha(dtb_path.read_bytes()),
+                  'image_size': output.stat().st_size, 'shim_size': len(shim),
+                  'bootshim_revision': 2, 'shim_source_sha256': sha((uefi / 'bootshim.S').read_bytes()), 'dtb_sha256': sha(dtb_path.read_bytes()),
                   'ramroot_sha256': sha(hello) if hello is not None else None,
                   'contains_xnu': True, 'contains_ios': ios is not None, 'identity': 'local-ipsw' if ios is not None else 'placeholder',
-                  'device_tested': False, 'touch_prototype': touch_report}
+                  'device_tested': False, 'touch_prototype': touch_report, 'native_gpu': native}
         output.with_suffix(output.suffix + '.json').write_text(json.dumps(report, indent=2) + '\n')
         print(f'Built XNU checkpoint-{checkpoint} probe: {output}')
 
@@ -315,5 +402,6 @@ if __name__ == '__main__':
     parser.add_argument('--ios-config', type=Path)
     parser.add_argument('--cpus', type=int, choices=[1, 8], default=1, help='iOS only: request all eight CPUs through the existing PSCI path; disable verbose framebuffer console')
     parser.add_argument('--touch', action='store_true', help='Experimental ABI-pinned FT3658U driver with verified UEFI power handoff')
+    parser.add_argument('--native-gpu-config', type=Path, help='Source-built A650 diagnostic or iOS GPU kernel manifest')
     args = parser.parse_args()
-    pack(args.fd.resolve(), args.dtb.resolve(), args.output.resolve(), args.checkpoint, args.no_early_bootargs, args.ios_config, args.touch, args.cpus)
+    pack(args.fd.resolve(), args.dtb.resolve(), args.output.resolve(), args.checkpoint, args.no_early_bootargs, args.ios_config, args.touch, args.cpus, args.native_gpu_config)

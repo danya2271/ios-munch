@@ -30,4 +30,5 @@ for name in a650_gmu.bin a650_sqe.fw a650_zap.mdt a650_zap.b00 a650_zap.b01 a650
     echo "Pulled $name from $found"
 done
 (cd "$out" && sha256sum ./*)
+"$(dirname "$0")/gpu/fetch-firmware.sh" --check
 echo "Firmware saved in $out (ignored by git)."

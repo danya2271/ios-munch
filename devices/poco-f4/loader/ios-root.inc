@@ -63,7 +63,22 @@ munch_load_iosroot(const struct payload_info *pi)
     }
     resident_rd_size = 0;
     print("MUNCH: reading verified iOS 16.5 RAM root, %d MiB\n", MUNCH_SYSTEM_BYTES >> 20);
-    for (uint64_t at = 0; at < MUNCH_SYSTEM_BYTES;) {
+    uint64_t prefix = MUNCH_SYSTEM_BYTES < 0x100000 ? MUNCH_SYSTEM_BYTES : 0x100000;
+    efi_status prefix_status = selected->read_blocks(selected, media->media_id, 0, prefix,
+                                                      (void *)(uintptr_t)base);
+    if (EFI_ERROR(prefix_status)) {
+        print("MUNCH: iosroot prefix read failed: %x\n", prefix_status);
+        return 0;
+    }
+    const uint8_t *prefix_image = (const uint8_t *)(uintptr_t)base;
+    if (prefix_image[32] != 'N' || prefix_image[33] != 'X' ||
+        prefix_image[34] != 'S' || prefix_image[35] != 'B') {
+        print("MUNCH: iosroot is not APFS; expected NXSB, got %x %x %x %x\n",
+              (uint64_t)prefix_image[32], (uint64_t)prefix_image[33],
+              (uint64_t)prefix_image[34], (uint64_t)prefix_image[35]);
+        return 0;
+    }
+    for (uint64_t at = prefix; at < MUNCH_SYSTEM_BYTES;) {
         uint64_t size = MUNCH_SYSTEM_BYTES - at;
         if (size > 0x100000) size = 0x100000;
         efi_status status = selected->read_blocks(selected, media->media_id, at / bs,
@@ -75,9 +90,11 @@ munch_load_iosroot(const struct payload_info *pi)
         if (!(at & 0x7ffffff)) print("MUNCH: read %d MiB\n", at >> 20);
     }
     const uint8_t *image = (const uint8_t *)(uintptr_t)base;
-    if (image[32] != 'N' || image[33] != 'X' || image[34] != 'S' || image[35] != 'B' ||
-        munch_system_crc32(image, MUNCH_SYSTEM_BYTES) != MUNCH_SYSTEM_CRC32) {
-        print("MUNCH: system image CRC/magic mismatch; kernel NOT started\n"); return 0;
+    uint32_t actual_crc = munch_system_crc32(image, MUNCH_SYSTEM_BYTES);
+    if (actual_crc != MUNCH_SYSTEM_CRC32) {
+        print("MUNCH: system image CRC mismatch; expected %x got %x; kernel NOT started\n",
+              (uint64_t)MUNCH_SYSTEM_CRC32, (uint64_t)actual_crc);
+        return 0;
     }
     resident_rd_size = MUNCH_SYSTEM_BYTES;
     print("MUNCH: system image read and CRC verified; starting XNU\n");

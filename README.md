@@ -136,10 +136,22 @@ MUNCH_XBL=/absolute/path/to/xbl_a.img \
 `MUNCH_XBL` is needed only for the first UEFI build; the extracted vendor modules
 stay in the ignored `Mu-Silicium/Binaries/munch/` directory. The live merged Munch
 DTB is required for every boot-image package and is never downloaded from this
-repository. The default build requests eight CPUs, the working touch handoff,
-`iosroot`, and software rendering unless `fw-gpu/` exists; set `MUNCH_GPU=1` to
-request the A650 path explicitly. `MUNCH_STORAGE=1` is the default because the
-iosroot handoff needs the reviewed storage drivers.
+repository. The default build requests eight CPUs, enables the Munch frequency
+handoff with `cpufreq=1`, uses the working touch handoff, and performs a
+flash-root iOS boot (`root_apfs=ufs_darwin ufs=2 apfs_volume=ufs_darwin
+bootcpu=7`). The loader serves UFS read-only through the resident firmware driver;
+the physical `iosroot` partition must contain the exact raw APFS `system.apfs`
+recorded in `artifacts/munch-build/ios-config.json`. The older HFS+ `iOSRoot`
+images made by the trampoline patch workflow are not compatible with this loader.
+The six required A650 firmware files are verified against the pinned
+`TheMuppets/proprietary_vendor_xiaomi_sm8250-common` commit
+`c48b43a4db777a1005f730ca1ff0c14d022055db` before packaging.
+When `MUNCH_GPU=auto` (the default) or `MUNCH_GPU=1` and `fw-gpu/` is incomplete,
+the build downloads missing files and verifies their SHA-256 values; matching
+local files are kept. Set `MUNCH_GPU=0` to force software rendering, or run
+`devices/poco-f4/gpu/fetch-firmware.sh --check` to verify the local copy.
+`MUNCH_STORAGE=1` is the default because the `iosroot` handoff needs the reviewed
+storage drivers.
 
 The individual stages are also available:
 

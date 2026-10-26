@@ -6,7 +6,9 @@ intentional PID-1 exit panic, and return to UEFI. Storage FD revision 3 has also
 found iosroot and read its first 64 KiB through vendor Block I/O. The user subsequently reports an Apple logo and iOS interface in mode 58;
 touch input is now confirmed with the powered FT3658U XNU prototype. The latest
 image requests eight CPUs; their actual online count has not been captured.
-GPU acceleration, audio, Wi-Fi and modem support are not established. See
+Adreno 650 hardware drawing is confirmed with the r4 diagnostic. The user confirms Mesa/freedreno-backed iOS UI and a large smoothness improvement.
+Intermittent rendering glitches while swiping remain under investigation.
+Audio, Wi-Fi and modem support are not established. See
 TOUCH-BRINGUP.md and GPU-BRINGUP.md for the current driver work.
 
 A first iOS 16.5 (20F66) attempt is prepared in loader/: a verified local APFS

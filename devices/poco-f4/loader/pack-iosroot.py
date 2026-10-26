@@ -199,8 +199,12 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
     root = Path(__file__).resolve().parents[3]
     source = root / 'xnuloader/loader.c'
     identity = Path(config['identity']['path']).read_bytes()
-    cmdline = ('cpus=8 small_cores=2 small_cores_after=0 touchscreen=1 loader_return_after=600' if cpus == 8
-               else '-v cpus=1 touchscreen=1 loader_return_after=600')
+    if cpus == 8:
+        cmdline = ('root_apfs=ufs_darwin ufs=2 apfs_volume=ufs_darwin bootcpu=7 '
+                   'cpus=8 cpufreq=1 small_cores=2 small_cores_after=0 touchscreen=1 '
+                   'loader_return_after=600')
+    else:
+        cmdline = '-v cpus=1 touchscreen=1 loader_return_after=600'
     if gpu:
         cmdline += ' gpu=1'
     if verbose and '-v' not in cmdline.split():

@@ -127,3 +127,14 @@ connects those controllers recursively and reads the first 64 KiB of exactly
 one iosroot GPT partition. It never calls write_blocks or flush_blocks. The
 new driver configuration still needs device testing; do not assume earlier
 XNU checkpoint successes validate this FD.
+
+### Shim overlap regression check
+
+The shared bootshim now selects FD/payload copy order from runtime ranges and
+uses aligned memmove semantics. It rejects source layouts that would overwrite
+its running code. The existing fixed FD and payload destinations are unchanged.
+With clang, llvm-readelf, aarch64-linux-gnu-objcopy and Python Unicorn available,
+run `python3 devices/poco-f4/uefi/check-bootshim.py` from the repository root.
+The test executes the actual compiled ARM64 shim and checks seven relocation
+layouts, preserved x0/x1 and invalid-range rejection. Image manifests record
+`shim_size`; old 208-byte-shim images remain supported by the inspector.

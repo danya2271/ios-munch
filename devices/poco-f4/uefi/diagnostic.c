@@ -30,6 +30,14 @@ static void field(const char *name, uint64_t value)
     text(name); hex(value); text("\r\n");
 }
 
+#ifdef MUNCH_DISPLAY_SCAN_PROBE
+#include "display-scan-probe.inc"
+#endif
+
+#ifdef MUNCH_PANEL_TE_PROBE
+#include "panel-te-probe.inc"
+#endif
+
 #ifdef MUNCH_GPU_PROBE
 #include "gpu-probe.inc"
 #endif
@@ -111,6 +119,12 @@ efi_status efi_main(efi_handle image, efi_system_table *table)
 #ifdef MUNCH_TOUCH_PROBE
     touch_probe(table, gop);
 #endif
+#endif
+#ifdef MUNCH_DISPLAY_SCAN_PROBE
+    display_scan_probe();
+#endif
+#ifdef MUNCH_PANEL_TE_PROBE
+    panel_te_probe();
 #endif
 #ifdef MUNCH_GPU_PROBE
     gpu_probe();

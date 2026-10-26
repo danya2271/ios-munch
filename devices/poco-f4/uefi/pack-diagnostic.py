@@ -11,12 +11,12 @@ import tempfile
 from pathlib import Path
 
 
-def pack(fd_path, dtb_path, output, usb_probe=False, root_probe=False, touch_probe=False, touch_reset=False, touch_power=False, touch_enable=False, gpu_probe=False):
+def pack(fd_path, dtb_path, output, usb_probe=False, root_probe=False, touch_probe=False, touch_reset=False, touch_power=False, touch_enable=False, gpu_probe=False, panel_te_probe=False, display_scan_probe=False):
     if touch_enable:
         touch_probe = touch_reset = True
     if touch_reset and not touch_probe:
         raise ValueError('Reset release requires the touch diagnostic')
-    if sum((usb_probe, root_probe, touch_probe, touch_power, gpu_probe)) > 1:
+    if sum((usb_probe, root_probe, touch_probe, touch_power, gpu_probe, panel_te_probe, display_scan_probe)) > 1:
         raise ValueError('Select one probe mode')
     here = Path(__file__).resolve().parent
     root = here.parents[2]
@@ -34,7 +34,7 @@ def pack(fd_path, dtb_path, output, usb_probe=False, root_probe=False, touch_pro
     with tempfile.TemporaryDirectory(prefix='munch-diagnostic-') as temp:
         work = Path(temp)
         obj, efi = work / 'diagnostic.obj', work / 'diagnostic.efi'
-        subprocess.run(['clang', *(['-DMUNCH_GPU_PROBE=1'] if gpu_probe else []), *(['-DMUNCH_USB_PROBE=1'] if usb_probe else []), *(['-DMUNCH_ROOT_PROBE=1'] if root_probe else []), *(['-DMUNCH_TOUCH_PROBE=1'] if touch_probe else []), *(['-DMUNCH_TOUCH_RELEASE_RESET=1'] if touch_reset else []), *(['-DMUNCH_TOUCH_POWER_PROBE=1'] if touch_power or touch_enable else []), *(['-DMUNCH_TOUCH_POWER_ENABLE=1'] if touch_enable else []), '--target=aarch64-unknown-windows', '-ffreestanding',
+        subprocess.run(['clang', *(['-DMUNCH_DISPLAY_SCAN_PROBE=1'] if display_scan_probe else []), *(['-DMUNCH_PANEL_TE_PROBE=1'] if panel_te_probe else []), *(['-DMUNCH_GPU_PROBE=1'] if gpu_probe else []), *(['-DMUNCH_USB_PROBE=1'] if usb_probe else []), *(['-DMUNCH_ROOT_PROBE=1'] if root_probe else []), *(['-DMUNCH_TOUCH_PROBE=1'] if touch_probe else []), *(['-DMUNCH_TOUCH_RELEASE_RESET=1'] if touch_reset else []), *(['-DMUNCH_TOUCH_POWER_PROBE=1'] if touch_power or touch_enable else []), *(['-DMUNCH_TOUCH_POWER_ENABLE=1'] if touch_enable else []), '--target=aarch64-unknown-windows', '-ffreestanding',
                         '-fno-builtin', '-fno-stack-protector', '-fshort-wchar',
                         '-mgeneral-regs-only', '-O1', '-Wall', '-Wextra', '-Werror',
                         '-I', str(root / 'xnuloader'), '-c', str(here / 'diagnostic.c'),
@@ -66,10 +66,13 @@ def pack(fd_path, dtb_path, output, usb_probe=False, root_probe=False, touch_pro
                         '--kernel', str(kernel), '--ramdisk', str(ramdisk),
                         '--header_version', '1', '--board', 'MUNCHDIAG', '-o', str(output)], check=True)
         report = {**metadata, 'image_sha256': hashlib.sha256(output.read_bytes()).hexdigest(),
-                  'image_size': output.stat().st_size, 'probe_sha256': hashlib.sha256(probe).hexdigest(),
+                  'image_size': output.stat().st_size, 'shim_size': len(shim_raw.read_bytes()),
+                  'bootshim_revision': 2, 'probe_sha256': hashlib.sha256(probe).hexdigest(),
                   'dtb_sha256': hashlib.sha256(dtb_path.read_bytes()).hexdigest(),
                   'boot_header_version': 1, 'contains_xnu': False, 'contains_ios': False,
-                  'probe_mode': 'a650-read-only' if gpu_probe else 'ft3658u-power-enable' if touch_enable else 'ft3658u-power-read' if touch_power else 'ft3658u-runtime-read' if touch_probe else ('iosroot-read-only' if root_probe else ('usb' if usb_probe else 'display')),
+                  'display_register_writes': False if display_scan_probe else None,
+                  'temporary_display_bus_clocks': display_scan_probe,
+                  'probe_mode': 'display-scan-observe' if display_scan_probe else 'panel-te-read-only' if panel_te_probe else 'a650-read-only' if gpu_probe else 'ft3658u-power-enable' if touch_enable else 'ft3658u-power-read' if touch_power else 'ft3658u-runtime-read' if touch_probe else ('iosroot-read-only' if root_probe else ('usb' if usb_probe else 'display')),
                   'usb_probe_revision': 2 if usb_probe else None,
                   'touch_probe_revision': (5 if touch_enable else 3 if touch_reset else 2) if touch_probe else None,
                   'touch_reset_release': touch_reset, 'touch_temporary_power_enable': touch_enable,
@@ -91,5 +94,7 @@ if __name__ == '__main__':
     parser.add_argument('--touch-power-probe', action='store_true')
     parser.add_argument('--touch-enable-probe', action='store_true')
     parser.add_argument('--gpu-probe', action='store_true')
+    parser.add_argument('--panel-te-probe', action='store_true')
+    parser.add_argument('--display-scan-probe', action='store_true')
     args = parser.parse_args()
-    pack(args.fd, args.dtb, args.output, args.usb_probe, args.root_probe, args.touch_probe or args.touch_reset_probe, args.touch_reset_probe, args.touch_power_probe, args.touch_enable_probe, args.gpu_probe)
+    pack(args.fd, args.dtb, args.output, args.usb_probe, args.root_probe, args.touch_probe or args.touch_reset_probe, args.touch_reset_probe, args.touch_power_probe, args.touch_enable_probe, args.gpu_probe, args.panel_te_probe, args.display_scan_probe)

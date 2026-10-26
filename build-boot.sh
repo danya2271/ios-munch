@@ -9,6 +9,7 @@ munch_lock
 
 CONFIG=${MUNCH_IOS_CONFIG:-$MUNCH_BUILD_DIR/ios-config.json}
 munch_prepare_dtb
+munch_prepare_requested_gpu_firmware
 if [ "${MUNCH_SKIP_ROOT:-0}" != 1 ] && [ -z "${MUNCH_IOS_CONFIG:-}" ] &&
    { [ ! -f "$CONFIG" ] || [ "${MUNCH_REBUILD_ROOT:-0}" = 1 ]; }; then
     MUNCH_LOCK_HELD=1 bash "$ROOT/build-root.sh"
@@ -53,10 +54,17 @@ FD="$MUNCH_MU_ROOT/Build/munchPkg/${TARGET}_CLANGPDB/FV/SILICIUM_UEFI.fd"
 OUTPUT=${MUNCH_BOOT_IMAGE:-$MUNCH_BUILD_DIR/munch-iosroot.img}
 GPU_ARGS=()
 case "${MUNCH_GPU:-auto}" in
-    1) GPU_ARGS=(--gpu) ;;
+    1)
+        munch_prepare_gpu_firmware
+        GPU_ARGS=()
+        ;;
     0) GPU_ARGS=(--no-gpu) ;;
     auto)
-        if compgen -G "$ROOT/fw-gpu/*" >/dev/null 2>&1; then GPU_ARGS=(--gpu); else GPU_ARGS=(--no-gpu); fi
+        if munch_prepare_gpu_firmware; then
+            GPU_ARGS=()
+        else
+            GPU_ARGS=(--no-gpu)
+        fi
         ;;
     *) munch_die 'MUNCH_GPU must be auto, 0, or 1' ;;
 esac

@@ -26,6 +26,30 @@ munch_need() {
     done
 }
 
+munch_prepare_gpu_firmware() {
+    local fetch="$MUNCH_ROOT/devices/poco-f4/gpu/fetch-firmware.sh"
+    [ -x "$fetch" ] || munch_die "GPU firmware helper is not executable: $fetch"
+
+    if "$fetch" --check; then
+        return 0
+    else
+        local status=$?
+        [ "$status" = 1 ] || munch_die "GPU firmware in $MUNCH_ROOT/fw-gpu is not trusted"
+    fi
+
+    [ "${MUNCH_GPU_FW_AUTO_DOWNLOAD:-1}" = 1 ] ||
+        munch_die 'GPU firmware is missing; set MUNCH_GPU_FW_AUTO_DOWNLOAD=1 or run devices/poco-f4/gpu/fetch-firmware.sh'
+    "$fetch"
+}
+
+munch_prepare_requested_gpu_firmware() {
+    case "${MUNCH_GPU:-auto}" in
+        0) ;;
+        1|auto) munch_prepare_gpu_firmware ;;
+        *) munch_die 'MUNCH_GPU must be auto, 0, or 1' ;;
+    esac
+}
+
 munch_lock() {
     mkdir -p "$MUNCH_BUILD_DIR"
     if [ "${MUNCH_LOCK_HELD:-0}" = 1 ]; then

@@ -2,8 +2,14 @@
 # Build XNU for redwood on Linux. Extra make args are passed through.
 source "$(dirname "${BASH_SOURCE[0]}")/xnu-env.sh"
 if [ "${MUNCH_STAGE:-0}" = 1 ]; then
-  python3 "$DARWIN_REDWOOD/devices/poco-f4/gpu/stage-kernel.py" "$XNU_SRC" \
-    --report "${MUNCH_STAGE_REPORT:-$XNU_SRC/BUILD/munch-stage.json}"
+  STAGE_ARGS=(--report "${MUNCH_STAGE_REPORT:-$XNU_SRC/BUILD/munch-stage.json}")
+  if [ -n "${MUNCH_TOUCH_POLL_MS:-}" ]; then
+    STAGE_ARGS+=(--touch-poll-ms "$MUNCH_TOUCH_POLL_MS")
+  fi
+  if [ "${MUNCH_TE_STAGING:-0}" = 1 ]; then
+    STAGE_ARGS+=(--te-staging)
+  fi
+  python3 "$DARWIN_REDWOOD/devices/poco-f4/gpu/stage-kernel.py" "$XNU_SRC" "${STAGE_ARGS[@]}"
 fi
 cd "$XNU_SRC" || exit 1
 # The Wi-Fi driver's object (tools/mk-ath11k.sh) is linked into the kernel when it is there; make
@@ -14,7 +20,7 @@ mtime() { if [ "$XNU_HOST_OS" = Darwin ]; then stat -f %m "$1"; else stat -c %Y 
 if [ -f "$LX" ]; then now="$LX $(mtime "$LX")"; else LX= now=; fi
 # the build tools of SETUP/ are Apple's: on macOS they build as they are, on Linux with a compatibility header
 if [ "$XNU_HOST_OS" = Darwin ]; then HOSTCC=clang; else
-HOSTCC="clang -include $XNUDEPS/hostinc/hostcompat.h -I$XNUDEPS/hostinc -Wno-unused-command-line-argument -Wno-error=implicit-function-declaration"; fi
+HOSTCC="clang ${XNU_HOST_CFLAGS:-} -include $XNUDEPS/hostinc/hostcompat.h -I$XNUDEPS/hostinc -Wno-unused-command-line-argument -Wno-error=implicit-function-declaration"; fi
 if [ -d BUILD/obj ] && [ "$(cat $STAMP 2>/dev/null)" != "$now" ]; then
 	rm -f BUILD/obj/*/mach.*.unstripped
 	echo "$now" > $STAMP

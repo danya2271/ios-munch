@@ -6,6 +6,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$ROOT/tools/munch-build-common.sh"
 cd "$ROOT"
 munch_lock
+munch_prepare_requested_gpu_firmware
 
 munch_prepare_xnu
 

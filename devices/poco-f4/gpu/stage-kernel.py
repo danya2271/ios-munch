@@ -8,6 +8,9 @@ import tempfile
 from pathlib import Path
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('tree', type=Path)
+p.add_argument('--te-staging', action='store_true', help='Stage the opt-in passive-TE framebuffer experiment')
+p.add_argument('--touch-poll-ms', type=int, choices=(4, 16), default=16,
+               help='Delay between native touch reads; 4 ms is experimental')
 p.add_argument('--report', required=True, type=Path)
 a = p.parse_args()
 here = Path(__file__).resolve().parent
@@ -27,7 +30,8 @@ with tempfile.TemporaryDirectory(prefix='munch-native-stage-') as directory:
     subprocess.run(['patch', '--batch', '--forward', '-p1', '-i', str(here / 'umi-a650.patch')], cwd=work, check=True)
     gpu = path.read_bytes()
 existing = a.tree / 'bsd/dev/hakios.adreno.c'
-if existing.read_bytes() not in (original, gpu):
+old_a650 = '5d5c303f422f2e18badd91b1b46da7dae51fcd5417e14658a9c4bc9b15b59799'
+if existing.read_bytes() not in (original, gpu) and sha(existing.read_bytes()) != old_a650:
     raise ValueError('Refusing to overwrite independently modified GPU source')
 touch = (here.parent / 'touch/xnu-ft3658u.c').read_text()
 touch = touch.replace('extern struct state munch_state;', 'static struct state munch_state;')
@@ -43,14 +47,46 @@ touch = touch.replace(needle, '    extern int PE_parse_boot_argn(const char *, v
                   '        if (!PE_parse_boot_argn("munch_touch", &enabled, sizeof(enabled)) || !enabled) return;\n'
                   '    }\n' + needle, 1)
 touch = '/* Native munch build: enabled by touchscreen=1 (munch_touch=1 is retained for probes). */\n' + touch
+if touch.count('IOSleep(16);') != 1:
+    raise ValueError('Unexpected touch polling loop')
+touch = touch.replace('IOSleep(16);', f'IOSleep({a.touch_poll_ms});')
+early_path = a.tree / 'osfmk/arm64/loader_return.c'
+early = early_path.read_text()
+old_query = 'if (PE_parse_boot_argn("bootcpu", &own_core, sizeof(own_core))) {'
+new_query = 'if (0) { /* munch current-core handoff: PE is not initialized here. */'
+if early.count(old_query) == 1:
+    early = early.replace(old_query, new_query, 1)
+elif early.count(new_query) != 1:
+    raise ValueError('Unexpected early bootcpu query')
+early_path.write_text(early)
 existing.write_bytes(gpu)
 (a.tree / 'bsd/dev/hakios.goodix.c').write_text(touch)
 header = (here.parent / 'touch/ft3658u-protocol.h').read_bytes()
 (a.tree / 'bsd/dev/ft3658u-protocol.h').write_bytes(header)
+fb_base = (root / 'xnu/files/iokit/Kernel/MiniIOMobileFramebuffer.cpp').read_bytes()
+if sha(fb_base) != 'c6aa9da0a649ae6adf784a00327a60b7bd21e10549c9094093301951971f6ebe':
+    raise ValueError('Unexpected framebuffer port base')
+with tempfile.TemporaryDirectory(prefix='munch-display-stage-') as directory:
+    work = Path(directory)
+    path = work / 'iokit/Kernel/MiniIOMobileFramebuffer.cpp'
+    path.parent.mkdir(parents=True)
+    path.write_bytes(fb_base)
+    subprocess.run(['patch', '--batch', '--forward', '-p1', '-i', str(here.parent / 'display/munch-te-staging.patch')], cwd=work, check=True)
+    fb_patched = path.read_bytes()
+fb_target = a.tree / 'iokit/Kernel/MiniIOMobileFramebuffer.cpp'
+if fb_target.read_bytes() not in (fb_base, fb_patched):
+    raise ValueError('Refusing to overwrite independent framebuffer changes')
+fb_target.write_bytes(fb_patched if a.te_staging else fb_base)
+(a.tree / 'iokit/Kernel/munch-te-frame.h').write_bytes((here.parent / 'display/te-frame.h').read_bytes())
 report = {'xnu_base': base, 'umi_reference': '6b6fb2b0c5a1720496ec71e88c95d2a45a0046a4',
-          'gpu_source_sha256': sha(gpu), 'touch_source_sha256': sha(touch.encode()),
+          'early_return_source_sha256': sha(early.encode()), 'gpu_source_sha256': sha(gpu),
+          'touch_source_sha256': sha(touch.encode()),
           'touch_header_sha256': sha(header), 'gpu_patch_sha256': sha((here / 'umi-a650.patch').read_bytes()),
-          'native_touch_bootarg': 'touchscreen=1', 'legacy_touch_bootarg': 'munch_touch=1', 'hardware_tested': False}
+          'native_touch_bootarg': 'touchscreen=1', 'legacy_touch_bootarg': 'munch_touch=1',
+          'touch_poll_sleep_ms': a.touch_poll_ms, 'display_te_staging': a.te_staging,
+          'display_source_sha256': sha(fb_target.read_bytes()),
+          'display_header_sha256': sha((here.parent / 'display/te-frame.h').read_bytes()),
+          'hardware_tested': False}
 a.report.parent.mkdir(parents=True, exist_ok=True)
 a.report.write_text(json.dumps(report, indent=2) + '\n')
 print('Staged A650 GPU and native munch touch; base prebuilt and installed APFS unchanged')

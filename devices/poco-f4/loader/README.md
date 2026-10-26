@@ -494,7 +494,7 @@ coordinate orientation and sustained reliability require device validation.
 ### Eight-core iOS experiment
 
 Add `--cpus 8` to the iOS touch build to restore upstream CPU enumeration and
-request `cpus=8 small_cores=2 small_cores_after=0`. The current boot CPU remains the boot CPU;
+request `cpus=8 cpufreq=1 small_cores=2 small_cores_after=0`. The current boot CPU remains the boot CPU;
 other MPIDRs are 0x000..0x700, in 0x100 steps as captured on munch. Existing
 PSCI AFFINITY_INFO filtering excludes processors firmware reports as in use;
 CPU_ON, GICv3 redistributor selection and secondary shutdown use the kernel's
@@ -504,7 +504,7 @@ default. The new profile also omits `-v` to avoid verbose framebuffer scrolling.
 `munch-ios165-touch-8cpu-r1.img` requests up to eight processors. The actual
 number registered/running is a device-test result, not a host-build guarantee.
 The existing touch overlay, APFS installation and 600-second return timer are
-retained. GPU acceleration and frequency control are not added by this change.
+retained. GPU acceleration remains a separate firmware-dependent experiment.
 
 ## Source-built iosroot image
 
@@ -512,7 +512,8 @@ For a normal source-built kernel, use `pack-iosroot.py` rather than the
 checkpoint packer. It reads only the dedicated `iosroot` partition at runtime;
 the large system APFS image is not embedded in the boot image. The small APFS
 helper and the local iOS identity are packaged after their SHA/size records are
-checked. The default command line requests eight CPUs, `small_cores=2`, the
+checked. The default command line requests eight CPUs, `cpufreq=1`,
+`small_cores=2`, the
 verified FT3658U handoff and `gpu=1`; pass `--no-gpu` when testing software
 rendering. GPU firmware stays outside git in `fw-gpu/`.
 
