@@ -120,6 +120,40 @@ module, or the open lzfse library gets built). User space and the images: `REST=
 (`MODEM=1 SYSTEM=1` put the modem's firmware into the system image). Details: `xnu/README.md`,
 `docs/ru/notes.md`.
 
+## POCO F4 source pipeline
+
+The complete Munch build is split into three resumable scripts. They fetch the iOS
+16.5 source members and open-source dependencies, build the userland/APFS images,
+clone the pinned Mu-Silicium revision, build XNU and the UEFI FD, and package a
+temporary Android boot image:
+
+```sh
+MUNCH_DTB=/absolute/path/to/live-munch.dtb \
+MUNCH_XBL=/absolute/path/to/xbl_a.img \
+./build.sh
+```
+
+`MUNCH_XBL` is needed only for the first UEFI build; the extracted vendor modules
+stay in the ignored `Mu-Silicium/Binaries/munch/` directory. The live merged Munch
+DTB is required for every boot-image package and is never downloaded from this
+repository. The default build requests eight CPUs, the working touch handoff,
+`iosroot`, and software rendering unless `fw-gpu/` exists; set `MUNCH_GPU=1` to
+request the A650 path explicitly. `MUNCH_STORAGE=1` is the default because the
+iosroot handoff needs the reviewed storage drivers.
+
+The individual stages are also available:
+
+```sh
+./build-root.sh
+./build-boot.sh
+```
+
+The result is `artifacts/munch-build/munch-iosroot.img`. Test it with
+`fastboot boot`; the pipeline never flashes a partition. `THEOS`, `MU_ROOT`,
+`MUNCH_BUILD_DIR`, `MUNCH_JOBS`, `BUILD_TARGET`, `MUNCH_DTB`, and `MUNCH_XBL` may
+be overridden. On Linux, the missing Theos cross-toolchain is downloaded into
+`.cache/theos`; host package installation is intentionally left to the host.
+
 ## Layout
 
 | Directory | Contents |

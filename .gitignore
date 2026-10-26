@@ -30,6 +30,9 @@
 !/xnu-deps/
 !/prebuilt/
 !/wifi/
+!/build.sh
+!/build-boot.sh
+!/build-root.sh
 
 __pycache__/
 *~
@@ -95,3 +98,6 @@ __pycache__/
 /xnuloader/identity.h
 !/xnuloader/im4p.py
 !/xnuloader/mkidentity.sh
+
+# shared source-build bootstrap helper
+!/tools/munch-build-common.sh
