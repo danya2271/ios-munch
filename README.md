@@ -160,7 +160,9 @@ The individual stages are also available:
 ```
 
 The result is `artifacts/munch-build/munch-iosroot.img`. Test it with
-`fastboot boot`; the pipeline never flashes a partition. `THEOS`, `MU_ROOT`,
+`fastboot boot`; the pipeline never flashes a partition. For this Munch target, boot that image
+directly; do not use the legacy `./xl enter` / `./xl ramdisk` flow, which packages the separate
+redwood UEFI and can silently select its stale prebuilt. `THEOS`, `MU_ROOT`,
 `MUNCH_BUILD_DIR`, `MUNCH_JOBS`, `BUILD_TARGET`, `MUNCH_DTB`, and `MUNCH_XBL` may
 be overridden. On Linux, the missing Theos cross-toolchain is downloaded into
 `.cache/theos`; host package installation is intentionally left to the host.

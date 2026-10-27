@@ -91,7 +91,7 @@ DYN="xnu-clang -arch arm64 -isysroot ${THEOS:-$HOME/theos}/sdks/iPhoneOS16.5.sdk
 IOS=../sysimage
 CACHE=$IOS/20F66__iPhone10,3_6
 REPO_ROOT=$(cd .. && pwd)
-MUNCH_DEBLOAT=${MUNCH_DEBLOAT-1}
+MUNCH_DEBLOAT=${MUNCH_DEBLOAT:-1}
 MUNCH_DEBLOAT_PROFILE=${MUNCH_DEBLOAT_PROFILE:-$REPO_ROOT/devices/poco-f4/debloat/munch-safe.json}
 case "$MUNCH_DEBLOAT" in
 	0|1) ;;

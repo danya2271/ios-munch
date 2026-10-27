@@ -513,9 +513,10 @@ checkpoint packer. It reads only the dedicated `iosroot` partition at runtime;
 the large system APFS image is not embedded in the boot image. The small APFS
 helper and the local iOS identity are packaged after their SHA/size records are
 checked. The default command line requests eight CPUs, `cpufreq=1`,
-`small_cores=2`, the
-verified FT3658U handoff and `gpu=1`; pass `--no-gpu` when testing software
-rendering. GPU firmware stays outside git in `fw-gpu/`.
+`small_cores=2`, the verified FT3658U handoff and `gpu=1`. The patched XNU
+keeps the GPU available to Mesa when that path starts successfully; pass
+`--no-gpu` when testing software rendering. GPU firmware stays outside git in
+`fw-gpu/`.
 
 Build the Kona/A650 kernel and then pack it with:
 

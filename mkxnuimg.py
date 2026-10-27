@@ -27,6 +27,14 @@ ap.add_argument('--mode', default='RELEASE')
 args = ap.parse_args()
 
 fd_path = os.path.join(MU, f'Build/redwoodPkg/{args.mode}_CLANGPDB/FV/SILICIUM_UEFI.fd')
+munch_fd_path = os.path.join(MU, f'Build/munchPkg/{args.mode}_CLANGPDB/FV/SILICIUM_UEFI.fd')
+if not os.path.isfile(fd_path) and os.path.isfile(munch_fd_path):
+    raise SystemExit(
+        'mkxnuimg.py builds the legacy redwood boot image, but only a Munch UEFI was found at '
+        f'{munch_fd_path}. Do not use ./xl for this target; use the Munch image from '
+        'artifacts/munch-build/munch-iosroot.img (fastboot boot), or rebuild it with ./build-boot.sh.'
+    )
+
 if os.path.isfile(fd_path):
     shim_dir = os.path.join(MU, 'BootShim')
     for f in ('BootShim.elf', 'BootShim.bin'):

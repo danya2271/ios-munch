@@ -47,6 +47,34 @@ To test another profile without changing the repository default:
 MUNCH_DEBLOAT_PROFILE=/path/to/profile.json ./build.sh
 ```
 
+## GPU and button diagnostics
+
+Mesa includes both Freedreno and the software `softpipe` fallback. The patched
+XNU's `gpu=1` path starts and retains the GPU for Mesa, but the renderer string
+still needs runtime confirmation.
+Build a one-off image that runs the existing GL test and streams kernel logs
+over USB Ethernet:
+
+```sh
+RC_JOBS=rc.jobs.gltest MUNCH_GPU_DIAGNOSTICS=1 MUNCH_USB=1 \
+  MUNCH_BOOT_IMAGE="$PWD/artifacts/munch-build/munch-iosroot-diagnostic.img" ./build.sh
+```
+
+Before booting, run `sudo tools/munch-usbnet.sh logs/munch-runtime.log` in a
+second terminal, then boot it with:
+
+```sh
+fastboot boot artifacts/munch-build/munch-iosroot-diagnostic.img
+```
+
+In the log,
+`gl_test:` prints `GL_RENDERER` and draw/read timings; `softpipe` means CPU
+rasterization, while a Freedreno renderer name confirms Mesa's GPU driver was
+selected. `MUNCH KEYS:` lines show whether the kernel detects physical key
+presses. If those appear but iOS does not react, inspect BackBoard input logs;
+if they do not, the same log includes the PMIC setup/read failure that needs
+investigation. The regular image remains unchanged by this diagnostic build.
+
 ## Reproduce the device summary
 
 From the repository root:
