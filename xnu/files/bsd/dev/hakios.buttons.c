@@ -239,12 +239,6 @@ find_channel(struct peripheral *p, uint32_t channels)
 #define REG_TYPE                0x04
 #define REG_SUBTYPE             0x05
 #define REG_RT_STATUS           0x10            /* the inputs as they are now */
-#define REG_INT_SET_TYPE        0x11            /* interrupts: a bit per input in each of these */
-#define REG_INT_POLARITY_HIGH   0x12
-#define REG_INT_POLARITY_LOW    0x13
-#define REG_INT_ENABLED         0x15
-#define REG_INT_LATCHED         0x18
-#define REG_INT_PENDING         0x19
 
 /* the primary PM8150 power-on block */
 #define PON_TYPE                0x01
@@ -380,29 +374,24 @@ identify(const struct peripheral *p, uint8_t type, uint8_t subtype_from, uint8_t
 	return true;
 }
 
-/* Step 4 for the power-on block: nothing to check but what it says now; its interrupt setup goes to the log. */
+/* Step 4 for PON: use the same single-byte status read as the polling loop. */
 static void
 pon_inputs(void)
 {
 	const char *problem;
-	uint8_t r[8], more[2];
+	uint8_t status;
 
-	printf("MUNCH KEYS: next: read the status and the interrupt setup of %s (registers 0x0810 to 0x0819)\n", pon.name);
-	problem = spmi_read(&pon, REG_RT_STATUS, r, 8);
-	if (problem == NULL) {
-		problem = spmi_read(&pon, REG_INT_LATCHED, more, 2);
-	}
+	printf("MUNCH KEYS: next: read the live key status of %s (register 0x0810, one byte)\n", pon.name);
+	problem = spmi_read(&pon, REG_RT_STATUS, &status, 1);
 	if (problem != NULL) {
 		printf("MUNCH KEYS: %s: %s\n", pon.name, problem);
 		return;
 	}
-	printf("MUNCH KEYS: power-on block: status %#x (power %s, volume down %s); interrupts: edge %#x, high %#x, low %#x, "
-	    "enabled %#x, latched %#x, pending %#x\n", r[0], (r[0] & PON_KPDPWR) ? "HELD" : "released",
-	    (r[0] & PON_RESIN) ? "HELD" : "released", r[REG_INT_SET_TYPE - REG_RT_STATUS], r[REG_INT_POLARITY_HIGH - REG_RT_STATUS],
-	    r[REG_INT_POLARITY_LOW - REG_RT_STATUS], r[REG_INT_ENABLED - REG_RT_STATUS], more[0], more[1]);
+	printf("MUNCH KEYS: power-on block: status %#x (power %s, volume down %s)\n", status,
+	    (status & PON_KPDPWR) ? "HELD" : "released", (status & PON_RESIN) ? "HELD" : "released");
 	power.usable = volume_down.usable = true;
-	power.last = r[0] & PON_KPDPWR;
-	volume_down.last = r[0] & PON_RESIN;
+	power.last = status & PON_KPDPWR;
+	volume_down.last = status & PON_RESIN;
 }
 
 /* Step 4 for the pin: it is volume up only if it is an input with a pull-up, and switched on. */

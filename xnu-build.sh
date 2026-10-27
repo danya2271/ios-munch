@@ -9,7 +9,10 @@ if [ "${MUNCH_STAGE:-0}" = 1 ]; then
   if [ "${MUNCH_TE_STAGING:-0}" = 1 ]; then
     STAGE_ARGS+=(--te-staging)
   fi
-  python3 "$DARWIN_REDWOOD/devices/poco-f4/gpu/stage-kernel.py" "$XNU_SRC" "${STAGE_ARGS[@]}"
+  if ! python3 "$DARWIN_REDWOOD/devices/poco-f4/gpu/stage-kernel.py" "$XNU_SRC" "${STAGE_ARGS[@]}"; then
+    echo "xnu-build: failed to stage Munch kernel sources" >&2
+    exit 1
+  fi
 fi
 cd "$XNU_SRC" || exit 1
 # The Wi-Fi driver's object (tools/mk-ath11k.sh) is linked into the kernel when it is there; make

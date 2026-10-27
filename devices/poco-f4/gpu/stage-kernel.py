@@ -91,6 +91,7 @@ if usb_entry not in files:
 buttons = (root / 'xnu/files/bsd/dev/hakios.buttons.c').read_bytes()
 buttons_target = a.tree / 'bsd/dev/hakios.buttons.c'
 old_buttons = {
+    '13d98aa814c0edfcffa414e594011f25b7d579f2468b310d2e43f5cf57ba53ba',
     '63bd20a4ae9fc8f93f7cedecdfd05087fd2a4b50b21d554899baa8b0dc880197',
     'cdd15554746045282d19c283028bb2b16230515541898ace8a40f85f43f60080',
     'e2e3af9820415675d806965ff066a3f1b23c44b6ab4474ce1d0bfbef899433d6',
