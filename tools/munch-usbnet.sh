@@ -52,17 +52,28 @@ sudo ip addr replace 192.168.7.1/24 dev "$ifname"
 sudo ip link set "$ifname" up
 echo "$ifname up: 192.168.7.1 <-> Munch 192.168.7.2; UDP log on 5140" >&2
 
-if command -v nc >/dev/null 2>&1; then
-	if [ -n "$LOGFILE" ]; then
-		nc -u -l -k 5140 | tee -a "$LOGFILE"
+listen_udp() {
+	port=5140
+	if command -v socat >/dev/null 2>&1; then
+		socat -u "udp-recv:$port,reuseaddr" -
+	elif command -v ncat >/dev/null 2>&1; then
+		ncat -l -u -k "$port"
+	elif command -v nc >/dev/null 2>&1; then
+		if nc -h 2>&1 | grep -q -- '-k'; then
+			nc -u -l -k "$port"
+		else
+			while :; do
+				nc -u -l -p "$port" 2>/dev/null || nc -u -l "$port" 2>/dev/null || return 1
+			done
+		fi
 	else
-		nc -u -l -k 5140
+		echo 'munch-usbnet: nc, ncat, or socat is required' >&2
+		return 1
 	fi
+}
+
+if [ -n "$LOGFILE" ]; then
+	listen_udp | tee -a "$LOGFILE"
 else
-	command -v socat >/dev/null 2>&1 || { echo 'munch-usbnet: nc or socat is required' >&2; exit 1; }
-	if [ -n "$LOGFILE" ]; then
-		socat -u UDP-RECV:5140,reuseaddr - | tee -a "$LOGFILE"
-	else
-		socat -u UDP-RECV:5140,reuseaddr -
-	fi
+	listen_udp
 fi
