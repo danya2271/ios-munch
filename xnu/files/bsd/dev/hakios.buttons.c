@@ -83,13 +83,17 @@ say(const char *format, ...)
 static inline uint32_t
 rd(vm_offset_t address)
 {
-	return *(volatile uint32_t *)address;
+	uint32_t value = *(volatile uint32_t *)address;
+	__asm__ volatile("dmb oshld" ::: "memory");
+	return value;
 }
 
 static inline void
 wr(vm_offset_t address, uint32_t value)
 {
+	__asm__ volatile("dmb oshst" ::: "memory");
 	*(volatile uint32_t *)address = value;
+	__asm__ volatile("dsb osh" ::: "memory");
 }
 
 /* ---- the PMIC arbiter ---------------------------------------------------------------------------- */
