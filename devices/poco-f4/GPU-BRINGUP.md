@@ -1,9 +1,11 @@
 # Munch Adreno 650 bring-up
 
-Status: hardware profile inspection complete; GPU execution on munch is not
-established. iOS UI and touch input are device-confirmed. Eight CPUs were
-requested by the current image; the photograph alone does not establish the
-number of running CPUs or hardware graphics acceleration.
+Status: the user reports that GPU-backed iOS rendering now works and the UI is
+substantially smoother. The latest DVFS build includes a basic GMU governor, but
+frequency transitions still need confirmation from a captured runtime log. iOS
+UI and touch input are device-confirmed. Eight CPUs were requested by the
+current image; the photograph alone does not establish the number of running
+CPUs.
 
 ## Candidate implementation
 
@@ -75,8 +77,8 @@ TrustZone on the device can authenticate that. Android reports Adreno650v3 and
 305/400/441.6/490/525/587/670 MHz. The drawing profile explicitly requests
 `adreno_speed=1`, the port's 305-MHz entry.
 
-`gpu/stage-kernel.py` applies `gpu/umi-a650.patch` to a prepared upstream XNU
-8796.121.2 tree and stages FT3658U as a native kernel driver behind
+`gpu/stage-kernel.py` applies the UMI A650 initialization and runtime OPP
+governor patches to a prepared upstream XNU 8796.121.2 tree and stages FT3658U as a native kernel driver behind
 `munch_touch=1`. It also removes the same premature PE bootcpu query previously
 bypassed in the binary prototype: this profile runs on the current boot CPU.
 The prebuilt kernel and original source overlays remain available unchanged.
@@ -268,8 +270,14 @@ The existing A650 `gpu=1` path initializes and retains the GPU, publishes
 HakiosGPU and proceeds into iOS. The existing libhakios.dylib injection detects
 that service and loads /redwood/lib/libhakios.gl.dylib; Mesa uses the matching
 HakiosGPU DRM adapter. Without a started GPU the existing fallback keeps the
-software renderer. The first image stays at the device-tested 305-MHz entry;
-frequency scaling, Metal and other drivers are not added by this integration.
+software renderer. The image requests the 305-MHz OPP at startup
+(`adreno_speed=1`). Runtime GPU-core frequency scaling is enabled by default: a
+kernel worker samples GPU busy time every 100 ms and sends the GMU HFI frequency
+vote for the matching stock OPP. It raises one level per sample under load and
+lowers one level after four low-load samples; the UMI table spans 305, 400,
+441.6, 525 and 587 MHz. `gpu_dvfs=0` pins the startup OPP for diagnostics. This
+is a basic GPU-core governor, not memory-bus scaling, Metal, or a validated
+thermal policy; transitions still need sustained testing on the phone.
 
 The native config pins the graphics report and helper hash as well as the
 kernel/source report. Independent image inspection verifies both profiles,

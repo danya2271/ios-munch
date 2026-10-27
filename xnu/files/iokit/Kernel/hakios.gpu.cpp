@@ -36,6 +36,7 @@
 #include <IOKit/IOBufferMemoryDescriptor.h>
 #include <IOKit/IOSubMemoryDescriptor.h>
 #include <kern/clock.h>
+#include <kern/thread.h>
 #include <mach/mach_time.h>
 #include <mach/vm_param.h>
 #include <sys/systm.h>
@@ -61,11 +62,14 @@ uint32_t hakios_gpu_last(void);
 void hakios_gpu_worked(uint64_t * microseconds, uint32_t * submissions, uint32_t by[7]);
 void hakios_gpu_report(const char * why);
 void hakios_gpu_stop(void);
+bool hakios_gpu_dvfs_enabled(void);
+void hakios_gpu_dvfs_tick(void);
 
 void HakiosGPUStart(void);
 void HakiosGPUStop(void);
 void MiniIOMobileFramebufferShow(const uint8_t * pixels, uint32_t width, uint32_t height, uint32_t rowBytes);
 }
+extern "C" kern_return_t thread_terminate(thread_t thread);
 
 /* Linux's include/uapi/drm/msm_drm.h and drm.h: the requests' numbers and structures. */
 enum {
@@ -184,6 +188,24 @@ static struct {
 	uint32_t made, given_again;             /* buffers of their own made for programs, and of those kept ones given again */
 	uint64_t making;                        /* ... and the time it took to make the others */
 } gGPUStat;
+
+static void
+gpuDVFSMain(__unused void * parameter, __unused wait_result_t result)
+{
+	for (;;) {
+		IOLockLock(gGPULock);
+		bool active = hakios_gpu_ready() && hakios_gpu_dvfs_enabled();
+		if (active) {
+			hakios_gpu_dvfs_tick();
+		}
+		IOLockUnlock(gGPULock);
+		if (!active) {
+			break;
+		}
+		delay_for_interval(100, NSEC_PER_MSEC);
+	}
+	thread_terminate(current_thread());
+}
 
 /* Wait for the 3D core to be done with submission `fence`; with the lock held, which is let go of while waiting. */
 static bool
@@ -313,7 +335,9 @@ HakiosGPUStart(void)
 {
 	IOService * provider = IOService::getPlatform();
 	HakiosGPU * gpu;
+	thread_t thread;
 	uint32_t cached = 0;
+	bool started = false;
 
 	gGPUCached = PE_parse_boot_argn("gpu_cached", &cached, sizeof(cached)) && cached != 0;
 	gGPULock = IOLockAlloc();
@@ -326,8 +350,17 @@ HakiosGPUStart(void)
 	if (!gpu->start(provider)) {
 		gpu->detach(provider);
 		IOLog("HakiosGPU: the service did not start\n");
+	} else {
+		started = true;
 	}
 	gpu->release();
+	if (started && hakios_gpu_dvfs_enabled()) {
+		if (kernel_thread_start(gpuDVFSMain, NULL, &thread) == KERN_SUCCESS) {
+			thread_deallocate(thread);
+		} else {
+			IOLog("HakiosGPU: cannot start frequency-scaling worker\n");
+		}
+	}
 }
 
 /* The run is ending (hakios.adreno.c): nobody is in the middle of anything when the GPU goes. */

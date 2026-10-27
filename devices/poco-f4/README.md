@@ -50,8 +50,12 @@ MUNCH_DEBLOAT_PROFILE=/path/to/profile.json ./build.sh
 ## GPU and button diagnostics
 
 Mesa includes both Freedreno and the software `softpipe` fallback. The patched
-XNU's `gpu=1` path starts and retains the GPU for Mesa, but the renderer string
-still needs runtime confirmation.
+XNU's `gpu=1` path starts and retains the GPU for Mesa; the user reports that
+the iOS UI now renders smoothly with GPU acceleration. The rebuilt image also
+enables a basic GPU frequency governor, whose transitions still need runtime
+log confirmation. The button driver's PMIC lines are mapped in the live device
+tree, but power and volume-down polling still need a captured kernel log to
+pinpoint why those presses are missed.
 Build a one-off image that runs the existing GL test and streams kernel logs
 over USB Ethernet:
 
@@ -60,8 +64,9 @@ RC_JOBS=rc.jobs.gltest MUNCH_GPU_DIAGNOSTICS=1 MUNCH_USB=1 \
   MUNCH_BOOT_IMAGE="$PWD/artifacts/munch-build/munch-iosroot-diagnostic.img" ./build.sh
 ```
 
-Before booting, run `sudo tools/munch-usbnet.sh logs/munch-runtime.log` in a
-second terminal, then boot it with:
+For optional live UDP logs over USB Ethernet, run
+`sudo tools/munch-usbnet.sh logs/munch-runtime.log` in a second terminal, then
+boot it with:
 
 ```sh
 fastboot boot artifacts/munch-build/munch-iosroot-diagnostic.img
@@ -71,9 +76,12 @@ In the log,
 `gl_test:` prints `GL_RENDERER` and draw/read timings; `softpipe` means CPU
 rasterization, while a Freedreno renderer name confirms Mesa's GPU driver was
 selected. `MUNCH KEYS:` lines show whether the kernel detects physical key
-presses. If those appear but iOS does not react, inspect BackBoard input logs;
-if they do not, the same log includes the PMIC setup/read failure that needs
-investigation. The regular image remains unchanged by this diagnostic build.
+presses. The UDP logger only works after the CDC Ethernet interface appears;
+if `munch-usbnet.sh` reports a timeout, the host never receives kernel logs, so
+the absence of `MUNCH KEYS:` in that terminal is inconclusive. If the captured
+log has key events but iOS does not react, inspect BackBoard input logs; PMIC
+setup/read errors identify the failing hardware path. The regular image remains
+unchanged by this diagnostic build.
 
 ## Reproduce the device summary
 

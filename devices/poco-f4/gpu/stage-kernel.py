@@ -28,10 +28,17 @@ with tempfile.TemporaryDirectory(prefix='munch-native-stage-') as directory:
     path.parent.mkdir(parents=True)
     path.write_bytes(original)
     subprocess.run(['patch', '--batch', '--forward', '-p1', '-i', str(here / 'umi-a650.patch')], cwd=work, check=True)
+    subprocess.run(['patch', '--batch', '--forward', '-p1', '-i', str(here / 'adreno-dvfs.patch')], cwd=work, check=True)
     gpu = path.read_bytes()
 existing = a.tree / 'bsd/dev/hakios.adreno.c'
 old_a650 = '5d5c303f422f2e18badd91b1b46da7dae51fcd5417e14658a9c4bc9b15b59799'
-if existing.read_bytes() not in (original, gpu) and sha(existing.read_bytes()) != old_a650:
+existing_gpu = existing.read_bytes()
+previously_staged = False
+if a.report.is_file():
+    previous_report = json.loads(a.report.read_text())
+    previously_staged = (sha(existing_gpu) == previous_report.get('gpu_source_sha256') and
+                         previous_report.get('gpu_patch_sha256') == sha((here / 'umi-a650.patch').read_bytes()))
+if existing_gpu not in (original, gpu) and sha(existing_gpu) != old_a650 and not previously_staged:
     raise ValueError('Refusing to overwrite independently modified GPU source')
 touch = (here.parent / 'touch/xnu-ft3658u.c').read_text()
 touch = touch.replace('extern struct state munch_state;', 'static struct state munch_state;')
@@ -86,6 +93,7 @@ buttons_target = a.tree / 'bsd/dev/hakios.buttons.c'
 old_buttons = {
     '63bd20a4ae9fc8f93f7cedecdfd05087fd2a4b50b21d554899baa8b0dc880197',
     'cdd15554746045282d19c283028bb2b16230515541898ace8a40f85f43f60080',
+    'e2e3af9820415675d806965ff066a3f1b23c44b6ab4474ce1d0bfbef899433d6',
 }
 if buttons_target.read_bytes() not in (buttons,) and sha(buttons_target.read_bytes()) not in old_buttons:
     raise ValueError('Refusing to overwrite independently modified Munch button source')
@@ -94,6 +102,17 @@ buttons_target.write_bytes(buttons)
 (a.tree / 'bsd/dev/hakios.goodix.c').write_text(touch)
 header = (here.parent / 'touch/ft3658u-protocol.h').read_bytes()
 (a.tree / 'bsd/dev/ft3658u-protocol.h').write_bytes(header)
+gpu_cpp = (root / 'xnu/files/iokit/Kernel/hakios.gpu.cpp').read_bytes()
+gpu_cpp_target = a.tree / 'iokit/Kernel/hakios.gpu.cpp'
+old_gpu_cpp = 'fbadcedbd5dec62ac5ea73a83777135bff624ab105c68a5ac6aeb019256fc45b'
+existing_gpu_cpp = gpu_cpp_target.read_bytes()
+previously_staged_gpu_cpp = False
+if a.report.is_file():
+    previous_report = json.loads(a.report.read_text())
+    previously_staged_gpu_cpp = sha(existing_gpu_cpp) == previous_report.get('gpu_service_source_sha256')
+if existing_gpu_cpp not in (gpu_cpp,) and sha(existing_gpu_cpp) != old_gpu_cpp and not previously_staged_gpu_cpp:
+    raise ValueError('Refusing to overwrite independently modified HakiosGPU service')
+gpu_cpp_target.write_bytes(gpu_cpp)
 fb_base = (root / 'xnu/files/iokit/Kernel/MiniIOMobileFramebuffer.cpp').read_bytes()
 if sha(fb_base) != 'c6aa9da0a649ae6adf784a00327a60b7bd21e10549c9094093301951971f6ebe':
     raise ValueError('Unexpected framebuffer port base')
@@ -113,8 +132,10 @@ report = {'xnu_base': base, 'umi_reference': '6b6fb2b0c5a1720496ec71e88c95d2a45a
           'early_return_source_sha256': sha(early.encode()), 'gpu_source_sha256': sha(gpu),
           'buttons_source_sha256': sha(buttons),
           'usb_source_sha256': sha(usb),
+          'gpu_service_source_sha256': sha(gpu_cpp),
           'touch_source_sha256': sha(touch.encode()),
           'touch_header_sha256': sha(header), 'gpu_patch_sha256': sha((here / 'umi-a650.patch').read_bytes()),
+          'gpu_dvfs_patch_sha256': sha((here / 'adreno-dvfs.patch').read_bytes()),
           'native_touch_bootarg': 'touchscreen=1', 'legacy_touch_bootarg': 'munch_touch=1',
           'touch_poll_sleep_ms': a.touch_poll_ms, 'display_te_staging': a.te_staging,
           'display_source_sha256': sha(fb_target.read_bytes()),
@@ -122,4 +143,4 @@ report = {'xnu_base': base, 'umi_reference': '6b6fb2b0c5a1720496ec71e88c95d2a45a
           'hardware_tested': False}
 a.report.parent.mkdir(parents=True, exist_ok=True)
 a.report.write_text(json.dumps(report, indent=2) + '\n')
-print('Staged A650 GPU and native munch touch; base prebuilt and installed APFS unchanged')
+print('Staged A650 GPU DVFS, native munch touch, and GPU service; base prebuilt and installed APFS unchanged')

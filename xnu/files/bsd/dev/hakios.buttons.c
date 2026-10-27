@@ -537,6 +537,7 @@ hakios_buttons_init(void)
 {
 	uint32_t enabled = 0, steps = 5;
 	thread_t thread;
+	kern_return_t result;
 
 	/*
 	 * On with the touch screen (the phone, somebody at it) unless buttons=0 says otherwise: a hand
@@ -548,14 +549,20 @@ hakios_buttons_init(void)
 		enabled = PE_parse_boot_argn("touchscreen", &touch_screen, sizeof(touch_screen)) && touch_screen != 0;
 	}
 	if (!enabled) {
+		printf("MUNCH KEYS: not started (button polling disabled by boot args)\n");
 		return;
 	}
 	PE_parse_boot_argn("buttons_steps", &steps, sizeof(steps));
 	if (steps == 0) {
+		printf("MUNCH KEYS: not started (buttons_steps=0)\n");
 		return;
 	}
-	if (kernel_thread_start(buttons_thread, (void *)(uintptr_t)steps, &thread) == KERN_SUCCESS) {
+	printf("MUNCH KEYS: starting PMIC polling (buttons_steps=%u)\n", steps);
+	result = kernel_thread_start(buttons_thread, (void *)(uintptr_t)steps, &thread);
+	if (result == KERN_SUCCESS) {
 		thread_deallocate(thread);
+	} else {
+		printf("MUNCH KEYS: failed to start polling thread (kern_return_t %d)\n", result);
 	}
 }
 
