@@ -194,6 +194,17 @@ reservations. Native kernel build completed; boot-image integrity and loader/
 kernel property presence are checked before publication. GPU clock remains
 305 MHz. Device authentication and drawing remain pending for r3.
 
+The source-built `iosroot` image uses a separate loader packer from the
+checkpoint images. Its first GPU-enabled revision-3 image did not include the
+loader reservation, despite carrying the revision-3 FD; the kernel therefore
+fell back to `kmem_alloc_contig` after the multi-gigabyte resident APFS root had
+made low RAM static, and step 12 stopped before PAS metadata submission. The
+`pack-iosroot.py` path now reserves 64 KiB after the kernel, checks that it fits
+below 4 GiB and before the resident root, and publishes the address in
+`/chosen/munch-scm-metadata`. The host packer verifies that the generated GPU
+loader contains this hook. A rebuilt image and device run are still required to
+confirm that the reservation is consumed and TrustZone proceeds.
+
 ## Drawing r3 device result and bounded SCM resumption r4
 
 `IMG_5584.HEIC` confirms that step 12 consumes the loader reservation at

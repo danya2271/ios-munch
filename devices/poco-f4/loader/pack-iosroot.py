@@ -69,7 +69,7 @@ def validate_device_inputs(fd_path, dtb_path):
     return fd, metadata
 
 
-def patch_loader(source, work, config, touch):
+def patch_loader(source, work, config, touch, gpu):
     """Make the generic loader select Munch and load the iosroot system image."""
     loader = source.read_text()
     platform = '''
@@ -172,6 +172,32 @@ static const struct platform platform_munch = {
     if loader.count(hook) != 1:
         raise ValueError('Unexpected loader one-shot entry')
     loader = loader.replace(hook, replacement, 1)
+
+    if gpu:
+        allocation = '\tuint64_t rd_pa = kern_hi;'
+        reservation = ('\tuint64_t scm_pa = kern_hi, scm_size = 4 * PAGE_SIZE_MAX;\n'
+                       '\tif (scm_pa == 0 || scm_pa + scm_size < scm_pa ||\n'
+                       '\t    scm_pa + scm_size > 0x100000000ULL ||\n'
+                       '\t    (resident_rd_size != 0 && scm_pa + scm_size > phys_base + RESIDENT_RD_OFFSET)) {\n'
+                       '\t\tprint("MUNCH: no low SCM reservation fits\\n"); return 0;\n\t}\n'
+                       '\tmemset((void *)scm_pa, 0, scm_size);\n'
+                       '\tprint("MUNCH SCM reserved page: %x size %x\\n", scm_pa, scm_size);\n'
+                       '\tuint64_t rd_pa = kern_hi + scm_size;')
+        if loader.count(allocation) != 1:
+            raise ValueError('Unexpected kernel/ramdisk allocation hook')
+        loader = loader.replace(allocation, reservation, 1)
+        overlap = '\t\tif (kern_hi + rd_size > res_pa) {'
+        if loader.count(overlap) != 1:
+            raise ValueError('Unexpected resident-image overlap check')
+        loader = loader.replace(overlap, '\t\tif (rd_pa + rd_size > res_pa) {', 1)
+        chosen = '\tdt_begin(&w, "chosen");'
+        metadata = ('\tdt_begin(&w, "chosen");\n'
+                    '\tuint64_t scm_metadata[2] = {scm_pa, scm_size};\n'
+                    '\tdt_prop(&w, "munch-scm-metadata", scm_metadata, sizeof(scm_metadata));')
+        if loader.count(chosen) != 1:
+            raise ValueError('Unexpected chosen device-tree hook')
+        loader = loader.replace(chosen, metadata, 1)
+
     (work / 'loader.c').write_text(loader)
 
 
@@ -224,7 +250,7 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
     with tempfile.TemporaryDirectory(prefix='munch-iosroot-') as directory:
         work = Path(directory)
         shutil.copy2(root / 'xnuloader/efi.h', work / 'efi.h')
-        patch_loader(source, work, config, touch)
+        patch_loader(source, work, config, touch, gpu)
         (work / 'identity.h').write_bytes(identity)
         subprocess.run(['clang', '--target=aarch64-unknown-windows', '-ffreestanding', '-fno-builtin',
                         '-fno-stack-protector', '-fshort-wchar', '-mgeneral-regs-only', '-O1',
@@ -233,7 +259,10 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
                         '-c', 'loader.c', '-o', 'loader.obj'], cwd=work, check=True)
         subprocess.run(['lld-link', '/subsystem:efi_application', '/entry:efi_main', '/nodefaultlib',
                         '/base:0xA1000000', '/out:loader.efi', 'loader.obj'], cwd=work, check=True)
-        entries = [('loader.efi', (work / 'loader.efi').read_bytes()), ('kernel', kernel),
+        loader_bytes = (work / 'loader.efi').read_bytes()
+        if gpu and (b'munch-scm-metadata' not in loader_bytes or b'MUNCH SCM reserved page' not in loader_bytes):
+            raise ValueError('GPU image loader is missing the low SCM metadata reservation')
+        entries = [('loader.efi', loader_bytes), ('kernel', kernel),
                    ('cmdline', cmdline.encode() + b'\0'), ('ramdisk', helper)]
         body = bytearray()
         for name, data in entries:
@@ -260,6 +289,7 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
         report = {**metadata, 'mode': 'iosroot-source-kernel', 'cmdline': cmdline,
                   'requested_cpu_count': cpus, 'touchscreen': touch, 'gpu_requested': gpu,
                   'gpu_diagnostics': gpu_diagnostics, 'usb_debug': usb_debug,
+                  'loader_scm_reservation_bytes': 65536 if gpu else 0,
                   'gpu_firmware_external': True, 'ios_version': config['version'], 'ios_build': config['build'],
                   'iosroot_system_sha256': config['system']['sha256'], 'iosroot_system_size': config['system']['size'],
                   'iosroot_helper_sha256': config['root']['sha256'], 'kernel_sha256': digest(kernel),
