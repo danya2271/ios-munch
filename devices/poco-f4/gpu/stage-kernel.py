@@ -83,8 +83,11 @@ if usb_entry not in files:
 
 buttons = (root / 'xnu/files/bsd/dev/hakios.buttons.c').read_bytes()
 buttons_target = a.tree / 'bsd/dev/hakios.buttons.c'
-old_buttons = '63bd20a4ae9fc8f93f7cedecdfd05087fd2a4b50b21d554899baa8b0dc880197'
-if buttons_target.read_bytes() not in (buttons,) and sha(buttons_target.read_bytes()) != old_buttons:
+old_buttons = {
+    '63bd20a4ae9fc8f93f7cedecdfd05087fd2a4b50b21d554899baa8b0dc880197',
+    'cdd15554746045282d19c283028bb2b16230515541898ace8a40f85f43f60080',
+}
+if buttons_target.read_bytes() not in (buttons,) and sha(buttons_target.read_bytes()) not in old_buttons:
     raise ValueError('Refusing to overwrite independently modified Munch button source')
 buttons_target.write_bytes(buttons)
 

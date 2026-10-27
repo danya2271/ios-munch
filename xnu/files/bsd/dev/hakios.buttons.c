@@ -151,7 +151,7 @@ struct peripheral {
 	bool            found;
 };
 static struct peripheral pon = { .name = "the PM8150's power-on block", .id = 0x008 };          /* registers 0x0800 of slave 0 */
-static struct peripheral pin = { .name = "GPIO6 of the PM8150", .id = 0x0c0 };                  /* registers 0xc000 of slave 0 */
+static struct peripheral pin = { .name = "GPIO6 of the PM8150", .id = 0x0c5 };                  /* registers 0xc500 of slave 0 */
 
 /* How the reads have gone: said once a minute. */
 static struct {
@@ -413,7 +413,7 @@ pin_input(void)
 	uint8_t c[8], status = 0;
 	unsigned mode, pull;
 
-	printf("MUNCH KEYS: next: read the setup and the level of %s (registers 0xc040 to 0xc047, 0xc010)\n", pin.name);
+	printf("MUNCH KEYS: next: read the setup and the level of %s (registers 0xc540 to 0xc547, 0xc510)\n", pin.name);
 	problem = spmi_read(&pin, GPIO_REG_MODE, c, 8);
 	if (problem == NULL) {
 		problem = spmi_read(&pin, REG_RT_STATUS, &status, 1);
