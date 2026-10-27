@@ -109,11 +109,12 @@ wr(vm_offset_t address, uint32_t value)
 #define ARB_VERSION             0x000
 #define ARB_VERSION_5           0x50000000u     /* what follows is version 5's; 7 moved things again */
 #define ARB_VERSION_7           0x70000000u
-#define ARB_FEATURES            0x004           /* [10:0] the number of channels */
-#define ARB_CHANNEL(n)          (0x900 + 4 * (n))       /* core: [19:8] slave and peripheral, [24] interrupts go to the owner */
+#define ARB_CHANNEL_TABLE       0x900
+#define ARB_CHANNEL_SIZE        4
+#define ARB_CHANNEL(n)          (ARB_CHANNEL_TABLE + ARB_CHANNEL_SIZE * (n)) /* core: [19:8] PPID, [24] IRQ owner */
 #define ARB_CHANNEL_INTERRUPTS  (1u << 24)
 #define ARB_OWNER(n)            (0x700 + 4 * (n))       /* cnfg: [2:0] the system that may write through channel n */
-#define ARB_MAX_CHANNELS        512
+#define ARB_MAX_CHANNELS        ((ARB_CORE_SIZE - ARB_CHANNEL_TABLE) / ARB_CHANNEL_SIZE)
 
 #define OBSERVER_COMMAND        0x00
 #define OBSERVER_STATUS         0x08
@@ -332,11 +333,21 @@ buttons_poll(void)
 	const char *problem;
 	uint8_t status;
 
-	if (power.usable || volume_down.usable) {
+	if (pon.found) {
 		problem = spmi_read(&pon, REG_RT_STATUS, &status, 1);
 		if (problem == NULL) {
-			button_look(&power, status & PON_KPDPWR);
-			button_look(&volume_down, status & PON_RESIN);
+			if (!power.usable || !volume_down.usable) {
+				power.usable = volume_down.usable = true;
+				power.last = status & PON_KPDPWR;
+				volume_down.last = status & PON_RESIN;
+				power.live = !power.last;
+				volume_down.live = !volume_down.last;
+				printf("MUNCH KEYS: PON polling recovered; status %#x (power %s, volume down %s)\n", status,
+				    power.last ? "HELD" : "released", volume_down.last ? "HELD" : "released");
+			} else {
+				button_look(&power, status & PON_KPDPWR);
+				button_look(&volume_down, status & PON_RESIN);
+			}
 		} else if (said < 8) {
 			said++;
 			printf("MUNCH KEYS: reading %s: %s\n", pon.name, problem);
@@ -444,8 +455,8 @@ say_summary(void)
 static void
 buttons_thread(void *parameter, __unused wait_result_t result)
 {
-	uint32_t steps = (uint32_t)(uintptr_t)parameter, version, channels;
-	bool pon_known, pin_known;
+	uint32_t steps = (uint32_t)(uintptr_t)parameter, version;
+	bool pin_known;
 
 	printf("MUNCH KEYS: step 1: map the PMIC arbiter (%#lx, %#lx, %#lx) and read its version\n", ARB_CORE_PHYS, ARB_CNFG_PHYS,
 	    ARB_OBSERVER_PHYS);
@@ -453,35 +464,31 @@ buttons_thread(void *parameter, __unused wait_result_t result)
 	arb_cnfg = ml_io_map(ARB_CNFG_PHYS, ARB_CNFG_SIZE);
 	arb_observer = ml_io_map(ARB_OBSERVER_PHYS, ARB_OBSERVER_SIZE);
 	version = rd(arb_core + ARB_VERSION);
-	channels = rd(arb_core + ARB_FEATURES) & 0x7ff;
-	printf("MUNCH KEYS: PMIC arbiter version %#x, %u channels\n", version, channels);
+	printf("MUNCH KEYS: PMIC arbiter version %#x, scanning %u APID mappings\n", version, ARB_MAX_CHANNELS);
 	if (version < ARB_VERSION_5 || version >= ARB_VERSION_7) {
 		printf("MUNCH KEYS: this driver knows version 5 of the arbiter only: no buttons\n");
 		goto out;
-	}
-	if (channels == 0 || channels > ARB_MAX_CHANNELS) {
-		channels = ARB_MAX_CHANNELS;
 	}
 	if (steps < 2) {
 		goto out;
 	}
 
 	printf("MUNCH KEYS: step 2: look through the arbiter's table for the channels of the two peripherals\n");
-	find_channel(&pon, channels);
-	find_channel(&pin, channels);
+	find_channel(&pon, ARB_MAX_CHANNELS);
+	find_channel(&pin, ARB_MAX_CHANNELS);
 	if (steps < 3) {
 		goto out;
 	}
 
 	printf("MUNCH KEYS: step 3: the first transfers on the SPMI bus\n");
-	pon_known = identify(&pon, PON_TYPE, PON_SUBTYPE_PRIMARY, PON_SUBTYPE_PRIMARY);
+	identify(&pon, PON_TYPE, PON_SUBTYPE_PRIMARY, PON_SUBTYPE_PRIMARY);
 	pin_known = identify(&pin, GPIO_TYPE, GPIO_SUBTYPE_LV, GPIO_SUBTYPE_MV_VIN3);
 	if (steps < 4) {
 		goto out;
 	}
 
 	printf("MUNCH KEYS: step 4: how the keys' inputs are set up\n");
-	if (pon_known) {
+	if (pon.found) {
 		pon_inputs();
 	}
 	if (pin_known) {
