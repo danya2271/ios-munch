@@ -76,7 +76,11 @@ existing.write_bytes(gpu)
 
 usb = (root / 'xnu/files/bsd/dev/hakios.usb.c').read_bytes()
 usb_target = a.tree / 'bsd/dev/hakios.usb.c'
-if usb_target.exists() and usb_target.read_bytes() not in (usb,):
+previous_usb = None
+if a.report.is_file():
+    previous_usb = json.loads(a.report.read_text()).get('usb_source_sha256')
+if (usb_target.exists() and usb_target.read_bytes() != usb and
+        sha(usb_target.read_bytes()) != previous_usb):
     raise ValueError('Refusing to overwrite independently modified Munch USB source')
 usb_target.write_bytes(usb)
 files_target = a.tree / 'bsd/conf/files'

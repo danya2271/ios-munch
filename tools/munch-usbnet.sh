@@ -2,7 +2,8 @@
 # Configure the Munch CDC-ECM debug link and collect its UDP console log.
 set -eu
 
-MAC=${MUNCH_USB_MAC:-02:00:5e:77:ee:01}
+MAC=${MUNCH_USB_MAC:-02:00:5e:77:ee:02}
+ALT_MAC=${MUNCH_USB_MAC_ALT:-02:00:5e:77:ee:01}
 LOGFILE=${1:-}
 TIMEOUT=${MUNCH_USB_TIMEOUT:-120}
 
@@ -22,10 +23,13 @@ fi
 
 elapsed=0
 while :; do
-	ifname=$(ip -o link | awk -v mac="$MAC" 'tolower($0) ~ tolower(mac) {split($2, a, ":"); sub(/@.*/, "", a[1]); print a[1]; exit}')
+	ifname=$(ip -o link | awk -v mac="$MAC" -v alt="$ALT_MAC" '
+		tolower($0) ~ tolower(mac) || tolower($0) ~ tolower(alt) {
+			split($2, a, ":"); sub(/@.*/, "", a[1]); print a[1]; exit
+		}')
 	[ -n "$ifname" ] && break
 	if [ "$TIMEOUT" -ne 0 ] && [ "$elapsed" -ge "$TIMEOUT" ]; then
-		message="munch-usbnet: timed out after ${elapsed}s; no interface with MAC $MAC"
+		message="munch-usbnet: timed out after ${elapsed}s; no interface with MAC $MAC or $ALT_MAC"
 		if [ -n "$LOGFILE" ]; then
 			printf '%s\n' "$message" | tee -a "$LOGFILE" >&2
 		else

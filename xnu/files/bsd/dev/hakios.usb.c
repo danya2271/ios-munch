@@ -147,6 +147,9 @@ munch_usb_probe(void)
  * ep0.c).
  */
 #define GCTL            0xc110
+#define GCTL_PRTCAPDIR(n) (((n) & 3u) << 12)
+#define GCTL_PRTCAP_MASK  (3u << 12)
+#define GCTL_PRTCAP_DEVICE 2u
 #define GEVNTADRLO      0xc400
 #define GEVNTADRHI      0xc404
 #define GEVNTSIZ        0xc408
@@ -349,9 +352,9 @@ static const uint8_t ud_cfg_desc[80] = {
 	7, 5, 0x81, 0x02, 0x00, 0x02, 0,                /* ep 0x81 bulk IN, 512 */
 	7, 5, 0x01, 0x02, 0x00, 0x02, 0,                /* ep 0x01 bulk OUT, 512 */
 };
-/* The host side's MAC (ECM iMACAddress); the phone's own is ..:02 */
+/* CDC ECM iMACAddress and the phone's own interface address. */
 static const char *const ud_strings[] = {
-	NULL, "ios-munch", "Munch iOS (USB Ethernet)", "0001", "02005E77EE01",
+	NULL, "ios-munch", "Munch iOS (USB Ethernet)", "0001", "02005E77EE02",
 };
 static const uint8_t ud_phone_mac[ETHER_ADDR_LEN] = { 0x02, 0x00, 0x5e, 0x77, 0xee, 0x02 };
 
@@ -379,6 +382,7 @@ ud_string(unsigned idx, uint8_t *out)
 static void ud_rx_arm(void);
 static void ud_tx_kick_locked(void);
 static void ud_link_event(bool up);
+static void ud_reset(void);
 
 /* NETWORK_CONNECTION notification: the host brings its link up on it. */
 static void
@@ -705,12 +709,23 @@ ud_if_create(void)
 }
 
 static void
+ud_reset(void)
+{
+	ud.configured = false;
+	ud.data_alt = 0;
+	ud.tx_busy = false;
+	ud_link_event(false);
+	ud_start_setup();
+}
+
+static void
 ud_event(uint32_t ev)
 {
 	if (ev & 1) {                   /* device event */
 		uint32_t type = (ev >> 8) & 0xf;
 		if (type == 1) {        /* USB reset */
 			dwc_wr(DCFG, dwc_rd(DCFG) & ~(0x7fu << 3));
+			ud_reset();
 			printf("MUNCH USB: bus reset\n");
 		} else if (type == 2) { /* connect done */
 			uint32_t speed = dwc_rd(DSTS) & 7;
@@ -721,6 +736,9 @@ ud_event(uint32_t ev)
 			    (1u << 8) | (1u << 10) | (1u << 25), 0);
 			printf("MUNCH USB: connected, speed %u\n", speed);
 		} else if (type == 0) {
+			ud.configured = false;
+			ud.data_alt = 0;
+			ud_link_event(false);
 			printf("MUNCH USB: disconnect\n");
 		}
 		return;
@@ -866,6 +884,11 @@ munch_usb_gadget_start(vm_offset_t dwc)
 	ud.dma_pa = ptoa_64(pn);
 	ud_if_create();
 
+	/* Fastboot leaves the controller in device mode, but do not depend on it. */
+	uint32_t gctl = dwc_rd(GCTL);
+	gctl = (gctl & ~GCTL_PRTCAP_MASK) | GCTL_PRTCAPDIR(GCTL_PRTCAP_DEVICE);
+	dwc_wr(GCTL, gctl);
+
 	/* Device controller soft reset (PHY and global setup stay as ABL left them). */
 	dwc_wr(DCTL, DCTL_CSFTRST);
 	int i;
@@ -900,7 +923,6 @@ munch_usb_gadget_start(vm_offset_t dwc)
 		return;
 	}
 	dwc_wr(DALEPENA, 0x3);
-	ud_start_setup();
 
 	vm_offset_t qs = ml_io_map(QSCRATCH_PA, 0x100);
 	if (qs != 0) {
@@ -914,6 +936,7 @@ munch_usb_gadget_start(vm_offset_t dwc)
 		    usb_rd(qs, QSCRATCH_HS_PHY_CTRL), usb_rd(qs, QSCRATCH_SS_PHY_CTRL));
 	}
 
+	ud_start_setup();
 	dwc_wr(DCTL, dwc_rd(DCTL) | DCTL_RUN_STOP);
 	for (i = 0; i < 500 && (dwc_rd(DSTS) & DSTS_DEVCTRLHLT); i++) {
 		delay(1000);
