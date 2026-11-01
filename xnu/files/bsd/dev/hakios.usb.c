@@ -494,13 +494,28 @@ ud_start_trb(unsigned ep, uint32_t trb, uint32_t buf, uint32_t len, uint32_t ctl
 		ud_sync(buf, len);
 	}
 	uint64_t tpa = ud.dma_pa + trb;
-	ud_epcmd(ep, DEPCMD_STARTTRANSFER, (uint32_t)(tpa >> 32), (uint32_t)tpa, 0);
+	if (ud_epcmd(ep, DEPCMD_STARTTRANSFER, (uint32_t)(tpa >> 32), (uint32_t)tpa, 0) != 0) {
+		printf("MUNCH USB: ep%u start transfer failed trb 0x%x len %u ctl 0x%x\n",
+		    ep, trb, len, ctl);
+	}
 }
 
 static void
 ud_start(unsigned ep, uint32_t buf, uint32_t len, uint32_t ctl)
 {
-	ud_start_trb(ep, ep ? UD_TRB_IN : UD_TRB_OUT, buf, len, ctl);
+	uint32_t trb;
+	if (ep == 0) {
+		trb = UD_TRB_OUT;
+	} else if (ep == 1) {
+		trb = UD_TRB_IN;
+	} else if (ep == EP_RX) {
+		trb = UD_TRB_RX;
+	} else if (ep == EP_TX) {
+		trb = UD_TRB_TX;
+	} else {
+		trb = UD_TRB_INT;
+	}
+	ud_start_trb(ep, trb, buf, len, ctl);
 }
 
 static void
