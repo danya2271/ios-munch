@@ -362,6 +362,9 @@ munch_usb_probe(void)
 #define DEPCMD_STARTTRANSFER    6
 #define DEPCMD_DEPSTARTCFG      9
 #define DEPCMD_CMDACT           (1u << 10)
+#define DEPCFG_XFER_COMPLETE_EN (1u << 8)
+#define DEPCFG_XFER_IN_PROGRESS_EN (1u << 9)
+#define DEPCFG_XFER_NOT_READY_EN (1u << 10)
 
 #define TRB_HWO         (1u << 0)
 #define TRB_LST         (1u << 1)
@@ -466,6 +469,25 @@ ud_epcmd(unsigned ep, uint32_t cmd, uint32_t p0, uint32_t p1, uint32_t p2)
 	}
 	printf("MUNCH USB: ep%u cmd 0x%x timeout\n", ep, cmd & 0xf);
 	return -1;
+}
+
+static int
+ud_ep_config(unsigned ep, unsigned type, unsigned max_packet, unsigned interval_m1)
+{
+	uint32_t p0 = (type << 1) | (max_packet << 3);
+	uint32_t p1 = (ep <= 1) ?
+	    (DEPCFG_XFER_COMPLETE_EN | DEPCFG_XFER_NOT_READY_EN) :
+	    (DEPCFG_XFER_COMPLETE_EN | DEPCFG_XFER_IN_PROGRESS_EN);
+
+	if (ep > 1 && (ep & 1)) {
+		p0 |= ((ep >> 1) << 17);       /* IN endpoint TX FIFO */
+	}
+	if (interval_m1 != 0) {
+		p1 |= (interval_m1 & 0xff) << 16;
+	}
+	p1 |= (ep & 0x1f) << 25;
+	printf("MUNCH USB: ep%u SETEPCONFIG p0 0x%08x p1 0x%08x\n", ep, p0, p1);
+	return ud_epcmd(ep, DEPCMD_SETEPCONFIG, p0, p1, 0);
 }
 
 static void
@@ -646,31 +668,37 @@ ud_notify_connected(void)
 	ud_start_trb(EP_INT, UD_TRB_INT, UD_NOTIFY, 8, TRBCTL_NORMAL);
 }
 
-/* SET_CONFIGURATION(1): bulk IN/OUT and the interrupt endpoint. */
-static void
+/* The default ECM data alternate setting has no bulk endpoints. */
+static bool
 ud_configure(void)
 {
 	if (ud.configured) {
-		return;
+		return true;
 	}
-	if (ud_epcmd(0, DEPCMD_DEPSTARTCFG, 0, 0, 0) ||
-	    ud_epcmd(EP_RX, DEPCMD_SETEPCONFIG, (2u << 1) | (512u << 3), (1u << 8) | ((uint32_t)EP_RX << 25), 0) ||
-	    ud_epcmd(EP_RX, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
-	    ud_epcmd(EP_TX, DEPCMD_SETEPCONFIG, (2u << 1) | (512u << 3) | (1u << 17), (1u << 8) | ((uint32_t)EP_TX << 25), 0) ||
-	    ud_epcmd(EP_TX, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
-	    ud_epcmd(EP_INT, DEPCMD_SETEPCONFIG, (3u << 1) | (16u << 3) | (2u << 17),
-	    (1u << 8) | (8u << 16) | ((uint32_t)EP_INT << 25), 0) ||
-	    ud_epcmd(EP_INT, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0)) {
-		printf("MUNCH USB: data endpoints setup failed\n");
-		if (ud.abl_evt_size != 0) {
-			ud_restore_abl();
-		}
-		return;
+	printf("MUNCH USB: SET_CONFIGURATION(1), configure ECM control endpoint\n");
+	if (ud_ep_config(EP_INT, 3, 16, 8) != 0) {
+		printf("MUNCH USB: ECM interrupt endpoint setup failed\n");
+		return false;
 	}
-	dwc_wr(DALEPENA, dwc_rd(DALEPENA) | (1u << EP_RX) | (1u << EP_TX) | (1u << EP_INT));
+	dwc_wr(DALEPENA, dwc_rd(DALEPENA) | (1u << EP_INT));
 	ud.configured = true;
+	printf("MUNCH USB: ECM control endpoint configured\n");
+	return true;
+}
+
+static bool
+ud_configure_data(void)
+{
+	printf("MUNCH USB: SET_INTERFACE(1, alt 1), configure ECM bulk endpoints\n");
+	if (ud_ep_config(EP_RX, 2, 512, 0) != 0 ||
+	    ud_ep_config(EP_TX, 2, 512, 0) != 0) {
+		printf("MUNCH USB: ECM bulk endpoint setup failed\n");
+		return false;
+	}
+	dwc_wr(DALEPENA, dwc_rd(DALEPENA) | (1u << EP_RX) | (1u << EP_TX));
 	ud_rx_arm();
-	printf("MUNCH USB: ECM endpoints configured\n");
+	printf("MUNCH USB: ECM bulk endpoints configured\n");
+	return true;
 }
 
 static void
@@ -704,7 +732,15 @@ ud_setup(void)
 		printf("MUNCH USB: address %u\n", value & 0x7f);
 	} else if (req == 9) {          /* SET_CONFIGURATION */
 		if (value == 1) {
-			ud_configure();
+			ok = ud_configure();
+		} else if (value == 0) {
+			ud.configured = false;
+			ud.data_alt = 0;
+			dwc_wr(DALEPENA, dwc_rd(DALEPENA) &
+			    ~((1u << EP_RX) | (1u << EP_TX) | (1u << EP_INT)));
+			ud_link_event(false);
+		} else {
+			ok = false;
 		}
 		printf("MUNCH USB: configured (%u)\n", value);
 	} else if (req == 8) {          /* GET_CONFIGURATION */
@@ -712,12 +748,21 @@ ud_setup(void)
 	} else if (req == 0) {          /* GET_STATUS */
 		data[0] = 0; data[1] = 0; n = 2;
 	} else if (req == 11) {         /* SET_INTERFACE */
-		if (index == 1) {
-			ud.data_alt = (uint8_t)value;
-			if (value == 1 && ud.configured) {
+		if (index != 1 || value > 1 || !ud.configured) {
+			ok = false;
+		} else if (value == 1 && ud.data_alt == 0) {
+			if (!ud_configure_data()) {
+				ok = false;
+			} else {
+				ud.data_alt = 1;
 				ud_notify_connected();
 				ud_link_event(true);
 			}
+		} else if (value == 0 && ud.data_alt != 0) {
+			dwc_wr(DALEPENA, dwc_rd(DALEPENA) &
+			    ~((1u << EP_RX) | (1u << EP_TX)));
+			ud.data_alt = 0;
+			ud_link_event(false);
 		}
 	} else if (req == 10) {         /* GET_INTERFACE */
 		data[0] = index == 1 ? ud.data_alt : 0; n = 1;
@@ -1171,16 +1216,27 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active, bool qcom_handoff
 		ud_qcom_wrapper_start();
 	}
 
-	/*
-	 * Match the UEFI DWC3 init: reset the USB2 PHY and leave it out of
-	 * suspend. The Munch SS PHY is disabled in the live DT.
-	 */
-	uint32_t usb3 = dwc_rd(GUSB3PIPECTL);
 	uint32_t usb2 = dwc_rd(GUSB2PHYCFG);
-	usb3 |= GUSB3PIPECTL_SUSPHY;
-	dwc_wr(GUSB3PIPECTL, usb3);
-	dwc_wr(GUSB2PHYCFG, usb2 | GUSB2PHYCFG_PHYSOFTRST);
-	delay(100);
+	uint32_t usb3 = dwc_rd(GUSB3PIPECTL);
+	if (qcom_handoff) {
+		/* UEFI already initialized the analog PHY; only wake its DWC3 interface. */
+		usb2 &= ~(GUSB2PHYCFG_ENBLSLPM | GUSB2PHYCFG_SUSPHY |
+		    GUSB2PHYCFG_ULPI_UTMI | GUSB2PHYCFG_PHYIF_MASK |
+		    GUSB2PHYCFG_USBTRDTIM_MASK | GUSB2PHYCFG_U2_FREECLK_EXISTS);
+		usb2 |= GUSB2PHYCFG_USBTRDTIM(9);
+		dwc_wr(GUSB2PHYCFG, usb2);
+		printf("MUNCH USB: preserving UEFI-initialized USB2 PHY (GUSB2PHYCFG 0x%08x)\n",
+		    dwc_rd(GUSB2PHYCFG));
+	} else {
+		/*
+		 * Cold-start path: reset the USB2 PHY and leave it out of suspend.
+		 * The Munch SS PHY is disabled in the live DT.
+		 */
+		usb3 |= GUSB3PIPECTL_SUSPHY;
+		dwc_wr(GUSB3PIPECTL, usb3);
+		dwc_wr(GUSB2PHYCFG, usb2 | GUSB2PHYCFG_PHYSOFTRST);
+		delay(100);
+	}
 	usb2 &= ~(GUSB2PHYCFG_PHYSOFTRST | GUSB2PHYCFG_ENBLSLPM |
 	    GUSB2PHYCFG_SUSPHY | GUSB2PHYCFG_ULPI_UTMI |
 	    GUSB2PHYCFG_PHYIF_MASK | GUSB2PHYCFG_USBTRDTIM_MASK |
@@ -1188,7 +1244,7 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active, bool qcom_handoff
 	usb2 |= GUSB2PHYCFG_USBTRDTIM(9);
 	dwc_wr(GUSB2PHYCFG, usb2);
 
-	/* Reset only a controller that was not inherited from ABL. */
+	/* Reset DWC3's device core; the explicit handoff path leaves the PHY intact. */
 	dwc_wr(DCTL, DCTL_CSFTRST);
 	int i;
 	for (i = 0; i < 500 && (dwc_rd(DCTL) & DCTL_CSFTRST); i++) {
@@ -1213,12 +1269,19 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active, bool qcom_handoff
 	/* Events: disconnect, USB reset, connect done, link changes and wakeup. */
 	dwc_wr(DEVTEN, 0x1f);
 
-	/* Endpoint 0 OUT/IN: start config, control type, max packet 64. */
+	/*
+	 * DWC3 allocates transfer resources after DEPSTARTCFG, before any
+	 * endpoint configuration. Keep resources across SET_CONFIGURATION and
+	 * SET_INTERFACE, as the Linux DWC3 gadget driver does.
+	 */
 	if (ud_epcmd(0, DEPCMD_DEPSTARTCFG, 0, 0, 0) ||
-	    ud_epcmd(0, DEPCMD_SETEPCONFIG, (0u << 1) | (64u << 3), (1u << 8) | (1u << 10) | (0u << 25), 0) ||
 	    ud_epcmd(0, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
-	    ud_epcmd(1, DEPCMD_SETEPCONFIG, (0u << 1) | (64u << 3), (1u << 8) | (1u << 10) | (1u << 25), 0) ||
-	    ud_epcmd(1, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0)) {
+	    ud_epcmd(1, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
+	    ud_epcmd(EP_RX, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
+	    ud_epcmd(EP_TX, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
+	    ud_epcmd(EP_INT, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
+	    ud_ep_config(0, 0, 64, 0) ||
+	    ud_ep_config(1, 0, 64, 0)) {
 		printf("MUNCH USB: endpoint 0 setup failed\n");
 		if (inherited_active) {
 			ud_restore_abl();
