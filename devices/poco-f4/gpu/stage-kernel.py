@@ -83,6 +83,9 @@ if (usb_target.exists() and usb_target.read_bytes() != usb and
         sha(usb_target.read_bytes()) != previous_usb):
     raise ValueError('Refusing to overwrite independently modified Munch USB source')
 usb_target.write_bytes(usb)
+input = (root / 'xnu/files/bsd/dev/hakios.input.c').read_bytes()
+input_target = a.tree / 'bsd/dev/hakios.input.c'
+input_target.write_bytes(input)
 files_target = a.tree / 'bsd/conf/files'
 files = files_target.read_text()
 usb_entry = 'bsd/dev/hakios.usb.c\t\tstandard\n'
@@ -141,6 +144,7 @@ report = {'xnu_base': base, 'umi_reference': '6b6fb2b0c5a1720496ec71e88c95d2a45a
           'early_return_source_sha256': sha(early.encode()), 'gpu_source_sha256': sha(gpu),
           'buttons_source_sha256': sha(buttons),
           'usb_source_sha256': sha(usb),
+          'input_source_sha256': sha(input),
           'gpu_service_source_sha256': sha(gpu_cpp),
           'touch_source_sha256': sha(touch.encode()),
           'touch_header_sha256': sha(header), 'gpu_patch_sha256': sha((here / 'umi-a650.patch').read_bytes()),
