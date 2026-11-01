@@ -3421,6 +3421,7 @@ static usb_device_protocol *USB;
 static int download_to_ramdisk;     /* set by "oem ramdisk" for the one download that follows */
 static uint8_t *usb_rx_buf, *usb_tx_buf;
 static int usb_connected;
+static int usb_rx_queued;           /* usb_poll_command() has left the receive queued */
 
 static const uint8_t usb_dev_desc[18] = { 18, 1, 0x10, 0x02, 0, 0, 0, 64, 0xd1, 0x18, 0x0d, 0xd0, 0x00, 0x01, 1, 2, 3, 1 };
 static const uint8_t usb_ss_dev_desc[18] = { 18, 1, 0x00, 0x03, 0, 0, 0, 9, 0xd1, 0x18, 0x0d, 0xd0, 0x00, 0x01, 1, 2, 3, 1 };
@@ -3497,6 +3498,40 @@ usb_start(void)
 }
 
 /*
+ * Release Qualcomm's USB DXE before XNU takes the DWC3, then rediscover and
+ * restart the protocol when the kernel returns. Stop invalidates its transfer
+ * buffers, so usb_start allocates fresh ones on every restart.
+ */
+static int
+usb_stop_for_kernel(void)
+{
+	if (USB == NULL) {
+		return 0;
+	}
+	efi_status status = USB->stop();
+	if (EFI_ERROR(status)) {
+		print("usb: UEFI protocol stop failed: %x\n", status);
+		return 0;
+	}
+	USB = NULL;
+	usb_rx_buf = NULL;
+	usb_tx_buf = NULL;
+	usb_connected = 0;
+	usb_rx_queued = 0;
+	print("usb: UEFI USB ownership released to XNU\n");
+	return 1;
+}
+
+static int
+usb_restart_after_kernel(void)
+{
+	if (USB != NULL) {
+		return 1;
+	}
+	return usb_start();
+}
+
+/*
  * Pump controller events until a transfer on `endpoint` finishes.
  * Returns the byte count, or -1 if the transfer was cancelled or the cable
  * state changed. Keeps the watchdog fed while idle.
@@ -3531,8 +3566,6 @@ usb_wait(uint8_t endpoint)
 		}
 	}
 }
-
-static int usb_rx_queued;       /* usb_poll_command() has left the receive for the next command with the controller */
 
 static int64_t
 usb_rx(uint8_t *buf, uint64_t len)
@@ -3738,7 +3771,17 @@ fb_command(char *cmd)
 			fb_reply("OKAY", "");
 			log_len = 0;
 			print("== XNULOADER run (usb) ==\n");
-			if (!run_kernel(have_cp, cp)) {
+			if (!usb_stop_for_kernel()) {
+				print("usb: could not release the Qualcomm USB protocol; kernel not started\n");
+				set_result("usb-stop-failed", 0, 0);
+				compose_logs(NULL, 0);
+				return;
+			}
+			int kernel_started = run_kernel(have_cp, cp);
+			if (!usb_restart_after_kernel()) {
+				print("usb: could not restart the Qualcomm fastboot protocol\n");
+			}
+			if (!kernel_started) {
 				set_result("not-started", 0, 0);
 				compose_logs(NULL, 0);
 			}

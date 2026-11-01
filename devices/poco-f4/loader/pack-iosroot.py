@@ -172,6 +172,44 @@ static const struct platform platform_munch = {
     loader = loader.replace(hook, replacement, 1)
     marker = '\tint have_payload = parse_payload(&pi, 0);\n'
     preload = marker + '\tif (have_payload && !munch_load_iosroot(&pi)) { reboot(); return 0; }\n'
+    usb_run = '\t\t\tint kernel_started = run_kernel(have_cp, cp);\n'
+    if loader.count(usb_run) != 1:
+        raise ValueError('Unexpected USB kernel-run hook')
+    usb_run_replacement = usb_run
+    if touch:
+        touch_prepare = '''\t\t\ttouch_handoff_ready = 0;
+\t\t\tif (!touch_power_enable_begin()) {
+\t\t\t\ttouch_power_enable_end();
+\t\t\t\tfb_reply("FAIL", "touch power handoff failed");
+\t\t\t\treturn;
+\t\t\t}
+\t\t\ttouch_probe(ST, NULL);
+\t\t\tif (!touch_handoff_ready) {
+\t\t\t\ttouch_restore();
+\t\t\t\ttouch_power_enable_end();
+\t\t\t\tfb_reply("FAIL", "touch controller handoff failed");
+\t\t\t\treturn;
+\t\t\t}
+'''
+        command_start = '\t\t\tset_result("running", cp, 0);\n'
+        if loader.count(command_start) != 1:
+            raise ValueError('Unexpected USB command start hook')
+        loader = loader.replace(command_start, touch_prepare + command_start, 1)
+        usb_run_replacement += '\t\t\ttouch_restore();\n\t\t\ttouch_power_enable_end();\n'
+    usb_run_replacement += '\t\t\tif (!usb_restart_after_kernel()) {\n'
+    usb_run_replacement += '\t\t\t\tprint("usb: fastboot restart failed after XNU returned\\n");\n'
+    usb_run_replacement += '\t\t\t}\n'
+    loader = loader.replace(usb_run, usb_run_replacement, 1)
+    if touch:
+        usb_stop_error = '''\t\t\tif (!usb_stop_for_kernel()) {
+\t\t\t\tprint("usb: could not release the Qualcomm USB protocol; kernel not started\\n");'''
+        usb_stop_error_touch = '''\t\t\tif (!usb_stop_for_kernel()) {
+\t\t\t\ttouch_restore();
+\t\t\t\ttouch_power_enable_end();
+\t\t\t\tprint("usb: could not release the Qualcomm USB protocol; kernel not started\\n");'''
+        if loader.count(usb_stop_error) != 1:
+            raise ValueError('Unexpected USB stop failure hook')
+        loader = loader.replace(usb_stop_error, usb_stop_error_touch, 1)
     if loader.count(marker) != 1:
         raise ValueError('Unexpected loader payload entry point')
     loader = loader.replace(marker, preload, 1)
@@ -245,8 +283,8 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
         cmdline += ' gpu=1 adreno_speed=1 gpu_va=1'
         if gpu_diagnostics:
             cmdline += ' gpu_log=1 gpu_exact=1'
-    if usb_debug:
-        cmdline += ' munchusb=2 munchusblog=1'
+    if usb_debug and not any(argument.startswith('munchusb=') for argument in extra.split()):
+        cmdline += ' munchusb=2 usb_handoff=1 munchusblog=1'
     if verbose and '-v' not in cmdline.split():
         cmdline = '-v ' + cmdline
     if extra:

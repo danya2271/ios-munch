@@ -37,7 +37,7 @@
 
 extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
 void munch_usb_probe(void);
-static void munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active);
+static void munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active, bool qcom_handoff);
 extern ppnum_t pmap_find_phys(pmap_t pmap, addr64_t va);
 
 #define GCC_PA                  0x00100000
@@ -217,9 +217,11 @@ munch_usb_probe(void)
 	bool clocks_on = true;
 	bool need_phy_init = false;
 	bool inherited_active = false;
+	uint32_t handoff_requested = 0;
 
-	/* munchusb=0 off, 1 reports state only, 2 legacy gadget, 3 takes over USB */
+	/* munchusb=0 off, 1 probe only, 2 start gadget after an explicit UEFI handoff */
 	PE_parse_boot_argn("munchusb", &enabled, sizeof(enabled));
+	PE_parse_boot_argn("usb_handoff", &handoff_requested, sizeof(handoff_requested));
 	if (!enabled) {
 		return;
 	}
@@ -261,13 +263,17 @@ munch_usb_probe(void)
 	printf("MUNCH USB: DWC3 GEVNTADR 0x%08x%08x GEVNTSIZ 0x%08x GEVNTCOUNT 0x%08x GHWPARAMS0 0x%08x\n",
 	    usb_rd(dwc, 0xc404), usb_rd(dwc, 0xc400), usb_rd(dwc, 0xc408), usb_rd(dwc, 0xc40c),
 	    usb_rd(dwc, 0xc140));
+	if (handoff_requested && inherited_active) {
+		printf("MUNCH USB: UEFI USB protocol released DWC3; taking ownership for CDC gadget\n");
+		inherited_active = false;
+	}
 	vm_offset_t phy = 0;
 	if (enabled >= 2 && !inherited_active) {
 		if (need_phy_init && !munch_usb_phy_init(gcc, &phy)) {
 			printf("MUNCH USB: QUSB2 PHY initialization failed\n");
 			return;
 		}
-		munch_usb_gadget_start(dwc, inherited_active);
+		munch_usb_gadget_start(dwc, inherited_active, handoff_requested != 0);
 	} else if (enabled >= 2 && inherited_active) {
 		printf("MUNCH USB: ABL owns active DWC3; skipping gadget takeover to preserve USB\n");
 	}
@@ -1123,7 +1129,7 @@ ud_log_thread(void *arg __unused, wait_result_t wr __unused)
 }
 
 static void
-munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active)
+munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active, bool qcom_handoff)
 {
 	thread_t thread;
 
@@ -1157,6 +1163,8 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active)
 	}
 	if (inherited_active) {
 		ud_handoff_from_abl();
+		ud_qcom_wrapper_start();
+	} else if (qcom_handoff) {
 		ud_qcom_wrapper_start();
 	}
 
@@ -1216,7 +1224,7 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active)
 	}
 	dwc_wr(DALEPENA, 0x3);
 
-	if (!inherited_active) {
+	if (!qcom_handoff) {
 		vm_offset_t qs = ml_io_map(QSCRATCH_PA, 0x100);
 		if (qs != 0) {
 		uint32_t hs = usb_rd(qs, QSCRATCH_HS_PHY_CTRL), ss = usb_rd(qs, QSCRATCH_SS_PHY_CTRL);
