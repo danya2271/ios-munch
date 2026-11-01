@@ -37,7 +37,7 @@
 
 extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
 void munch_usb_probe(void);
-static void munch_usb_gadget_start(vm_offset_t dwc);
+static void munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active);
 extern ppnum_t pmap_find_phys(pmap_t pmap, addr64_t va);
 
 #define GCC_PA                  0x00100000
@@ -216,8 +216,9 @@ munch_usb_probe(void)
 	uint32_t gdscr, cbcr[sizeof(usb_cbcr) / sizeof(usb_cbcr[0])];
 	bool clocks_on = true;
 	bool need_phy_init = false;
+	bool inherited_active = false;
 
-	/* munchusb=0 off, 1 reports state only, 2 also starts the USB device */
+	/* munchusb=0 off, 1 reports state only, 2 probes, 3 takes over USB */
 	PE_parse_boot_argn("munchusb", &enabled, sizeof(enabled));
 	if (!enabled) {
 		return;
@@ -241,6 +242,7 @@ munch_usb_probe(void)
 		clocks_on = munch_usb_gcc_start(gcc);
 	} else if (enabled >= 2) {
 		printf("MUNCH USB: inheriting active ABL GCC/GDSC state; no block reset\n");
+		inherited_active = true;
 	}
 	if (!clocks_on) {
 		printf("MUNCH USB: controller unpowered or unclocked; DWC3 not read\n");
@@ -260,12 +262,14 @@ munch_usb_probe(void)
 	    usb_rd(dwc, 0xc404), usb_rd(dwc, 0xc400), usb_rd(dwc, 0xc408), usb_rd(dwc, 0xc40c),
 	    usb_rd(dwc, 0xc140));
 	vm_offset_t phy = 0;
-	if (enabled >= 2) {
+	if (enabled >= 3) {
 		if (need_phy_init && !munch_usb_phy_init(gcc, &phy)) {
 			printf("MUNCH USB: QUSB2 PHY initialization failed\n");
 			return;
 		}
-		munch_usb_gadget_start(dwc);
+		munch_usb_gadget_start(dwc, inherited_active);
+	} else if (enabled >= 2) {
+		printf("MUNCH USB: diagnostic-only mode; leaving active DWC3 untouched\n");
 	}
 	if (phy == 0) {
 		phy = ml_io_map(QUSB2_PA, QUSB2_SIZE);
@@ -1027,7 +1031,7 @@ ud_log_thread(void *arg __unused, wait_result_t wr __unused)
 }
 
 static void
-munch_usb_gadget_start(vm_offset_t dwc)
+munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active)
 {
 	thread_t thread;
 
@@ -1043,6 +1047,12 @@ munch_usb_gadget_start(vm_offset_t dwc)
 	}
 	ud.dma_pa = ptoa_64(pn);
 	ud_if_create();
+
+	if (inherited_active) {
+		printf("MUNCH USB: active ABL controller detected; conservative takeover disabled\n");
+		printf("MUNCH USB: use munchusb=2 for diagnostics, munchusb=3 only on a non-running controller\n");
+		return;
+	}
 
 	/* Fastboot leaves the controller in device mode, but do not depend on it. */
 	uint32_t gctl = dwc_rd(GCTL);
