@@ -218,7 +218,7 @@ munch_usb_probe(void)
 	bool need_phy_init = false;
 	bool inherited_active = false;
 
-	/* munchusb=0 off, 1 reports state only, 2 starts USB, 3 forces PHY init */
+	/* munchusb=0 off, 1 reports state only, 2 starts USB, 3 takes over USB */
 	PE_parse_boot_argn("munchusb", &enabled, sizeof(enabled));
 	if (!enabled) {
 		return;
@@ -262,12 +262,14 @@ munch_usb_probe(void)
 	    usb_rd(dwc, 0xc404), usb_rd(dwc, 0xc400), usb_rd(dwc, 0xc408), usb_rd(dwc, 0xc40c),
 	    usb_rd(dwc, 0xc140));
 	vm_offset_t phy = 0;
-	if (enabled >= 2) {
+	if (enabled >= 2 && !inherited_active) {
 		if (need_phy_init && !munch_usb_phy_init(gcc, &phy)) {
 			printf("MUNCH USB: QUSB2 PHY initialization failed\n");
 			return;
 		}
 		munch_usb_gadget_start(dwc, inherited_active);
+	} else if (enabled >= 2 && inherited_active) {
+		printf("MUNCH USB: ABL owns active DWC3; skipping gadget takeover to preserve USB\n");
 	}
 	if (phy == 0) {
 		phy = ml_io_map(QUSB2_PA, QUSB2_SIZE);
@@ -1066,19 +1068,9 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active)
 	 * controller, preserving GCC, PHY, and wrapper state; resetting the PHY
 	 * here drops VBUS and makes fastboot disappear from the host.
 	 */
-	if (inherited_active) {
-		uint32_t dctl = dwc_rd(DCTL);
-		if (dctl & DCTL_RUN_STOP) {
-			dwc_wr(DCTL, dctl & ~DCTL_RUN_STOP);
-			for (int stop = 0; stop < 500 && !(dwc_rd(DSTS) & DSTS_DEVCTRLHLT); stop++) {
-				delay(1000);
-			}
-		}
-	} else {
-		dwc_wr(DCTL, dwc_rd(DCTL) & ~DCTL_RUN_STOP);
-		for (int stop = 0; stop < 500 && !(dwc_rd(DSTS) & DSTS_DEVCTRLHLT); stop++) {
-			delay(1000);
-		}
+	dwc_wr(DCTL, dwc_rd(DCTL) & ~DCTL_RUN_STOP);
+	for (int stop = 0; stop < 500 && !(dwc_rd(DSTS) & DSTS_DEVCTRLHLT); stop++) {
+		delay(1000);
 	}
 
 	/*
@@ -1087,33 +1079,27 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active)
 	 */
 	uint32_t usb3 = dwc_rd(GUSB3PIPECTL);
 	uint32_t usb2 = dwc_rd(GUSB2PHYCFG);
-	if (!inherited_active) {
-		usb3 |= GUSB3PIPECTL_SUSPHY;
-		dwc_wr(GUSB3PIPECTL, usb3);
-		dwc_wr(GUSB2PHYCFG, usb2 | GUSB2PHYCFG_PHYSOFTRST);
-		delay(100);
-		usb2 &= ~(GUSB2PHYCFG_PHYSOFTRST | GUSB2PHYCFG_ENBLSLPM |
-		    GUSB2PHYCFG_SUSPHY | GUSB2PHYCFG_ULPI_UTMI |
-		    GUSB2PHYCFG_PHYIF_MASK | GUSB2PHYCFG_USBTRDTIM_MASK |
-		    GUSB2PHYCFG_U2_FREECLK_EXISTS);
-		usb2 |= GUSB2PHYCFG_USBTRDTIM(9);
-		dwc_wr(GUSB2PHYCFG, usb2);
-	}
+	usb3 |= GUSB3PIPECTL_SUSPHY;
+	dwc_wr(GUSB3PIPECTL, usb3);
+	dwc_wr(GUSB2PHYCFG, usb2 | GUSB2PHYCFG_PHYSOFTRST);
+	delay(100);
+	usb2 &= ~(GUSB2PHYCFG_PHYSOFTRST | GUSB2PHYCFG_ENBLSLPM |
+	    GUSB2PHYCFG_SUSPHY | GUSB2PHYCFG_ULPI_UTMI |
+	    GUSB2PHYCFG_PHYIF_MASK | GUSB2PHYCFG_USBTRDTIM_MASK |
+	    GUSB2PHYCFG_U2_FREECLK_EXISTS);
+	usb2 |= GUSB2PHYCFG_USBTRDTIM(9);
+	dwc_wr(GUSB2PHYCFG, usb2);
 
 	/* Reset only a controller that was not inherited from ABL. */
-	if (!inherited_active) {
-		dwc_wr(DCTL, DCTL_CSFTRST);
-	}
+	dwc_wr(DCTL, DCTL_CSFTRST);
 	int i;
-	for (i = 0; !inherited_active && i < 500 && (dwc_rd(DCTL) & DCTL_CSFTRST); i++) {
+	for (i = 0; i < 500 && (dwc_rd(DCTL) & DCTL_CSFTRST); i++) {
 		delay(1000);
 	}
-	printf("MUNCH USB: %s after %d ms, GCTL 0x%08x DCFG 0x%08x GUSB2PHYCFG 0x%08x GUSB3PIPECTL 0x%08x\n",
-	    inherited_active ? "preserved active PHY/controller" :
-	    ((dwc_rd(DCTL) & DCTL_CSFTRST) ? "soft reset STUCK" : "soft reset done"),
-	    i, dwc_rd(GCTL), dwc_rd(DCFG),
+	printf("MUNCH USB: soft reset %s after %d ms, GCTL 0x%08x DCFG 0x%08x GUSB2PHYCFG 0x%08x GUSB3PIPECTL 0x%08x\n",
+	    (dwc_rd(DCTL) & DCTL_CSFTRST) ? "STUCK" : "done", i, dwc_rd(GCTL), dwc_rd(DCFG),
 	    dwc_rd(GUSB2PHYCFG), dwc_rd(GUSB3PIPECTL));
-	if (!inherited_active && (dwc_rd(DCTL) & DCTL_CSFTRST)) {
+	if (dwc_rd(DCTL) & DCTL_CSFTRST) {
 		return;
 	}
 
