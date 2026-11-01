@@ -417,6 +417,8 @@ static struct {
 	unsigned    txq_head, txq_count;
 	bool        tx_busy;
 	uint64_t    rx_frames, tx_frames;
+	uint64_t    log_datagrams, log_errors;
+	int         log_last_error;
 	uint32_t    abl_evt_lo, abl_evt_hi, abl_evt_size;
 } ud;
 
@@ -838,7 +840,7 @@ ud_rx_done(void)
 static void
 ud_tx_kick_locked(void)
 {
-	while (!ud.tx_busy && ud.txq_count > 0 && ud.configured) {
+	while (!ud.tx_busy && ud.txq_count > 0 && ud.configured && ud.data_alt == 1) {
 		mbuf_t m = ud.txq[ud.txq_head];
 		ud.txq_head = (ud.txq_head + 1) % UD_TXQ;
 		ud.txq_count--;
@@ -864,7 +866,7 @@ static errno_t
 ud_if_output(ifnet_t ifp, mbuf_t m)
 {
 	lck_mtx_lock(ud.lock);
-	if (ud.txq_count == UD_TXQ || !ud.configured) {
+	if (ud.txq_count == UD_TXQ || !ud.configured || ud.data_alt != 1) {
 		lck_mtx_unlock(ud.lock);
 		mbuf_freem(m);
 		ifnet_stat_increment_out(ifp, 0, 0, 1);
@@ -1122,7 +1124,8 @@ ud_thread(void *arg __unused, wait_result_t wr __unused)
 			dwc_wr(GEVNTCOUNT, available);
 		}
 		if ((++ticks % 30000) == 0) {
-			printf("MUNCH USB: ue0 rx %llu tx %llu frames\n", ud.rx_frames, ud.tx_frames);
+			printf("MUNCH USB: ue0 rx %llu tx %llu frames; UDP log sent %llu errors %llu last %d\n",
+			    ud.rx_frames, ud.tx_frames, ud.log_datagrams, ud.log_errors, ud.log_last_error);
 		}
 		ud_sleep_ms(1);
 	}
@@ -1154,24 +1157,36 @@ ud_log_thread(void *arg __unused, wait_result_t wr __unused)
 	to.sin_addr.s_addr = htonl(0xc0a80701);         /* 192.168.7.1 */
 	for (;;) {
 		ud_sleep_ms(100);
-		if (!ud.configured) {
+		if (!ud.configured || ud.data_alt != 1) {
 			continue;
 		}
-		if (so == NULL && sock_socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP, NULL, NULL, &so) != 0) {
-			so = NULL;
-			continue;
+		if (so == NULL) {
+			errno_t err = sock_socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP, NULL, NULL, &so);
+			if (err != 0) {
+				ud.log_errors++;
+				ud.log_last_error = err;
+				so = NULL;
+				continue;
+			}
 		}
 		uint32_t n;
 		while ((n = loader_log_copy(&pos, chunk, sizeof(chunk))) > 0) {
+			uint64_t retry_pos = pos - n;
 			struct iovec iov = { .iov_base = chunk, .iov_len = n };
 			struct msghdr msg = {
 				.msg_name = &to, .msg_namelen = sizeof(to),
 				.msg_iov = &iov, .msg_iovlen = 1,
 			};
 			size_t sent = 0;
-			if (sock_send(so, &msg, 0, &sent) != 0) {
-				break;          /* no route/ARP yet: retry later */
+			errno_t err = sock_send(so, &msg, 0, &sent);
+			if (err != 0 || sent != n) {
+				pos = retry_pos;
+				ud.log_errors++;
+				ud.log_last_error = err != 0 ? err : EIO;
+				break;
 			}
+			ud.log_datagrams++;
+			ud_sleep_ms(10);
 		}
 	}
 }
