@@ -404,6 +404,7 @@ static struct {
 	unsigned    txq_head, txq_count;
 	bool        tx_busy;
 	uint64_t    rx_frames, tx_frames;
+	uint32_t    abl_evt_lo, abl_evt_hi, abl_evt_size;
 } ud;
 
 static inline void
@@ -461,6 +462,9 @@ static void
 ud_handoff_from_abl(void)
 {
 	uint32_t enabled = dwc_rd(DALEPENA);
+	ud.abl_evt_lo = dwc_rd(GEVNTADRLO);
+	ud.abl_evt_hi = dwc_rd(GEVNTADRHI);
+	ud.abl_evt_size = dwc_rd(GEVNTSIZ);
 
 	/* Stop event generation before replacing ABL's event ring. */
 	dwc_wr(DEVTEN, 0);
@@ -476,6 +480,19 @@ ud_handoff_from_abl(void)
 	dwc_wr(GEVNTCOUNT, dwc_rd(GEVNTCOUNT) & 0xffff);
 	__asm__ volatile ("dsb sy" ::: "memory");
 	printf("MUNCH USB: ABL handoff complete (old endpoints 0x%08x)\n", enabled);
+}
+
+static void
+ud_restore_abl(void)
+{
+	dwc_wr(DEVTEN, 0);
+	dwc_wr(GEVNTADRLO, ud.abl_evt_lo);
+	dwc_wr(GEVNTADRHI, ud.abl_evt_hi);
+	dwc_wr(GEVNTSIZ, ud.abl_evt_size);
+	dwc_wr(GEVNTCOUNT, 0);
+	dwc_wr(DALEPENA, 0);
+	printf("MUNCH USB: restored ABL event ring 0x%08x%08x size 0x%08x\n",
+	    ud.abl_evt_hi, ud.abl_evt_lo, ud.abl_evt_size);
 }
 
 /* One TRB (at DMA offset trb) on physical endpoint ep. */
@@ -613,6 +630,9 @@ ud_configure(void)
 	    (1u << 8) | (8u << 16) | ((uint32_t)EP_INT << 25), 0) ||
 	    ud_epcmd(EP_INT, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0)) {
 		printf("MUNCH USB: data endpoints setup failed\n");
+		if (ud.abl_evt_size != 0) {
+			ud_restore_abl();
+		}
 		return;
 	}
 	dwc_wr(DALEPENA, dwc_rd(DALEPENA) | (1u << EP_RX) | (1u << EP_TX) | (1u << EP_INT));
@@ -1162,6 +1182,9 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active)
 	    ud_epcmd(1, DEPCMD_SETEPCONFIG, (0u << 1) | (64u << 3), (1u << 8) | (1u << 10) | (1u << 25), 0) ||
 	    ud_epcmd(1, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0)) {
 		printf("MUNCH USB: endpoint 0 setup failed\n");
+		if (inherited_active) {
+			ud_restore_abl();
+		}
 		return;
 	}
 	dwc_wr(DALEPENA, 0x3);
