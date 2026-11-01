@@ -150,7 +150,6 @@ static const struct platform platform_munch = {
 \t}
 '''
         replacement = '''\tif (have_payload) {
-\t\tif (!munch_load_iosroot(&pi)) { reboot(); return 0; }
 \t\tif (!touch_power_enable_begin()) { touch_power_enable_end(); reboot(); return 0; }
 \t\ttouch_probe(ST, NULL);
 \t\tif (!touch_handoff_ready) { touch_power_enable_end(); reboot(); return 0; }
@@ -165,13 +164,21 @@ static const struct platform platform_munch = {
 \t}
 '''
         replacement = '''\tif (have_payload) {
-\t\tif (!munch_load_iosroot(&pi)) { reboot(); return 0; }
 \t\trun_kernel(0, 0);
 \t}
 '''
     if loader.count(hook) != 1:
         raise ValueError('Unexpected loader one-shot entry')
     loader = loader.replace(hook, replacement, 1)
+    marker = '\tint have_payload = parse_payload(&pi, 0);\n'
+    preload = marker + '\tif (have_payload && !munch_load_iosroot(&pi)) { reboot(); return 0; }\n'
+    if loader.count(marker) != 1:
+        raise ValueError('Unexpected loader payload entry point')
+    loader = loader.replace(marker, preload, 1)
+    preload_call = loader.find('if (have_payload && !munch_load_iosroot(&pi))')
+    usb_start_call = loader.find('if (have_payload && pi.usb_mode && usb_start())')
+    if preload_call < 0 or usb_start_call < 0 or preload_call > usb_start_call:
+        raise ValueError('iosroot must be loaded and verified before the USB command loop')
 
     if gpu:
         allocation = '\tuint64_t rd_pa = kern_hi;'
@@ -227,9 +234,8 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
     source = root / 'xnuloader/loader.c'
     identity = Path(config['identity']['path']).read_bytes()
     if cpus == 8:
-        cmdline = ('root_apfs=ufs_darwin ufs=2 apfs_volume=ufs_darwin bootcpu=7 '
-                   'cpus=8 cpufreq=1 small_cores=2 small_cores_after=0 touchscreen=1 '
-                   'buttons=1 loader_return_after=600')
+        cmdline = ('bootcpu=7 cpus=8 cpufreq=1 small_cores=2 small_cores_after=0 touchscreen=1 '
+                   'buttons=1')
     else:
         cmdline = '-v cpus=1 touchscreen=1 buttons=1 loader_return_after=600'
     if gpu:
