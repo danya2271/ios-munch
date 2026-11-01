@@ -324,7 +324,11 @@ munch_usb_probe(void)
  * reports a cable (dwc3_qcom_vbus_override_enable).
  */
 #define QSCRATCH_PA             0x0a6f8800
+#define QSCRATCH_GENERAL_CFG    0x08
 #define QSCRATCH_HS_PHY_CTRL    0x10
+#define   PIPE_UTMI_CLK_SEL     (1u << 0)
+#define   PIPE3_PHYSTATUS_SW    (1u << 3)
+#define   PIPE_UTMI_CLK_DIS     (1u << 8)
 #define   UTMI_OTG_VBUS_VALID   (1u << 20)
 #define   SW_SESSVLD_SEL        (1u << 28)
 #define QSCRATCH_SS_PHY_CTRL    0x30
@@ -461,25 +465,47 @@ ud_epcmd(unsigned ep, uint32_t cmd, uint32_t p0, uint32_t p1, uint32_t p2)
 static void
 ud_handoff_from_abl(void)
 {
-	uint32_t enabled = dwc_rd(DALEPENA);
 	ud.abl_evt_lo = dwc_rd(GEVNTADRLO);
 	ud.abl_evt_hi = dwc_rd(GEVNTADRHI);
 	ud.abl_evt_size = dwc_rd(GEVNTSIZ);
 
-	/* Stop event generation before replacing ABL's event ring. */
+	/* Keep Qualcomm's wrapper session valid while taking DWC3 into device mode. */
 	dwc_wr(DEVTEN, 0);
-	for (unsigned ep = 0; ep < 16; ep++) {
-		if (!(enabled & (1u << ep))) {
-			continue;
-		}
-		if (ud_epcmd(ep, DEPCMD_ENDTRANSFER, 0, 0, 0) != 0) {
-			printf("MUNCH USB: ABL ep%u end transfer failed\n", ep);
-		}
-	}
-	dwc_wr(DALEPENA, 0);
-	dwc_wr(GEVNTCOUNT, dwc_rd(GEVNTCOUNT) & 0xffff);
+	dwc_wr(GEVNTCOUNT, 0);
 	__asm__ volatile ("dsb sy" ::: "memory");
-	printf("MUNCH USB: ABL handoff complete (old endpoints 0x%08x)\n", enabled);
+	printf("MUNCH USB: Qualcomm wrapper handoff prepared (ABL ring 0x%08x%08x size 0x%08x)\n",
+	    ud.abl_evt_hi, ud.abl_evt_lo, ud.abl_evt_size);
+}
+
+static void
+ud_qcom_wrapper_start(void)
+{
+	vm_offset_t qs = ml_io_map(QSCRATCH_PA, 0x100);
+	if (qs == 0) {
+		printf("MUNCH USB: QSCRATCH map failed\n");
+		return;
+	}
+	uint32_t cfg = usb_rd(qs, QSCRATCH_GENERAL_CFG);
+	*(volatile uint32_t *)(qs + QSCRATCH_GENERAL_CFG) = cfg | PIPE_UTMI_CLK_DIS;
+	__asm__ volatile ("dsb sy" ::: "memory");
+	delay(100);
+	cfg = usb_rd(qs, QSCRATCH_GENERAL_CFG) | PIPE_UTMI_CLK_SEL | PIPE3_PHYSTATUS_SW;
+	*(volatile uint32_t *)(qs + QSCRATCH_GENERAL_CFG) = cfg;
+	__asm__ volatile ("dsb sy" ::: "memory");
+	delay(100);
+	*(volatile uint32_t *)(qs + QSCRATCH_GENERAL_CFG) = cfg & ~PIPE_UTMI_CLK_DIS;
+	__asm__ volatile ("dsb sy" ::: "memory");
+
+	uint32_t hs = usb_rd(qs, QSCRATCH_HS_PHY_CTRL);
+	uint32_t ss = usb_rd(qs, QSCRATCH_SS_PHY_CTRL);
+	*(volatile uint32_t *)(qs + QSCRATCH_HS_PHY_CTRL) =
+	    hs | UTMI_OTG_VBUS_VALID | SW_SESSVLD_SEL;
+	*(volatile uint32_t *)(qs + QSCRATCH_SS_PHY_CTRL) =
+	    ss | LANE0_PWR_PRESENT;
+	__asm__ volatile ("dsb sy" ::: "memory");
+	printf("MUNCH USB: Qualcomm wrapper active GENERAL_CFG 0x%08x HS 0x%08x SS 0x%08x\n",
+	    usb_rd(qs, QSCRATCH_GENERAL_CFG), usb_rd(qs, QSCRATCH_HS_PHY_CTRL),
+	    usb_rd(qs, QSCRATCH_SS_PHY_CTRL));
 }
 
 static void
@@ -1131,6 +1157,7 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active)
 	}
 	if (inherited_active) {
 		ud_handoff_from_abl();
+		ud_qcom_wrapper_start();
 	}
 
 	/*
@@ -1189,8 +1216,9 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active)
 	}
 	dwc_wr(DALEPENA, 0x3);
 
-	vm_offset_t qs = ml_io_map(QSCRATCH_PA, 0x100);
-	if (qs != 0) {
+	if (!inherited_active) {
+		vm_offset_t qs = ml_io_map(QSCRATCH_PA, 0x100);
+		if (qs != 0) {
 		uint32_t hs = usb_rd(qs, QSCRATCH_HS_PHY_CTRL), ss = usb_rd(qs, QSCRATCH_SS_PHY_CTRL);
 		printf("MUNCH USB: QSCRATCH HS_PHY_CTRL 0x%08x SS_PHY_CTRL 0x%08x GENERAL_CFG 0x%08x\n",
 		    hs, ss, usb_rd(qs, 0x08));
@@ -1199,6 +1227,7 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active)
 		__asm__ volatile ("dsb sy" ::: "memory");
 		printf("MUNCH USB: VBUS override on: HS_PHY_CTRL 0x%08x SS_PHY_CTRL 0x%08x\n",
 		    usb_rd(qs, QSCRATCH_HS_PHY_CTRL), usb_rd(qs, QSCRATCH_SS_PHY_CTRL));
+		}
 	}
 
 	ud_start_setup();
