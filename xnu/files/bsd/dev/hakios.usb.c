@@ -1044,8 +1044,11 @@ ud_event(uint32_t ev)
 	if (type == 3 && status == 2) { /* XferNotReady, control status phase */
 		if (ud.state == EP0_WAIT_STATUS2 || ud.state == EP0_WAIT_STATUS3) {
 			uint32_t ctl = ud.state == EP0_WAIT_STATUS3 ? TRBCTL_STATUS3 : TRBCTL_STATUS2;
+			unsigned status_ep = ud.data_in ? 0 : 1;
 			ud.state = EP0_STATUS;
-			ud_start(ep, UD_DATA, 0, ctl);
+			printf("MUNCH USB: control status on ep%u (%s)\n", status_ep,
+			    ud.data_in ? "OUT after IN request" : "IN after OUT request");
+			ud_start(status_ep, UD_DATA, 0, ctl);
 		}
 	}
 }
