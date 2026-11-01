@@ -150,6 +150,10 @@ munch_usb_probe(void)
 #define GCTL_PRTCAPDIR(n) (((n) & 3u) << 12)
 #define GCTL_PRTCAP_MASK  (3u << 12)
 #define GCTL_PRTCAP_DEVICE 2u
+#define GCTL_SCALEDOWN_MASK (3u << 4)
+#define GCTL_DISSCRAMBLE   (1u << 3)
+#define GCTL_GBLHIBERNATIONEN (1u << 1)
+#define GCTL_DSBLCLKGTNG   (1u << 0)
 #define GEVNTADRLO      0xc400
 #define GEVNTADRHI      0xc404
 #define GEVNTSIZ        0xc408
@@ -180,6 +184,17 @@ munch_usb_probe(void)
 #define DCTL_RUN_STOP   (1u << 31)
 #define DCTL_CSFTRST    (1u << 30)
 #define DSTS_DEVCTRLHLT (1u << 22)
+#define GUSB2PHYCFG     0xc200
+#define GUSB2PHYCFG_PHYSOFTRST (1u << 31)
+#define GUSB2PHYCFG_U2_FREECLK_EXISTS (1u << 30)
+#define GUSB2PHYCFG_ENBLSLPM (1u << 8)
+#define GUSB2PHYCFG_SUSPHY (1u << 6)
+#define GUSB2PHYCFG_ULPI_UTMI (1u << 4)
+#define GUSB2PHYCFG_PHYIF_MASK (1u << 3)
+#define GUSB2PHYCFG_USBTRDTIM_MASK (0xfu << 10)
+#define GUSB2PHYCFG_USBTRDTIM(n) (((n) & 0xfu) << 10)
+#define GUSB3PIPECTL    0xc2c0
+#define GUSB3PIPECTL_SUSPHY (1u << 17)
 
 #define DEPCMD_SETEPCONFIG      1
 #define DEPCMD_SETTRANSFRESOURCE 2
@@ -403,7 +418,7 @@ ud_configure(void)
 	if (ud.configured) {
 		return;
 	}
-	if (ud_epcmd(0, DEPCMD_DEPSTARTCFG | (2u << 16), 0, 0, 0) ||
+	if (ud_epcmd(0, DEPCMD_DEPSTARTCFG, 0, 0, 0) ||
 	    ud_epcmd(EP_RX, DEPCMD_SETEPCONFIG, (2u << 1) | (512u << 3), (1u << 8) | ((uint32_t)EP_RX << 25), 0) ||
 	    ud_epcmd(EP_RX, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
 	    ud_epcmd(EP_TX, DEPCMD_SETEPCONFIG, (2u << 1) | (512u << 3) | (1u << 17), (1u << 8) | ((uint32_t)EP_TX << 25), 0) ||
@@ -887,16 +902,40 @@ munch_usb_gadget_start(vm_offset_t dwc)
 	/* Fastboot leaves the controller in device mode, but do not depend on it. */
 	uint32_t gctl = dwc_rd(GCTL);
 	gctl = (gctl & ~GCTL_PRTCAP_MASK) | GCTL_PRTCAPDIR(GCTL_PRTCAP_DEVICE);
+	gctl &= ~(GCTL_SCALEDOWN_MASK | GCTL_DISSCRAMBLE | GCTL_GBLHIBERNATIONEN | GCTL_DSBLCLKGTNG);
 	dwc_wr(GCTL, gctl);
 
-	/* Device controller soft reset (PHY and global setup stay as ABL left them). */
+	/* Stop a still-running fastboot controller before taking over its PHY. */
+	dwc_wr(DCTL, dwc_rd(DCTL) & ~DCTL_RUN_STOP);
+	for (int stop = 0; stop < 500 && !(dwc_rd(DSTS) & DSTS_DEVCTRLHLT); stop++) {
+		delay(1000);
+	}
+
+	/*
+	 * Match the UEFI DWC3 init: reset the USB2 PHY and leave it out of
+	 * suspend. The Munch SS PHY is disabled in the live DT.
+	 */
+	uint32_t usb3 = dwc_rd(GUSB3PIPECTL) | GUSB3PIPECTL_SUSPHY;
+	dwc_wr(GUSB3PIPECTL, usb3);
+	uint32_t usb2 = dwc_rd(GUSB2PHYCFG);
+	dwc_wr(GUSB2PHYCFG, usb2 | GUSB2PHYCFG_PHYSOFTRST);
+	delay(100);
+	usb2 &= ~(GUSB2PHYCFG_PHYSOFTRST | GUSB2PHYCFG_ENBLSLPM |
+	    GUSB2PHYCFG_SUSPHY | GUSB2PHYCFG_ULPI_UTMI |
+	    GUSB2PHYCFG_PHYIF_MASK | GUSB2PHYCFG_USBTRDTIM_MASK |
+	    GUSB2PHYCFG_U2_FREECLK_EXISTS);
+	usb2 |= GUSB2PHYCFG_USBTRDTIM(9);
+	dwc_wr(GUSB2PHYCFG, usb2);
+
+	/* Device controller soft reset. */
 	dwc_wr(DCTL, DCTL_CSFTRST);
 	int i;
 	for (i = 0; i < 500 && (dwc_rd(DCTL) & DCTL_CSFTRST); i++) {
 		delay(1000);
 	}
-	printf("MUNCH USB: soft reset %s after %d ms, GCTL 0x%08x DCFG 0x%08x\n",
-	    (dwc_rd(DCTL) & DCTL_CSFTRST) ? "STUCK" : "done", i, dwc_rd(GCTL), dwc_rd(DCFG));
+	printf("MUNCH USB: soft reset %s after %d ms, GCTL 0x%08x DCFG 0x%08x GUSB2PHYCFG 0x%08x GUSB3PIPECTL 0x%08x\n",
+	    (dwc_rd(DCTL) & DCTL_CSFTRST) ? "STUCK" : "done", i, dwc_rd(GCTL), dwc_rd(DCFG),
+	    dwc_rd(GUSB2PHYCFG), dwc_rd(GUSB3PIPECTL));
 	if (dwc_rd(DCTL) & DCTL_CSFTRST) {
 		return;
 	}
@@ -907,17 +946,17 @@ munch_usb_gadget_start(vm_offset_t dwc)
 	dwc_wr(GEVNTCOUNT, dwc_rd(GEVNTCOUNT) & 0xffff);
 	ud.evt_pos = 0;
 
-	/* High speed, address 0 */
+	/* High speed, address 0. EP0 is 64 bytes at High-Speed, not 512. */
 	uint32_t dcfg = dwc_rd(DCFG) & ~(7u | (0x7fu << 3));
 	dwc_wr(DCFG, dcfg | 0);
-	/* Events: disconnect, USB reset, connect done */
-	dwc_wr(DEVTEN, 0x7);
+	/* Events: disconnect, USB reset, connect done, link changes and wakeup. */
+	dwc_wr(DEVTEN, 0x1f);
 
-	/* Endpoint 0 OUT/IN: start config, control type, max packet 512 until connect done. */
+	/* Endpoint 0 OUT/IN: start config, control type, max packet 64. */
 	if (ud_epcmd(0, DEPCMD_DEPSTARTCFG, 0, 0, 0) ||
-	    ud_epcmd(0, DEPCMD_SETEPCONFIG, (0u << 1) | (512u << 3), (1u << 8) | (1u << 10) | (0u << 25), 0) ||
+	    ud_epcmd(0, DEPCMD_SETEPCONFIG, (0u << 1) | (64u << 3), (1u << 8) | (1u << 10) | (0u << 25), 0) ||
 	    ud_epcmd(0, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
-	    ud_epcmd(1, DEPCMD_SETEPCONFIG, (0u << 1) | (512u << 3), (1u << 8) | (1u << 10) | (1u << 25), 0) ||
+	    ud_epcmd(1, DEPCMD_SETEPCONFIG, (0u << 1) | (64u << 3), (1u << 8) | (1u << 10) | (1u << 25), 0) ||
 	    ud_epcmd(1, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0)) {
 		printf("MUNCH USB: endpoint 0 setup failed\n");
 		return;
@@ -941,7 +980,8 @@ munch_usb_gadget_start(vm_offset_t dwc)
 	for (i = 0; i < 500 && (dwc_rd(DSTS) & DSTS_DEVCTRLHLT); i++) {
 		delay(1000);
 	}
-	printf("MUNCH USB: running (DSTS 0x%08x after %d ms), DMA at 0x%llx\n", dwc_rd(DSTS), i, ud.dma_pa);
+	printf("MUNCH USB: running (DSTS 0x%08x after %d ms), GCTL 0x%08x GUSB2PHYCFG 0x%08x GUSB3PIPECTL 0x%08x DMA at 0x%llx\n",
+	    dwc_rd(DSTS), i, dwc_rd(GCTL), dwc_rd(GUSB2PHYCFG), dwc_rd(GUSB3PIPECTL), ud.dma_pa);
 	if (kernel_thread_start(ud_thread, NULL, &thread) == KERN_SUCCESS) {
 		thread_deallocate(thread);
 	}
