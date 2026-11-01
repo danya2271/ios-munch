@@ -218,7 +218,7 @@ munch_usb_probe(void)
 	bool need_phy_init = false;
 	bool inherited_active = false;
 
-	/* munchusb=0 off, 1 reports state only, 2 safe probe, 3 takes over USB */
+	/* munchusb=0 off, 1 reports state only, 2 legacy gadget, 3 takes over USB */
 	PE_parse_boot_argn("munchusb", &enabled, sizeof(enabled));
 	if (!enabled) {
 		return;
@@ -262,7 +262,7 @@ munch_usb_probe(void)
 	    usb_rd(dwc, 0xc404), usb_rd(dwc, 0xc400), usb_rd(dwc, 0xc408), usb_rd(dwc, 0xc40c),
 	    usb_rd(dwc, 0xc140));
 	vm_offset_t phy = 0;
-	if (enabled >= 3 || (enabled >= 2 && !inherited_active)) {
+	if (enabled >= 2 && !inherited_active) {
 		if (need_phy_init && !munch_usb_phy_init(gcc, &phy)) {
 			printf("MUNCH USB: QUSB2 PHY initialization failed\n");
 			return;

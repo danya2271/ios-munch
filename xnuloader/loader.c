@@ -2838,6 +2838,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 	uint64_t this_mpidr = READ_SYSREG(MPIDR_EL1) & 0xFFFFFF, kernel_mpidr = this_mpidr;
 	/* "cpus=N" or "cpumask=M" there too: the kernel may have more cores than the one it starts on */
 	int more_cores = 0, battery_requested = 0, ufs_requested = 0;
+	int usb_handoff_requested = 0;
 	/* "torch=N" (not 0) there too: the phone's flashlight is the kernel's (bsd/dev/hakios.torch.c) */
 	int torch_requested = 0;
 	/* "cam=5" there too: the phone's wide camera is iOS's (bsd/dev/hakios.camera.c) */
@@ -2857,6 +2858,8 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 		    (c[9] == 0 || c[9] == ' ');
 		torch_requested |= starts_with(c, "torch=") && (c == pi.cmdline || c[-1] == ' ') && c[6] >= '1' && c[6] <= '9';
 		camera_requested |= starts_with(c, "cam=5") && (c == pi.cmdline || c[-1] == ' ') && (c[5] == 0 || c[5] == ' ');
+		usb_handoff_requested |= starts_with(c, "usb_handoff=1") && (c == pi.cmdline || c[-1] == ' ') &&
+		    (c[13] == 0 || c[13] == ' ');
 		gamut_p3 |= starts_with(c, "gamut=p3") && (c == pi.cmdline || c[-1] == ' ');
 		if (starts_with(c, "ufs=") && (c == pi.cmdline || c[-1] == ' ') && c[4] >= '1' && c[4] <= '2' &&
 		    (c[5] == 0 || c[5] == ' ')) {
@@ -2879,6 +2882,9 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 	}
 	if (ufs_requested >= 2) {
 		block_start();
+	}
+	if (usb_handoff_requested) {
+		print("usb: preserving UEFI Qualcomm/DWC3 ownership for XNU diagnostics\n");
 	}
 	if (checkpoint == CHECKPOINT_SELFTEST) {
 		kernel_mpidr = this_mpidr;
