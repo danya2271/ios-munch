@@ -292,11 +292,11 @@ munch_usb_probe(void)
 /*
  * Step 2: USB device mode with only the default control endpoint, enough
  * for the host to enumerate the phone (boot-arg munchusb=2). The probe
- * brings up the inherited GCC/GDSC and QUSB2 state, then restarts the
- * device controller: soft reset, an event buffer in our memory, endpoint 0,
- * run. Events are polled from a kernel thread (no interrupt), like the UFS
- * driver. DMA is not cache coherent (DT qcom,gsi-disable-io-coherency):
- * buffers are cleaned/invalidated.
+ * brings up the inherited GCC/GDSC and QUSB2 state, restarts the device
+ * controller and installs an event buffer. CONNECT_DONE allocates endpoint
+ * resources, configures EP0 and starts setup reception. Events are polled
+ * from a kernel thread (no interrupt), like the UFS driver. DMA is not cache
+ * coherent (DT qcom,gsi-disable-io-coherency): buffers are cleaned/invalidated.
  * Register layout and the control-transfer state machine follow the
  * Synopsys DWC3 databook as used by Linux drivers/usb/dwc3 (gadget.c,
  * ep0.c).
@@ -419,6 +419,7 @@ static struct {
 	uint64_t    rx_frames, tx_frames;
 	uint64_t    log_datagrams, log_errors;
 	int         log_last_error;
+	bool        resources_ready;
 	uint32_t    abl_evt_lo, abl_evt_hi, abl_evt_size;
 } ud;
 
@@ -1013,9 +1014,16 @@ ud_reset(void)
 {
 	ud.configured = false;
 	ud.data_alt = 0;
+	lck_mtx_lock(ud.lock);
+	while (ud.txq_count != 0) {
+		mbuf_freem(ud.txq[ud.txq_head]);
+		ud.txq_head = (ud.txq_head + 1) % UD_TXQ;
+		ud.txq_count--;
+	}
 	ud.tx_busy = false;
+	lck_mtx_unlock(ud.lock);
+	dwc_wr(DALEPENA, 0);
 	ud_link_event(false);
-	ud_start_setup();
 }
 
 static void
@@ -1029,11 +1037,24 @@ ud_event(uint32_t ev)
 			printf("MUNCH USB: bus reset\n");
 		} else if (type == 2) { /* connect done */
 			uint32_t speed = dwc_rd(DSTS) & 7;
-			/* ep0 max packet: 64 at high/full speed (modify action) */
-			ud_epcmd(0, DEPCMD_SETEPCONFIG, (0u << 1) | (64u << 3) | (2u << 30),
-			    (1u << 8) | (1u << 10) | (0u << 25), 0);
-			ud_epcmd(1, DEPCMD_SETEPCONFIG, (0u << 1) | (64u << 3) | (2u << 30),
-			    (1u << 8) | (1u << 10) | (1u << 25), 0);
+			if (!ud.resources_ready) {
+				if (ud_epcmd(0, DEPCMD_DEPSTARTCFG, 0, 0, 0) ||
+				    ud_epcmd(0, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
+				    ud_epcmd(1, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
+				    ud_epcmd(EP_RX, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
+				    ud_epcmd(EP_TX, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
+				    ud_epcmd(EP_INT, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0)) {
+					printf("MUNCH USB: connect-done resource setup failed\n");
+					return;
+				}
+				ud.resources_ready = true;
+			}
+			if (ud_ep_config(0, 0, 64, 0) || ud_ep_config(1, 0, 64, 0)) {
+				printf("MUNCH USB: connect-done EP0 setup failed\n");
+				return;
+			}
+			dwc_wr(DALEPENA, 0x3);
+			ud_start_setup();
 			printf("MUNCH USB: connected, speed %u\n", speed);
 		} else if (type == 0) {
 			ud.configured = false;
@@ -1284,26 +1305,7 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active, bool qcom_handoff
 	/* Events: disconnect, USB reset, connect done, link changes and wakeup. */
 	dwc_wr(DEVTEN, 0x1f);
 
-	/*
-	 * DWC3 allocates transfer resources after DEPSTARTCFG, before any
-	 * endpoint configuration. Keep resources across SET_CONFIGURATION and
-	 * SET_INTERFACE, as the Linux DWC3 gadget driver does.
-	 */
-	if (ud_epcmd(0, DEPCMD_DEPSTARTCFG, 0, 0, 0) ||
-	    ud_epcmd(0, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
-	    ud_epcmd(1, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
-	    ud_epcmd(EP_RX, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
-	    ud_epcmd(EP_TX, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
-	    ud_epcmd(EP_INT, DEPCMD_SETTRANSFRESOURCE, 1, 0, 0) ||
-	    ud_ep_config(0, 0, 64, 0) ||
-	    ud_ep_config(1, 0, 64, 0)) {
-		printf("MUNCH USB: endpoint 0 setup failed\n");
-		if (inherited_active) {
-			ud_restore_abl();
-		}
-		return;
-	}
-	dwc_wr(DALEPENA, 0x3);
+	dwc_wr(DALEPENA, 0);
 
 	if (!qcom_handoff) {
 		vm_offset_t qs = ml_io_map(QSCRATCH_PA, 0x100);
@@ -1319,7 +1321,6 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active, bool qcom_handoff
 		}
 	}
 
-	ud_start_setup();
 	dwc_wr(DCTL, dwc_rd(DCTL) | DCTL_RUN_STOP);
 	for (i = 0; i < 500 && (dwc_rd(DSTS) & DSTS_DEVCTRLHLT); i++) {
 		delay(1000);
