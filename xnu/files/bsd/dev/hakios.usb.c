@@ -923,6 +923,10 @@ ud_event(uint32_t ev)
 	if (ep > 1) {
 		return;
 	}
+	if (ud.events < 256) {
+		printf("MUNCH USB: ep%u event type %u status %u state %u\n",
+		    ep, type, status, ud.state);
+	}
 	/*
 	 * Control transfer state machine (Linux dwc3 ep0.c): SETUP completes ->
 	 * request handled; the data stage (if any) is started right away; the
@@ -962,8 +966,13 @@ ud_thread(void *arg __unused, wait_result_t wr __unused)
 	for (;;) {
 		uint32_t count = dwc_rd(GEVNTCOUNT) & 0xffff;
 		if (count) {
+			uint32_t available = count;
+			if (available > UD_EVT_SIZE) {
+				printf("MUNCH USB: invalid event count %u\n", available);
+				available = UD_EVT_SIZE;
+			}
 			ud_sync(UD_EVT, UD_EVT_SIZE);
-			for (uint32_t done = 0; done < count; done += 4) {
+			for (uint32_t done = 0; done < available; done += 4) {
 				uint32_t ev = *(volatile uint32_t *)(ud.dma + UD_EVT + ud.evt_pos);
 				ud.evt_pos = (ud.evt_pos + 4) % UD_EVT_SIZE;
 				if (ud.events++ < 200) {
@@ -971,7 +980,7 @@ ud_thread(void *arg __unused, wait_result_t wr __unused)
 				}
 				ud_event(ev);
 			}
-			dwc_wr(GEVNTCOUNT, count);
+			dwc_wr(GEVNTCOUNT, available);
 		}
 		if ((++ticks % 30000) == 0) {
 			printf("MUNCH USB: ue0 rx %llu tx %llu frames\n", ud.rx_frames, ud.tx_frames);
