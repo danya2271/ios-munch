@@ -629,7 +629,7 @@ static const uint8_t ud_cfg_desc[80] = {
 };
 /* CDC ECM iMACAddress and the phone's own interface address. */
 static const char *const ud_strings[] = {
-	NULL, "ios-munch", "Munch iOS (USB Ethernet)", "0001", "02005E77EE02",
+	NULL, "ios-munch", "Munch iOS (USB Ethernet)", "0001", "02005E77EE01",
 };
 static const uint8_t ud_phone_mac[ETHER_ADDR_LEN] = { 0x02, 0x00, 0x5e, 0x77, 0xee, 0x02 };
 
