@@ -5,7 +5,7 @@ set -eu
 MAC=${MUNCH_USB_MAC:-02:00:5e:77:ee:02}
 ALT_MAC=${MUNCH_USB_MAC_ALT:-02:00:5e:77:ee:01}
 LOGFILE=${1:-}
-TIMEOUT=${MUNCH_USB_TIMEOUT:-120}
+TIMEOUT=${MUNCH_USB_TIMEOUT:-0}
 
 command -v ip >/dev/null 2>&1 || { echo 'munch-usbnet: ip is required' >&2; exit 1; }
 
@@ -39,7 +39,7 @@ while :; do
 		ip -br link >&2 || true
 		if command -v lsusb >/dev/null 2>&1; then
 			echo 'USB devices:' >&2
-			lsusb -nn >&2 || true
+			lsusb >&2 || true
 		fi
 		echo "For USB connect/disconnect events, run \`sudo dmesg -w\` in another terminal before booting." >&2
 		exit 1
