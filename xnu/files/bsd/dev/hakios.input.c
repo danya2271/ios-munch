@@ -217,12 +217,13 @@ hakios_input_init(void)
 	exit_call = thread_call_allocate(exit_hold_elapsed, NULL);
 	hakios_cpufreq_init();
 	hakios_virtio_input_init();
+	hakios_net_init();
+	/* Bring up the diagnostic transport before storage or peripheral probes. */
+	munch_usb_probe();
 	hakios_goodix_init();
 	hakios_buttons_init();
 	hakios_battery_init();
 	hakios_ufs_init();
-	hakios_net_init();
-	munch_usb_probe();
 	hakios_adreno_init();
 	hakios_wifi_init();
 	hakios_adsp_init();
