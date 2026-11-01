@@ -215,6 +215,7 @@ munch_usb_probe(void)
 	int enabled = 0;
 	uint32_t gdscr, cbcr[sizeof(usb_cbcr) / sizeof(usb_cbcr[0])];
 	bool clocks_on = true;
+	bool need_phy_init = false;
 
 	/* munchusb=0 off, 1 reports state only, 2 also starts the USB device */
 	PE_parse_boot_argn("munchusb", &enabled, sizeof(enabled));
@@ -235,8 +236,11 @@ munch_usb_probe(void)
 	}
 	/* DWC3 registers need the GDSC, the master clock and the config-NoC path. */
 	clocks_on = (gdscr & GDSCR_PWR_ON) && !(cbcr[0] & CBCR_CLK_OFF) && !(cbcr[3] & CBCR_CLK_OFF);
-	if (enabled >= 2) {
+	if (enabled >= 2 && !clocks_on) {
+		need_phy_init = true;
 		clocks_on = munch_usb_gcc_start(gcc);
+	} else if (enabled >= 2) {
+		printf("MUNCH USB: inheriting active ABL GCC/GDSC state; no block reset\n");
 	}
 	if (!clocks_on) {
 		printf("MUNCH USB: controller unpowered or unclocked; DWC3 not read\n");
@@ -257,7 +261,7 @@ munch_usb_probe(void)
 	    usb_rd(dwc, 0xc140));
 	vm_offset_t phy = 0;
 	if (enabled >= 2) {
-		if (!munch_usb_phy_init(gcc, &phy)) {
+		if (need_phy_init && !munch_usb_phy_init(gcc, &phy)) {
 			printf("MUNCH USB: QUSB2 PHY initialization failed\n");
 			return;
 		}
