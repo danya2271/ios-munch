@@ -3,9 +3,7 @@
 import argparse
 import gzip
 import hashlib
-import importlib.util
 import json
-import re
 import shutil
 import struct
 import subprocess
@@ -71,7 +69,7 @@ def validate_device_inputs(fd_path, dtb_path):
     return fd, metadata
 
 
-def patch_loader(source, work, config, touch, gpu, sde_backend=False):
+def patch_loader(source, work, config, touch, gpu):
     """Make the generic loader select Munch and load the iosroot system image."""
     loader = source.read_text()
     platform = '''
@@ -200,36 +198,6 @@ static const struct platform platform_munch = {
             raise ValueError('Unexpected chosen device-tree hook')
         loader = loader.replace(chosen, metadata, 1)
 
-    if sde_backend:
-        memory_header = Path(__file__).resolve().parents[3] / 'xnu/files/iokit/Kernel/munch-sde-memory.h'
-        loader = loader.replace('#include "efi.h"', '#include "efi.h"\n#include "munch-sde-memory.h"', 1)
-        (work / 'munch-sde-memory.h').write_bytes(memory_header.read_bytes())
-        allocation = '\tuint64_t rd_size = (pi.ramdisk_size + PAGE_SIZE_MAX - 1) & ~(PAGE_SIZE_MAX - 1);'
-        reservation = allocation + '''
-	uint64_t sde_pa = 0;
-	if (pi.resident_rd != 0) resident_rd_size = pi.resident_rd;
-	if (phys_base > UINT64_MAX - RESIDENT_RD_OFFSET ||
-	    !munch_sde_pool_plan(rd_pa, win_base, win_size,
-	    resident_rd_size ? phys_base + RESIDENT_RD_OFFSET : 0, rd_size, &sde_pa, &rd_pa)) {
-		print("MUNCH: no low SDE reservation fits\\n"); return 0;
-	}
-	print("MUNCH SDE reserved buffers: %x size %x\\n", sde_pa, (uint64_t)MUNCH_SDE_POOL_SIZE);'''
-        if loader.count(allocation) != 1:
-            raise ValueError('Unexpected SDE reservation layout hook')
-        loader = loader.replace(allocation, reservation, 1)
-        if not gpu:
-            overlap = '\t\tif (kern_hi + rd_size > res_pa) {'
-            if loader.count(overlap) != 1:
-                raise ValueError('Unexpected SDE resident-image overlap hook')
-            loader = loader.replace(overlap, '\t\tif (rd_pa + rd_size > res_pa) {', 1)
-        chosen = '\tdt_begin(&w, "chosen");'
-        metadata = chosen + '''
-	uint64_t sde_buffers[2] = {sde_pa, MUNCH_SDE_POOL_SIZE};
-	dt_prop(&w, "munch-sde-buffers", sde_buffers, sizeof(sde_buffers));'''
-        if loader.count(chosen) != 1:
-            raise ValueError('Unexpected SDE chosen device-tree hook')
-        loader = loader.replace(chosen, metadata, 1)
-
     (work / 'loader.c').write_text(loader)
 
 
@@ -243,61 +211,15 @@ def make_cpio(work):
     return path
 
 
-def validate_sde_backend(dtb_path, kernel, native=False):
-    if b'MUNCH SDE: hardware presenter v1' not in kernel or b'unsafe loader handoff refused' not in kernel:
-        raise ValueError('The selected kernel lacks the SDE presenter or safe loader-return hook')
-    inspector = Path(__file__).resolve().parents[1] / 'display/inspect-panel.py'
-    spec = importlib.util.spec_from_file_location('munch_panel', inspector)
-    panel = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(panel)
-    tree = panel.Fdt(dtb_path)
-    selected = re.findall(r'(?:^|\s)msm_drm\.dsi_display0=([^:\s]+)', tree.string('/chosen', 'bootargs'))
-    if selected != [panel.PANEL]:
-        raise ValueError('SDE presentation requires the captured live L11r panel selection')
-    profile = panel.profile(tree)
-    te = tree.cells(panel.MDP + '/' + panel.PANEL, 'qcom,platform-te-gpio')
-    if (profile['type'] != 'dsi_cmd_mode' or profile['controller'] != [0] or profile['phy'] != [0] or
-            profile['lanes'] != [0, 1, 2, 3] or profile['bpp'] != 24 or
-            profile['te_pin'] != 1 or len(te) != 3 or te[1:] != [66, 0] or
-            not profile['te_external'] or not profile['te_check'] or not profile['modes']):
-        raise ValueError('Unsupported L11r command-mode link')
-    geometry = {'qcom,mdss-dsi-panel-width': 1080, 'qcom,mdss-dsi-panel-height': 2400,
-                'qcom,mdss-dsc-slice-width': 540, 'qcom,mdss-dsc-slice-height': 8,
-                'qcom,mdss-dsc-bit-per-component': 8, 'qcom,mdss-dsc-bit-per-pixel': 8,
-                'qcom,compression-mode': 'dsc', 'qcom,display-topology': [1, 1, 1]}
-    if any(any(mode[key] != value for key, value in geometry.items()) for mode in profile['modes']):
-        raise ValueError('Unsupported L11r DSC geometry/topology')
-    if native:
-        if b'MUNCH SDE NATIVE r15' not in kernel or b'loader return refused before CPU shutdown' not in kernel:
-            raise ValueError('The selected kernel lacks native modesetting or native return protection')
-        observed = json.loads((inspector.parent / 'l11r-observed.json').read_text())['profile']['modes'][0]
-        if profile['modes'][0] != observed:
-            raise ValueError('Native mode requires the exact captured L11r 60-Hz timing/PHY/command profile')
-    return profile['panel']
-
-
 def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, gpu,
-         gpu_diagnostics, usb_debug, verbose, extra, sde_probe=False, sde_backend=False, sde_native=False):
+         gpu_diagnostics, usb_debug, verbose, extra):
     if cpus not in (1, 8):
         raise ValueError('Only 1 or 8 CPUs are supported')
-    if type(sde_probe) is not bool or (sde_probe and not gpu):
-        raise ValueError('The SDE probe requires the GPU profile')
-    if type(sde_backend) is not bool or (sde_backend and not gpu):
-        raise ValueError('The SDE backend requires the GPU profile')
-    if type(sde_native) is not bool or (sde_native and not sde_backend):
-        raise ValueError('Native L11r mode requires --sde-backend')
-    if sde_native and any(argument.startswith(('fb_hz=', 'loader_return_after=')) for argument in extra.split()):
-        raise ValueError('Native mode fixes 60 Hz and uses the guarded timed loader return')
-    if any(argument.startswith('munch_sde') for argument in extra.split()):
-        raise ValueError('Use --sde-probe, --sde-backend or --sde-native to select the SDE path')
     config = validate_ios_config(ios_config_path)
     fd, metadata = validate_device_inputs(fd_path, dtb_path)
     kernel = kernel_path.read_bytes()
     if kernel[:4] != b'\xcf\xfa\xed\xfe' or b'XNULDRST' not in kernel:
         raise ValueError('Expected a source-built ARM64 Mach-O with the loader return slot')
-    if sde_probe and b'MUNCH SDE: read-only Kona snapshot' not in kernel:
-        raise ValueError('The selected kernel does not contain the read-only SDE probe')
-    sde_panel = validate_sde_backend(dtb_path, kernel, sde_native) if sde_backend else None
     system_path = Path(config['system']['path'])
     if config['system']['crc32'] != file_crc32(system_path):
         raise ValueError('The iosroot CRC32 record does not match the system image')
@@ -311,19 +233,12 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
     else:
         cmdline = '-v cpus=1 touchscreen=1 buttons=1 loader_return_after=600'
     if gpu:
-        # Start above the floor to avoid first-frame ramp latency; the worker still scales both ways.
+        # Start at UMI's lowest declared OPP while the hardware profile is being verified.
         # gpu_va is required by the Mesa/freedreno bridge before it can hand IOSurface buffers
         # to the kernel.
-        # adreno_speed selects the startup OPP; gpu_dvfs keeps runtime scaling enabled.
-        cmdline += ' gpu=1 adreno_speed=2 gpu_dvfs=1 gpu_va=1'
+        cmdline += ' gpu=1 adreno_speed=1 gpu_va=1'
         if gpu_diagnostics:
             cmdline += ' gpu_log=1 gpu_exact=1'
-    if sde_probe:
-        cmdline += ' munch_sde_probe=1'
-    if sde_backend:
-        cmdline += ' munch_sde=1'
-    if sde_native:
-        cmdline += ' munch_sde_native=1'
     if usb_debug:
         cmdline += ' munchusb=2 munchusblog=1'
     if verbose and '-v' not in cmdline.split():
@@ -335,7 +250,7 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
     with tempfile.TemporaryDirectory(prefix='munch-iosroot-') as directory:
         work = Path(directory)
         shutil.copy2(root / 'xnuloader/efi.h', work / 'efi.h')
-        patch_loader(source, work, config, touch, gpu, sde_backend)
+        patch_loader(source, work, config, touch, gpu)
         (work / 'identity.h').write_bytes(identity)
         subprocess.run(['clang', '--target=aarch64-unknown-windows', '-ffreestanding', '-fno-builtin',
                         '-fno-stack-protector', '-fshort-wchar', '-mgeneral-regs-only', '-O1',
@@ -347,8 +262,6 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
         loader_bytes = (work / 'loader.efi').read_bytes()
         if gpu and (b'munch-scm-metadata' not in loader_bytes or b'MUNCH SCM reserved page' not in loader_bytes):
             raise ValueError('GPU image loader is missing the low SCM metadata reservation')
-        if sde_backend and (b'munch-sde-buffers' not in loader_bytes or b'munch-sde-buffers' not in kernel):
-            raise ValueError('SDE image is missing the loader/kernel reserved-memory contract')
         entries = [('loader.efi', loader_bytes), ('kernel', kernel),
                    ('cmdline', cmdline.encode() + b'\0'), ('ramdisk', helper)]
         if usb_debug:
@@ -378,10 +291,7 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
         report = {**metadata, 'mode': 'iosroot-source-kernel', 'cmdline': cmdline,
                   'requested_cpu_count': cpus, 'touchscreen': touch, 'gpu_requested': gpu,
                   'gpu_diagnostics': gpu_diagnostics, 'usb_debug': usb_debug,
-                  'sde_probe': sde_probe,
-                  'sde_backend': sde_backend, 'sde_panel': sde_panel, 'sde_native': sde_native,
                   'loader_scm_reservation_bytes': 65536 if gpu else 0,
-                  'loader_sde_reservation_bytes': 0x1444000 if sde_backend else 0,
                   'gpu_firmware_external': True, 'ios_version': config['version'], 'ios_build': config['build'],
                   'iosroot_system_sha256': config['system']['sha256'], 'iosroot_system_size': config['system']['size'],
                   'iosroot_helper_sha256': config['root']['sha256'], 'kernel_sha256': digest(kernel),
@@ -404,9 +314,6 @@ if __name__ == '__main__':
     parser.add_argument('--no-touch', dest='touch', action='store_false')
     parser.add_argument('--no-gpu', dest='gpu', action='store_false')
     parser.add_argument('--gpu-diagnostics', action='store_true')
-    parser.add_argument('--sde-probe', action='store_true', help='Enable the read-only Kona SDE snapshot')
-    parser.add_argument('--sde-backend', action='store_true', help='Opt in to qualified L11r hardware presentation; no live-scanout fallback')
-    parser.add_argument('--sde-native', action='store_true', help='Opt in to native L11r 60-Hz SDE handoff; keeps the inherited panel mode')
     parser.add_argument('--usb-debug', action='store_true')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--extra-cmdline', default='')
@@ -414,4 +321,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
     pack(args.fd.resolve(), args.dtb.resolve(), args.kernel.resolve(), args.ios_config.resolve(),
          args.output.resolve(), args.cpus, args.touch, args.gpu, args.gpu_diagnostics,
-         args.usb_debug, args.verbose, args.extra_cmdline, args.sde_probe, args.sde_backend, args.sde_native)
+         args.usb_debug, args.verbose, args.extra_cmdline)
