@@ -3,12 +3,10 @@
  *
  * The phone's USB is a Synopsys DWC3 (USB 2.0 only, maximum-speed
  * high-speed) at 0x0a600000 behind Qualcomm's dwc-usb3-msm wrapper, with a
- * QUSB2 PHY at 0x088e2000; its power domain is the USB30_PRIM GDSC and its
- * clocks come from GCC (offsets from Linux gcc-sdmmagpie.c). ABL uses this
- * controller for fastboot; this probe only reports what state it is left
- * in after `fastboot boot`. It never writes a register, and it touches the
- * DWC3 / PHY register blocks only when the GCC status registers say their
- * power domain and clocks are on (an access to a gated block would hang).
+ * QUSB2 PHY at 0x088e3000 (the adjacent 0x088e2000 register is the EUD
+ * enable status). Its power domain and clocks come from GCC. The live Linux
+ * DT and drivers are the reference for the Kona/Lito reset, clock, and PHY
+ * sequences used below.
  */
 #if defined(ARM64_BOARD_CONFIG_BCM2837)
 #include <sys/param.h>
@@ -52,18 +50,24 @@ static const struct {
 	uint32_t    off;
 } usb_cbcr[] = {
 	{ "master", 0x0f010 },
-	{ "sleep", 0x0f014 },
-	{ "utmi", 0x0f018 },
-	{ "cfg-noc-axi", 0x0502c },
-	{ "aggre-axi", 0x8201c },
-	{ "ahb2phy", 0x6a004 },
+	{ "mock-utmi", 0x0f01c },
+	{ "sleep", 0x0f018 },
+	{ "cfg-noc-axi", 0x0f07c },
+	{ "aggre-axi", 0x0f080 },
 	{ "clkref", 0x8c010 },
 };
 
 #define DWC3_PA                 0x0a600000
 #define DWC3_SIZE               0x0000d000
-#define QUSB2_PA                0x088e2000
-#define QUSB2_SIZE              0x00000400
+#define QUSB2_PA                0x088e3000
+#define QUSB2_SIZE              0x00000120
+#define QUSB2_EUD_PA            0x088e2000
+#define QUSB2_EUD_SIZE          0x00000004
+#define GCC_USB30_PRIM_BCR      0x0f000
+#define GCC_QUSB2PHY_PRIM_BCR  0x12000
+#define GDSCR_SW_COLLAPSE       (1u << 0)
+#define GDSCR_PWR_ON            (1u << 31)
+#define GCC_BRANCH_ENABLE       (1u << 0)
 
 static uint32_t
 usb_rd(vm_offset_t base, uint32_t off)
@@ -71,6 +75,138 @@ usb_rd(vm_offset_t base, uint32_t off)
 	uint32_t v = *(volatile uint32_t *)(base + off);
 	__asm__ volatile ("dmb oshld" ::: "memory");
 	return v;
+}
+
+static void
+usb_wr(vm_offset_t base, uint32_t off, uint32_t v)
+{
+	*(volatile uint32_t *)(base + off) = v;
+	__asm__ volatile ("dsb sy" ::: "memory");
+}
+
+static bool
+munch_usb_gcc_start(vm_offset_t gcc)
+{
+	uint32_t v;
+	static const uint32_t clocks[] = {
+		0x0f07c, /* cfg-noc-axi: Linux iface_clk */
+		0x0f080, /* aggre-axi: Linux bus_aggr_clk */
+		0x0f010, /* master: Linux core_clk */
+		0x0f018, /* sleep */
+		0x0f01c, /* mock UTMI */
+		0x8c010, /* USB3 ref clock / PHY XO */
+	};
+
+	v = usb_rd(gcc, GCC_USB30_PRIM_GDSCR);
+	if (!(v & GDSCR_PWR_ON)) {
+		printf("MUNCH USB: enabling usb30_prim GDSC 0x%08x\n", v);
+		usb_wr(gcc, GCC_USB30_PRIM_GDSCR, v & ~GDSCR_SW_COLLAPSE);
+		for (int i = 0; i < 500; i++) {
+			if (usb_rd(gcc, GCC_USB30_PRIM_GDSCR) & GDSCR_PWR_ON) {
+				break;
+			}
+			delay(1);
+		}
+	}
+	if (!(usb_rd(gcc, GCC_USB30_PRIM_GDSCR) & GDSCR_PWR_ON)) {
+		printf("MUNCH USB: usb30_prim GDSC did not power on\n");
+		return false;
+	}
+
+	/* qcom_reset_map uses reset bit 0 for the USB30 primary block. */
+	v = usb_rd(gcc, GCC_USB30_PRIM_BCR);
+	usb_wr(gcc, GCC_USB30_PRIM_BCR, v | GCC_BRANCH_ENABLE);
+	delay(1000);
+	usb_wr(gcc, GCC_USB30_PRIM_BCR, v & ~GCC_BRANCH_ENABLE);
+	for (unsigned i = 0; i < sizeof(clocks) / sizeof(clocks[0]); i++) {
+		v = usb_rd(gcc, clocks[i]);
+		usb_wr(gcc, clocks[i], v | GCC_BRANCH_ENABLE);
+	}
+	delay(1);
+	printf("MUNCH USB: GCC active GDSC 0x%08x master 0x%08x mock-utmi 0x%08x sleep 0x%08x cfg 0x%08x aggre 0x%08x clkref 0x%08x\n",
+	    usb_rd(gcc, GCC_USB30_PRIM_GDSCR), usb_rd(gcc, 0x0f010),
+	    usb_rd(gcc, 0x0f01c), usb_rd(gcc, 0x0f018), usb_rd(gcc, 0x0f07c),
+	    usb_rd(gcc, 0x0f080), usb_rd(gcc, 0x8c010));
+	return true;
+}
+
+static bool
+munch_usb_phy_write_mask(vm_offset_t phy, uint32_t off, uint32_t mask, uint32_t val)
+{
+	uint32_t old = usb_rd(phy, off);
+	uint32_t next = (old & ~mask) | (val & mask);
+
+	usb_wr(phy, off, next);
+	uint32_t got = usb_rd(phy, off);
+	if ((got & mask) != (val & mask)) {
+		printf("MUNCH USB: QUSB2 write failed off 0x%03x old 0x%08x want 0x%08x got 0x%08x\n",
+		    off, old, val, got);
+		return false;
+	}
+	return true;
+}
+
+static bool
+munch_usb_phy_init(vm_offset_t gcc, vm_offset_t *phy_out)
+{
+	vm_offset_t phy = ml_io_map(QUSB2_PA, QUSB2_SIZE);
+	vm_offset_t eud = ml_io_map(QUSB2_EUD_PA, QUSB2_EUD_SIZE);
+	if (phy == 0 || eud == 0) {
+		printf("MUNCH USB: QUSB2 map failed (phy %p eud %p)\n",
+		    (void *)phy, (void *)eud);
+		return false;
+	}
+
+	uint32_t eud_state = usb_rd(eud, 0);
+	printf("MUNCH USB: QUSB2 base 0x%08x EUD 0x%08x\n", QUSB2_PA, eud_state);
+	if (eud_state != 0) {
+		printf("MUNCH USB: EUD owns the USB2 PHY; refusing conflicting init\n");
+		return false;
+	}
+
+	/* msm_hsphy_reset(): assert for 100-150 us, then deassert. */
+	uint32_t reset = usb_rd(gcc, GCC_QUSB2PHY_PRIM_BCR);
+	usb_wr(gcc, GCC_QUSB2PHY_PRIM_BCR, reset | GCC_BRANCH_ENABLE);
+	delay(100);
+	usb_wr(gcc, GCC_QUSB2PHY_PRIM_BCR, reset & ~GCC_BRANCH_ENABLE);
+	delay(1);
+
+	/*
+	 * This is the reference phy-msm-snps-hs.c sequence. The register block
+	 * is only 0x110 bytes, unlike the older QUSB2 v2 block.
+	 */
+	bool ok = true;
+	ok &= munch_usb_phy_write_mask(phy, 0x94, 1u << 1, 1u << 1);
+	ok &= munch_usb_phy_write_mask(phy, 0x50, 1u << 1, 1u << 1);
+	ok &= munch_usb_phy_write_mask(phy, 0x54, 0x7u << 4, 0);
+	ok &= munch_usb_phy_write_mask(phy, 0x58, 1u << 5, 1u << 5);
+	ok &= munch_usb_phy_write_mask(phy, 0xa0, 0x3u, 0x2u);
+	ok &= munch_usb_phy_write_mask(phy, 0x58, 1u << 4, 1u << 4);
+	ok &= munch_usb_phy_write_mask(phy, 0x60, 1u << 0, 1u << 0);
+
+	/* Munch live-DT param_override_seq. */
+	usb_wr(phy, 0x6c, 0xe7);
+	usb_wr(phy, 0x70, 0xc9);
+	usb_wr(phy, 0x74, 0x21);
+	/* Munch global variant sequence, matching get_hw_country_version()==Global. */
+	usb_wr(phy, 0x6c, 0xe5);
+	usb_wr(phy, 0x70, 0x79);
+	usb_wr(phy, 0x74, 0x21);
+
+	ok &= munch_usb_phy_write_mask(phy, 0x5c, 1u << 0, 1u << 0);
+	ok &= munch_usb_phy_write_mask(phy, 0x64, (1u << 2) | (1u << 3), (1u << 2) | (1u << 3));
+	ok &= munch_usb_phy_write_mask(phy, 0x3c, 1u << 0, 1u << 0);
+	ok &= munch_usb_phy_write_mask(phy, 0x50, 1u << 1, 0);
+	ok &= munch_usb_phy_write_mask(phy, 0x64, 1u << 3, 0);
+	ok &= munch_usb_phy_write_mask(phy, 0x94, 1u << 1, 0);
+
+	printf("MUNCH USB: QUSB2 init %s CFG0 0x%08x UTMI0 0x%08x UTMI5 0x%08x COMMON0 0x%08x COMMON1 0x%08x CTRL1 0x%08x CTRL2 0x%08x REFCLK 0x%08x OV0 0x%08x OV1 0x%08x OV2 0x%08x\n",
+	    ok ? "done" : "FAILED", usb_rd(phy, 0x94), usb_rd(phy, 0x3c),
+	    usb_rd(phy, 0x50), usb_rd(phy, 0x54), usb_rd(phy, 0x58),
+	    usb_rd(phy, 0x60), usb_rd(phy, 0x64), usb_rd(phy, 0xa0),
+	    usb_rd(phy, 0x6c), usb_rd(phy, 0x70), usb_rd(phy, 0x74));
+	*phy_out = phy;
+	return ok;
 }
 
 void
@@ -98,7 +234,10 @@ munch_usb_probe(void)
 		    (cbcr[i] & CBCR_CLK_OFF) ? "off" : "on");
 	}
 	/* DWC3 registers need the GDSC, the master clock and the config-NoC path. */
-	clocks_on = (gdscr & (1u << 31)) && !(cbcr[0] & CBCR_CLK_OFF) && !(cbcr[3] & CBCR_CLK_OFF);
+	clocks_on = (gdscr & GDSCR_PWR_ON) && !(cbcr[0] & CBCR_CLK_OFF) && !(cbcr[3] & CBCR_CLK_OFF);
+	if (enabled >= 2) {
+		clocks_on = munch_usb_gcc_start(gcc);
+	}
 	if (!clocks_on) {
 		printf("MUNCH USB: controller unpowered or unclocked; DWC3 not read\n");
 		return;
@@ -116,32 +255,34 @@ munch_usb_probe(void)
 	printf("MUNCH USB: DWC3 GEVNTADR 0x%08x%08x GEVNTSIZ 0x%08x GEVNTCOUNT 0x%08x GHWPARAMS0 0x%08x\n",
 	    usb_rd(dwc, 0xc404), usb_rd(dwc, 0xc400), usb_rd(dwc, 0xc408), usb_rd(dwc, 0xc40c),
 	    usb_rd(dwc, 0xc140));
+	vm_offset_t phy = 0;
 	if (enabled >= 2) {
+		if (!munch_usb_phy_init(gcc, &phy)) {
+			printf("MUNCH USB: QUSB2 PHY initialization failed\n");
+			return;
+		}
 		munch_usb_gadget_start(dwc);
 	}
-	if (cbcr[5] & CBCR_CLK_OFF) {
-		printf("MUNCH USB: ahb2phy clock off; QUSB2 PHY not read\n");
-		return;
+	if (phy == 0) {
+		phy = ml_io_map(QUSB2_PA, QUSB2_SIZE);
 	}
-	vm_offset_t phy = ml_io_map(QUSB2_PA, QUSB2_SIZE);
 	if (phy == 0) {
 		return;
 	}
-	/* DT qcom,qusb-phy-reg-offset order (Linux phy-msm-qusb-v2.c): PORT_TUNE1 0x240,
-	 * PLL_COMMON_STATUS_ONE 0x1a0, PWR_CTRL1 0x210, INTR_CTRL 0x230,
-	 * PLL_CORE_INPUT_OVERRIDE 0x0a8, TEST1 0x254. */
-	printf("MUNCH USB: QUSB2 PLL_STATUS 0x%08x PWR_CTRL1 0x%08x PORT_TUNE1 0x%08x TEST1 0x%08x\n",
-	    usb_rd(phy, 0x1a0), usb_rd(phy, 0x210), usb_rd(phy, 0x240), usb_rd(phy, 0x254));
+	printf("MUNCH USB: QUSB2 final CFG0 0x%08x UTMI0 0x%08x UTMI5 0x%08x COMMON0 0x%08x COMMON1 0x%08x CTRL1 0x%08x CTRL2 0x%08x REFCLK 0x%08x\n",
+	    usb_rd(phy, 0x94), usb_rd(phy, 0x3c), usb_rd(phy, 0x50),
+	    usb_rd(phy, 0x54), usb_rd(phy, 0x58), usb_rd(phy, 0x60),
+	    usb_rd(phy, 0x64), usb_rd(phy, 0xa0));
 }
 
 /*
  * Step 2: USB device mode with only the default control endpoint, enough
- * for the host to enumerate the phone (boot-arg munchusb=2). ABL leaves
- * the DWC3 powered, clocked, in device mode and halted, with the PHY set
- * up, so only the device controller is restarted: soft reset, an event
- * buffer in our memory, endpoint 0, run. Events are polled from a kernel
- * thread (no interrupt), like the UFS driver. DMA is not cache coherent
- * (DT qcom,gsi-disable-io-coherency): buffers are cleaned/invalidated.
+ * for the host to enumerate the phone (boot-arg munchusb=2). The probe
+ * brings up the inherited GCC/GDSC and QUSB2 state, then restarts the
+ * device controller: soft reset, an event buffer in our memory, endpoint 0,
+ * run. Events are polled from a kernel thread (no interrupt), like the UFS
+ * driver. DMA is not cache coherent (DT qcom,gsi-disable-io-coherency):
+ * buffers are cleaned/invalidated.
  * Register layout and the control-transfer state machine follow the
  * Synopsys DWC3 databook as used by Linux drivers/usb/dwc3 (gadget.c,
  * ep0.c).
