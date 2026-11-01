@@ -218,7 +218,7 @@ munch_usb_probe(void)
 	bool need_phy_init = false;
 	bool inherited_active = false;
 
-	/* munchusb=0 off, 1 reports state only, 2 starts USB, 3 takes over USB */
+	/* munchusb=0 off, 1 reports state only, 2 safe probe, 3 takes over USB */
 	PE_parse_boot_argn("munchusb", &enabled, sizeof(enabled));
 	if (!enabled) {
 		return;
@@ -262,7 +262,7 @@ munch_usb_probe(void)
 	    usb_rd(dwc, 0xc404), usb_rd(dwc, 0xc400), usb_rd(dwc, 0xc408), usb_rd(dwc, 0xc40c),
 	    usb_rd(dwc, 0xc140));
 	vm_offset_t phy = 0;
-	if (enabled >= 2 && !inherited_active) {
+	if (enabled >= 3 || (enabled >= 2 && !inherited_active)) {
 		if (need_phy_init && !munch_usb_phy_init(gcc, &phy)) {
 			printf("MUNCH USB: QUSB2 PHY initialization failed\n");
 			return;
@@ -347,6 +347,7 @@ munch_usb_probe(void)
 
 #define DEPCMD_SETEPCONFIG      1
 #define DEPCMD_SETTRANSFRESOURCE 2
+#define DEPCMD_ENDTRANSFER      8
 #define DEPCMD_SETSTALL         4
 #define DEPCMD_STARTTRANSFER    6
 #define DEPCMD_DEPSTARTCFG      9
@@ -454,6 +455,27 @@ ud_epcmd(unsigned ep, uint32_t cmd, uint32_t p0, uint32_t p1, uint32_t p2)
 	}
 	printf("MUNCH USB: ep%u cmd 0x%x timeout\n", ep, cmd & 0xf);
 	return -1;
+}
+
+static void
+ud_handoff_from_abl(void)
+{
+	uint32_t enabled = dwc_rd(DALEPENA);
+
+	/* Stop event generation before replacing ABL's event ring. */
+	dwc_wr(DEVTEN, 0);
+	for (unsigned ep = 0; ep < 16; ep++) {
+		if (!(enabled & (1u << ep))) {
+			continue;
+		}
+		if (ud_epcmd(ep, DEPCMD_ENDTRANSFER, 0, 0, 0) != 0) {
+			printf("MUNCH USB: ABL ep%u end transfer failed\n", ep);
+		}
+	}
+	dwc_wr(DALEPENA, 0);
+	dwc_wr(GEVNTCOUNT, dwc_rd(GEVNTCOUNT) & 0xffff);
+	__asm__ volatile ("dsb sy" ::: "memory");
+	printf("MUNCH USB: ABL handoff complete (old endpoints 0x%08x)\n", enabled);
 }
 
 /* One TRB (at DMA offset trb) on physical endpoint ep. */
@@ -1071,6 +1093,9 @@ munch_usb_gadget_start(vm_offset_t dwc, bool inherited_active)
 	dwc_wr(DCTL, dwc_rd(DCTL) & ~DCTL_RUN_STOP);
 	for (int stop = 0; stop < 500 && !(dwc_rd(DSTS) & DSTS_DEVCTRLHLT); stop++) {
 		delay(1000);
+	}
+	if (inherited_active) {
+		ud_handoff_from_abl();
 	}
 
 	/*
