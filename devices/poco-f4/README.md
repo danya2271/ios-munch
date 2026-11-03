@@ -10,6 +10,8 @@ Adreno 650 hardware drawing is confirmed with the r4 diagnostic. The user confir
 Intermittent rendering glitches while swiping remain under investigation.
 Audio, Wi-Fi and modem support are not established. See
 TOUCH-BRINGUP.md and GPU-BRINGUP.md for the current driver work.
+See [USB-ETHERNET.md](USB-ETHERNET.md) for USB Ethernet live logging, image
+build profiles, and boot commands.
 
 A first iOS 16.5 (20F66) attempt is prepared in loader/: a verified local APFS
 system image staged in iosroot, a 4-MiB helper RAM disk, and a small RAM boot
