@@ -150,10 +150,6 @@ static const struct platform platform_munch = {
 
     if usb_autoboot:
         one_shot_usb = '''\tif (have_payload) {
-\t\tif (!usb_stop_for_kernel()) {
-\t\t\tprint("usb: could not release the Qualcomm USB protocol; kernel not started\\n");
-\t\t\treboot();
-\t\t}
 '''
         if touch:
             one_shot_usb += '''\t\ttouch_handoff_ready = 0;
@@ -166,6 +162,25 @@ static const struct platform platform_munch = {
 \t\t\ttouch_restore();
 \t\t\ttouch_power_enable_end();
 \t\t\treboot();
+\t\t}
+'''
+        one_shot_usb += '''\t\tif (!usb_start()) {
+\t\t\tprint("usb: could not start Qualcomm USB protocol for one-shot handoff\\n");
+'''
+        if touch:
+            one_shot_usb += '''\t\t\ttouch_restore();
+\t\t\ttouch_power_enable_end();
+'''
+        one_shot_usb += '''\t\t\treboot();
+\t\t}
+\t\tif (!usb_stop_for_kernel()) {
+\t\t\tprint("usb: could not release the Qualcomm USB protocol; kernel not started\\n");
+'''
+        if touch:
+            one_shot_usb += '''\t\t\ttouch_restore();
+\t\t\ttouch_power_enable_end();
+'''
+        one_shot_usb += '''\t\t\treboot();
 \t\t}
 '''
         one_shot_usb += '''\t\trun_kernel(0, 0);
