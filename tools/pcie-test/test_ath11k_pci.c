@@ -51,6 +51,7 @@ static struct {
 	bool bad_fence_worker, bad_fence_ipcr;
 	bool refuse_fence;
 	bool hif_closed;
+	unsigned cold_boot_calls;
 } model;
 
 static int
@@ -302,6 +303,14 @@ ath11k_core_init(struct ath11k_base *base)
 	return -failure(FAIL_CORE);
 }
 
+int
+ath11k_qmi_fwreset_from_cold_boot(struct ath11k_base *base)
+{
+	assert(base == model.base && model.binding == &base->qmi.handle && model.irqs);
+	model.cold_boot_calls++;
+	return 0;
+}
+
 static int
 close_admission(void *owner)
 {
@@ -463,6 +472,7 @@ test_success(void)
 		struct lx_qca_pci *state;
 		assert(lx_qca_pci_probe(&model.device, &hif, &operations, &model, &state) == 0 && state != NULL);
 		assert(lx_qca_pci_owner(model.base) == &model && !model.closed);
+		assert(model.cold_boot_calls == 1);
 		if (special != 0) {
 			set_bit(ATH11K_FLAG_QMI_FAIL, &model.base->dev_flags);
 		}
@@ -482,6 +492,7 @@ test_probe_failures(void)
 		struct lx_qca_pci *state;
 		assert(lx_qca_pci_probe(&model.device, &hif, &operations, &model, &state) < 0);
 		assert(model.fail_site == FAIL_NONE);
+		assert(model.cold_boot_calls == 0);
 		check_clean(state);
 		injected++;
 	}

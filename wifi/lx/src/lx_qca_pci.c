@@ -352,6 +352,7 @@ lx_qca_pci_probe(struct device *device, const struct ath11k_hif_ops *hif,
 		goto fail;
 	}
 	state->core_ready = true;
+	(void)ath11k_qmi_fwreset_from_cold_boot(base);
 	return 0;
 fail:
 	{
