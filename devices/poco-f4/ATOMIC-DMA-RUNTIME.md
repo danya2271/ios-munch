@@ -117,13 +117,16 @@ hook; that hook must schedule external work, not synchronously stop/recover.
 4. Bind HIF before platform IRQ attachment, then invoke core initialization.
    Resource identity includes the arena's endpoint and bound Linux device.
 
-Stop first closes platform and arena admission, masks/drains HIF work, invokes
-the mandatory platform fence and closes the endpoint. The existing adapter
-validates worker/IPCR/DMA quiescence before driver cleanup. HIF destruction and
-arena retirement precede platform resource release. The provider must preserve
-the resources needed by cleanup and satisfy the existing adapter fence contract.
-Failed close/fence/drain/release or outstanding allocations retain the runtime
-handle for retry; they do not free it or start a replacement controller.
+Stop closes platform admission first, then drains ath11k core/QMI work while the
+DMA arena still admits the driver's normal unmap/free operations. It unbinds
+QMI, closes and drains the HIF, closes arena admission, and only then invokes
+the mandatory platform fence and closes the endpoint. Worker/IPCR/DMA status
+checks follow that fence. IRQ detachment and CE/HAL/core memory destruction
+happen only after fencing; final HIF/arena/platform release happens last.
+Completed stages are retained across retries, including HIF close when a later
+release callback fails. Failed close/fence/drain/release or outstanding
+allocations retain the runtime handle; they do not free it or start a
+replacement controller.
 
 Recovery fully stops the previous epoch before asking the provider to prepare
 fresh resources. This orchestrates lifetime; it does not implement the actual

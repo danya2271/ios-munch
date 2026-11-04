@@ -59,14 +59,13 @@ static int runtime_attach(void *owner, struct ath11k_base *base)
 static int runtime_close(void *owner)
 {
 	struct lx_qca_runtime *runtime = owner;
-	int error = runtime->operations.platform.close_admission(runtime->owner);
-	if (error == 0 && runtime->resources.arena != NULL) { error = hakios_dma_arena_close(runtime->resources.arena); }
-	return error;
+	return runtime->operations.platform.close_admission(runtime->owner);
 }
 static int runtime_fence(void *owner)
 {
 	struct lx_qca_runtime *runtime = owner;
-	int error = runtime->operations.platform.fence(runtime->owner);
+	int error = runtime->resources.arena != NULL ? hakios_dma_arena_close(runtime->resources.arena) : 0;
+	if (error == 0) { error = runtime->operations.platform.fence(runtime->owner); }
 	if (error == 0 && runtime->resources.dma != NULL) { error = hakios_dma_endpoint_close(runtime->resources.dma); }
 	return error;
 }

@@ -24,6 +24,8 @@ struct lx_qca_pci {
 	bool bound;
 	bool irqs_attempted;
 	bool core_ready;
+	bool workers_cancelled;
+	bool hif_closed;
 	bool closed;
 	bool fenced;
 };
@@ -208,23 +210,20 @@ lx_qca_pci_remove(struct lx_qca_pci **driver)
 		if (error != 0) {
 			return qca_native_error(error);
 		}
-		if (state->resources.hif != NULL && (error = lx_qca_hif_close(state->resources.hif)) != 0) {
-			return error;
-		}
 		state->closed = true;
 	}
-	if (!state->fenced && (error = qca_fence(state)) != 0) {
-		return error;
-	}
 	if (base != NULL) {
-		if (state->core_ready) {
-			cancel_work_sync(&base->qmi.event_work);
+		if (!state->workers_cancelled) {
+			if (state->core_ready) {
+				cancel_work_sync(&base->qmi.event_work);
+			}
+			cancel_work_sync(&base->reset_work);
+			cancel_work_sync(&base->dump_work);
+			cancel_work_sync(&base->restart_work);
+			cancel_work_sync(&base->update_11d_work);
+			del_timer_sync(&base->rx_replenish_retry);
+			state->workers_cancelled = true;
 		}
-		cancel_work_sync(&base->reset_work);
-		cancel_work_sync(&base->dump_work);
-		cancel_work_sync(&base->restart_work);
-		cancel_work_sync(&base->update_11d_work);
-		del_timer_sync(&base->rx_replenish_retry);
 		if (state->core_ready) {
 			if (test_bit(ATH11K_FLAG_QMI_FAIL, &base->dev_flags)) {
 				base->hif.ops->power_down(base, false);
@@ -245,6 +244,16 @@ lx_qca_pci_remove(struct lx_qca_pci **driver)
 			return qca_native_error(error);
 		}
 		state->bound = false;
+	}
+	if (state->resources.hif != NULL && !state->hif_closed) {
+		error = lx_qca_hif_close(state->resources.hif);
+		if (error != 0) {
+			return error;
+		}
+		state->hif_closed = true;
+	}
+	if (!state->fenced && (error = qca_fence(state)) != 0) {
+		return error;
 	}
 	if (state->irqs_attempted) {
 		error = state->operations.detach_irqs(state->owner);
