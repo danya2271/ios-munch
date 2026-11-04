@@ -21,8 +21,11 @@
 #include <libkern/libkern.h>
 #include <mach/mach_types.h>
 #include <mach/vm_param.h>
+#include <pexpert/device_tree.h>
 #include <pexpert/pexpert.h>
 #include <sys/errno.h>
+#include <sys/hakios.dma.arena.h>
+#include <sys/hakios.qca6390.h>
 #include <sys/random.h>
 #include <sys/hakios.input.h>
 #include <sys/hakios.lx.h>
@@ -37,6 +40,40 @@ extern kern_return_t thread_terminate(thread_t thread);
 extern void thread_set_thread_name(thread_t thread, const char *name);
 
 #define say hakios_wifi_say
+
+static bool lx_munch_platform(void);
+
+__attribute__((weak)) int
+lx_backend_is_pci(void)
+{
+	return 0;
+}
+
+__attribute__((weak)) int
+lx_os_qca_platform(struct hakios_lx_qca_platform *platform, void **owner,
+    struct hakios_dma_arena_config *config)
+{
+	const uint32_t required = HAKIOS_QCA6390_RC0_HANDOFF | HAKIOS_QCA6390_DMA_DOMAIN |
+	    HAKIOS_QCA6390_MSI_ROUTES;
+	uint32_t missing = required;
+	int error;
+
+	if (platform == NULL || owner == NULL || config == NULL) {
+		return EINVAL;
+	}
+	bzero(platform, sizeof(*platform));
+	*owner = NULL;
+	bzero(config, sizeof(*config));
+	error = hakios_qca6390_preflight(required, &missing);
+	if (error != 0) {
+		say("lx: QCA6390 platform owner unavailable: preflight error %d, missing %#x (RC0=%u DMA=%u MSI=%u)\n",
+		    error, missing, (missing & HAKIOS_QCA6390_RC0_HANDOFF) != 0,
+		    (missing & HAKIOS_QCA6390_DMA_DOMAIN) != 0, (missing & HAKIOS_QCA6390_MSI_ROUTES) != 0);
+		return error;
+	}
+	say("lx: QCA6390 preflight passed but no runtime callback bundle is registered\n");
+	return EPROTO;
+}
 
 static LCK_GRP_DECLARE(lx_lock_group, "hakios-lx");
 static LCK_MTX_DECLARE(lx_lock, &lx_lock_group);
@@ -65,6 +102,15 @@ lx_os_radio_memory(unsigned long size, unsigned long long *address)
 {
 	vm_offset_t cached = 0, uncached;
 	uint64_t physical;
+	uint32_t missing;
+
+	if (lx_munch_platform() && hakios_qca6390_preflight(
+	    HAKIOS_QCA6390_RC0_HANDOFF | HAKIOS_QCA6390_DMA_DOMAIN, &missing) != 0) {
+		if (address != NULL) {
+			*address = 0;
+		}
+		return NULL;
+	}
 
 	size = round_page(size);
 	if (kmem_alloc_contig(kernel_map, &cached, size, 0, 0, 0, KMA_KOBJECT | KMA_ZERO | KMA_DATA, VM_KERN_MEMORY_IOKIT) !=
@@ -79,7 +125,8 @@ lx_os_radio_memory(unsigned long size, unsigned long long *address)
 	}
 	__asm__ volatile ("dsb sy");
 	uncached = ml_io_map_unmappable(physical, size, VM_WIMG_WCOMB);
-	if (uncached == 0 || !hakios_wifi_radio_map(physical, size, address)) {
+	if (uncached == 0 || !(lx_munch_platform() ? hakios_qca6390_dma_map(physical, size, address) :
+	    hakios_wifi_radio_map(physical, size, address))) {
 		return NULL;
 	}
 	return (void *)uncached;
@@ -88,8 +135,14 @@ lx_os_radio_memory(unsigned long size, unsigned long long *address)
 void *
 lx_os_map_registers(unsigned long long physical, unsigned long size)
 {
-	unsigned long long page = trunc_page(physical);
-	vm_offset_t mapped = ml_io_map_unmappable(page, round_page(physical + size) - page, VM_WIMG_IO);
+	unsigned long long page;
+	vm_offset_t mapped;
+
+	if (lx_munch_platform()) {
+		return NULL;
+	}
+	page = trunc_page(physical);
+	mapped = ml_io_map_unmappable(page, round_page(physical + size) - page, VM_WIMG_IO);
 
 	return mapped == 0 ? NULL : (void *)(mapped + (physical - page));
 }
@@ -379,6 +432,7 @@ static struct {
 	bool attached;
 } lx_vector[LX_VECTORS];
 static uint32_t lx_irq_first;                   /* the GIC's number of vector 0; 0: no interrupts */
+static bool lx_irq_qca;                         /* Munch owns the bank through the QCA provider */
 static uint32_t lx_irq_pending;                 /* the vectors that have fired and are not dealt with yet */
 static uint32_t lx_irq_running;                 /* the vectors whose function the thread is in */
 static thread_t lx_irq_thread;
@@ -388,7 +442,12 @@ static LCK_MTX_DECLARE(lx_irq_lock, &lx_lock_group);
 static void
 lx_irq_arrived(__unused void *context, uint32_t intid)
 {
-	gic_v3_spi_mask(intid);
+	if (lx_irq_first == 0 || intid < lx_irq_first || intid - lx_irq_first >= LX_VECTORS) {
+		return;
+	}
+	if (!lx_irq_qca) {
+		gic_v3_spi_mask(intid);
+	}
 	os_atomic_or(&lx_irq_pending, 1u << (intid - lx_irq_first), relaxed);
 	thread_wakeup((event_t)&lx_irq_pending);
 }
@@ -432,10 +491,12 @@ lx_os_irq_msi(unsigned long long *address, unsigned *data)
 {
 	uint32_t first = 0;
 
-	if (!hakios_wifi_radio_msi(address, data, &first)) {
+	if (!(lx_munch_platform() ? hakios_qca6390_msi(address, data, &first) :
+	    hakios_wifi_radio_msi(address, data, &first))) {
 		return 0;
 	}
 	lx_irq_first = first;
+	lx_irq_qca = lx_munch_platform();
 	return 1;
 }
 
@@ -443,6 +504,13 @@ int
 lx_os_irq_attach(unsigned vector, void (*function)(void *), void *argument)
 {
 	kern_return_t kr;
+	uint32_t missing;
+	int error;
+
+	if (lx_munch_platform() && (error = hakios_qca6390_preflight(
+	    HAKIOS_QCA6390_RC0_HANDOFF | HAKIOS_QCA6390_DMA_DOMAIN | HAKIOS_QCA6390_MSI_ROUTES, &missing)) != 0) {
+		return error;
+	}
 
 	if (vector >= LX_VECTORS || lx_irq_first == 0 || function == NULL) {
 		return EINVAL;
@@ -461,13 +529,25 @@ lx_os_irq_attach(unsigned vector, void (*function)(void *), void *argument)
 	lx_vector[vector].argument = argument;
 	lx_vector[vector].attached = true;
 	lck_mtx_unlock(&lx_irq_lock);
-	if ((kr = gic_v3_spi_attach(lx_irq_first + vector, true, lx_irq_arrived, NULL)) != KERN_SUCCESS) {
+	if (lx_irq_qca) {
+		int qca_error = hakios_qca6390_irq_attach(vector, lx_irq_arrived, NULL);
+		if (qca_error != 0) {
+			lck_mtx_lock(&lx_irq_lock);
+			lx_vector[vector].attached = false;
+			lck_mtx_unlock(&lx_irq_lock);
+			return qca_error;
+		}
+	} else if ((kr = gic_v3_spi_attach(lx_irq_first + vector, true, lx_irq_arrived, NULL)) != KERN_SUCCESS) {
 		lck_mtx_lock(&lx_irq_lock);
 		lx_vector[vector].attached = false;
 		lck_mtx_unlock(&lx_irq_lock);
 		return kr == KERN_NAME_EXISTS ? EBUSY : EINVAL;
 	}
-	gic_v3_spi_mask(lx_irq_first + vector);
+	if (lx_irq_qca) {
+		(void)hakios_qca6390_irq_enable(vector, false);
+	} else {
+		gic_v3_spi_mask(lx_irq_first + vector);
+	}
 	return 0;
 }
 
@@ -475,7 +555,11 @@ void
 lx_os_irq_enable(unsigned vector)
 {
 	if (vector < LX_VECTORS && lx_vector[vector].attached) {
-		gic_v3_spi_unmask(lx_irq_first + vector);
+		if (lx_irq_qca) {
+			(void)hakios_qca6390_irq_enable(vector, true);
+		} else {
+			gic_v3_spi_unmask(lx_irq_first + vector);
+		}
 	}
 }
 
@@ -485,7 +569,11 @@ lx_os_irq_disable(unsigned vector)
 	if (vector >= LX_VECTORS || !lx_vector[vector].attached) {
 		return;
 	}
-	gic_v3_spi_mask(lx_irq_first + vector);
+	if (lx_irq_qca) {
+		(void)hakios_qca6390_irq_enable(vector, false);
+	} else {
+		gic_v3_spi_mask(lx_irq_first + vector);
+	}
 	if (current_thread() == lx_irq_thread) {
 		return;                         /* (from the vector's own function, or another's: nothing to wait for) */
 	}
@@ -499,9 +587,13 @@ lx_os_irq_disable(unsigned vector)
 void
 lx_os_irq_detach_all(void)
 {
-	for (unsigned v = 0; v < LX_VECTORS; v++) {
-		if (lx_vector[v].attached) {
-			gic_v3_spi_detach(lx_irq_first + v);
+	if (lx_irq_qca) {
+		(void)hakios_qca6390_irq_detach_all();
+	} else {
+		for (unsigned v = 0; v < LX_VECTORS; v++) {
+			if (lx_vector[v].attached) {
+				gic_v3_spi_detach(lx_irq_first + v);
+			}
 		}
 	}
 	lck_mtx_lock(&lx_irq_lock);
@@ -513,12 +605,17 @@ lx_os_irq_detach_all(void)
 	}
 	lck_mtx_unlock(&lx_irq_lock);
 	os_atomic_store(&lx_irq_pending, 0, relaxed);
+	lx_irq_first = 0;
+	lx_irq_qca = false;
 }
 
 unsigned long long
 lx_os_irq_count(unsigned vector)
 {
-	return vector < LX_VECTORS && lx_irq_first != 0 ? gic_v3_spi_count(lx_irq_first + vector) : 0;
+	if (vector >= LX_VECTORS || lx_irq_first == 0) {
+		return 0;
+	}
+	return lx_irq_qca ? hakios_qca6390_irq_count(vector) : gic_v3_spi_count(lx_irq_first + vector);
 }
 
 /* ---- the station (sys/hakios.sta.h) --------------------------------------------------------------------- */
@@ -563,9 +660,19 @@ lx_transmit(__unused const unsigned char *frame, __unused unsigned long length)
 	return ENXIO;
 }
 
+static bool
+lx_munch_platform(void)
+{
+	return hakios_qca6390_platform_matches();
+}
+
 int
 hakios_lx_start(void)
 {
+	if (lx_munch_platform() && !lx_backend_is_pci()) {
+		say("lx: refusing the WCN6750 AHB backend on Munch; its QCA6390 PCIe/MHI backend is not available\n");
+		return (ENOTSUP);
+	}
 	return lx_start();
 }
 
@@ -573,10 +680,20 @@ void
 hakios_lx_stop(void)
 {
 	lx_stop();
+	if (lx_munch_platform()) {
+		int error = hakios_qca6390_release();
+		if (error != 0) {
+			say("lx: QCA6390 release retained RC0 ownership: %d\n", error);
+		}
+	}
 }
 
 int
 hakios_lx_prepare(void)
 {
+	if (lx_munch_platform() && !lx_backend_is_pci()) {
+		say("lx: refusing Redwood AHB preparation on Munch; QCA6390 PCIe/MHI runtime is not available\n");
+		return (ENOTSUP);
+	}
 	return lx_prepare();
 }

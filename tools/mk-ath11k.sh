@@ -15,9 +15,8 @@
 #                         radio's bus) written on the handful of calls that the kernel's
 #                         bsd/dev/hakios.lx.c offers (bsd/sys/hakios.lx.h of the kernel tree).
 #
-# Not all of the driver is built yet: DRIVER below lists the files that are. What they call in
-# the files that are not becomes a function that says its name in the log and answers 0
-# (out/stubs.txt lists them), unless wifi/lx/src has one that does more.
+# DRIVER below lists the ath11k files that are built. Any unresolved ath11k function is a hard
+# error: a success-shaped stub can make an incomplete bus or data path look operational.
 #
 # Everything is compiled as FreeBSD kernel code for an Apple arm64 kernel and tied into one
 # object that shows nothing but its entry points; the kernel links it when it is there
@@ -30,7 +29,7 @@
 #
 # What comes out, in xnu-deps/build/ath11k:
 #   src/ath11k/        the driver's files, untouched       freebsd/sys/   FreeBSD's, patched
-#   out/ath11k.o       the object for the kernel           out/stubs.txt  what is not there yet
+#   out/ath11k.o       the object for the kernel           out/undefined.txt unresolved names
 # Needs on this machine: curl, tar, xz, sha256sum, patch, awk, clang, and the kernel's linker
 # (xnu-deps/host/bin/ld64, see xnu-deps/setup.sh). The two archives are 150 and 253 MB and are kept.
 #
@@ -114,6 +113,22 @@ if [ ! -d gen ]; then
 fi
 
 # --- compile: the driver's files that are built so far, and ours
+ATH11K_PROFILE=${ATH11K_PROFILE:-AHB}
+case "$ATH11K_PROFILE" in
+AHB)
+	BUS_DEFINES="-DCONFIG_ATH11K_AHB"
+	LX_SOURCES=("$W/src/lx_base.c" "$W/src/lx_80211.c" "$W/src/lx_bus.c" "$W/src/lx_common.c" "$W/src/lx_wpa.c")
+	;;
+PCI)
+	BUS_DEFINES="-DCONFIG_ATH11K_PCI -DLX_QCA_NATIVE_DMA"
+	LX_SOURCES=("$W/src/lx_base.c" "$W/src/lx_80211.c" "$W/src/lx_common.c" "$W/src/lx_qca_dma.c"
+		"$W/src/lx_qca_entry.c" "$W/src/lx_qca_hif.c" "$W/src/lx_qca_pci.c" "$W/src/lx_qca_runtime.c" "$W/src/lx_wpa.c")
+	;;
+*)
+	echo "mk-ath11k.sh: ATH11K_PROFILE must be AHB or PCI (got $ATH11K_PROFILE)" >&2
+	exit 2
+	;;
+esac
 DRIVER="core hal qmi ce hw fw htc wmi mac reg peer dp dp_rx dp_tx hal_rx hal_tx dbring p2p"
 CC="clang -target arm64-apple-ios16.5"
 LD=$ROOT/xnu-deps/host/bin/ld64
@@ -123,16 +138,21 @@ CFLAGS="-mkernel -mgeneral-regs-only -fno-builtin -fno-common -ffreestanding -fn
 	-I$W/include -Igen -I$S -I$S/contrib/ck/include
 	-I$S/compat/linuxkpi/common/include -I$S/compat/linuxkpi/dummy/include
 	-include $S/compat/linuxkpi/common/include/linux/kconfig.h -DLINUXKPI_VERSION=70000"
-DFLAGS="-Isrc/ath11k -Isrc -include $W/include/lx_prelude.h -DCONFIG_ATH11K_AHB -DCONFIG_ATH11K_DEBUG
+DFLAGS="-Isrc/ath11k -Isrc -include $W/include/lx_prelude.h $BUS_DEFINES -DCONFIG_ATH11K_DEBUG
 	-DKBUILD_MODNAME=\"ath11k\""
 # two headers are the kernel's: what it offers this object (wifi/lx/include/lx_os.h), and its QMI
 # helpers (wifi/lx/include/linux/soc/qcom/qmi.h)
 source "$ROOT/xnu-env.sh"
+CFLAGS="$CFLAGS -I$XNU_SRC/bsd"
 for h in lx qmi; do
 	[ -f "$XNU_SRC/bsd/sys/hakios.$h.h" ] || { echo "mk-ath11k.sh: the kernel tree has no bsd/sys/hakios.$h.h" >&2; exit 1; }
 done
 DFLAGS="$DFLAGS -DLX_HAKIOS_LX_H=\"$XNU_SRC/bsd/sys/hakios.lx.h\" -DLX_HAKIOS_QMI_H=\"$XNU_SRC/bsd/sys/hakios.qmi.h\""
 mkdir -p obj out
+if [ "$(cat obj/.profile 2>/dev/null)" != "$ATH11K_PROFILE" ]; then
+	rm -f obj/*.o obj/*.d obj/*.err out/*.o out/*.txt out/*.err
+fi
+printf '%s\n' "$ATH11K_PROFILE" > obj/.profile
 rm -f obj/*.err
 compile() {		# compile SOURCE OBJECT [FLAGS]: only when the object is older than anything it was made of
 	local src=$1 obj=$2
@@ -143,45 +163,36 @@ compile() {		# compile SOURCE OBJECT [FLAGS]: only when the object is older than
 	$CC $CFLAGS "$@" -MMD -MF "$obj.d" -c "$src" -o "$obj" 2> "$obj.err" || rm -f "$obj"
 }
 for f in $DRIVER; do compile src/ath11k/$f.c obj/ath11k_$f.o $DFLAGS & done
-for f in "$W"/src/*.c; do [ -f "$f" ] && compile "$f" obj/lx_$(basename "$f" .c).o $DFLAGS -I$W/src & done
+for f in "${LX_SOURCES[@]}"; do compile "$f" obj/lx_$(basename "$f" .c).o $DFLAGS -I$W/src & done
 wait
 bad=
 for f in obj/*.err; do
 	[ -s "$f" ] && [ ! -f "${f%.err}" ] && { echo "--- $(basename "$f" .o.err)"; grep -m6 -A3 "error:" "$f"; bad=1; }
 done
 [ -z "$bad" ] || exit 1
-OBJECTS=$(for f in $DRIVER; do echo obj/ath11k_$f.o; done; for f in "$W"/src/*.c; do echo obj/lx_$(basename "$f" .c).o; done)
+OBJECTS=$(for f in $DRIVER; do echo obj/ath11k_$f.o; done; for f in "${LX_SOURCES[@]}"; do echo obj/lx_$(basename "$f" .c).o; done)
 
-# --- tie it all into one object. What it then still wants is one of three things: a call of the
-# kernel's (hakios.lx.h; the QMI helpers; the handful of C library functions XNU has under the same
-# names with the same meaning), a function of a part of the driver that is not built yet, or a
-# mistake. The second kind gets a stub each that says its name and answers 0; anything else
-# missing ends the build.
+# --- tie it all into one object. Only known kernel, QMI, and section symbols may remain unresolved.
+# Missing driver functions stop the build rather than being replaced by callable stubs.
 KERNEL="memcmp memcpy memmove memset strcmp strncmp strlen strchr strrchr strlcpy strlcat bzero
 	snprintf vsnprintf __stack_chk_fail __stack_chk_guard"
 $LD -r -arch arm64 $OBJECTS -o out/all.o 2> out/ld.err || { cat out/ld.err; exit 1; }
 llvm-nm -u --format=just-symbols out/all.o | sed 's/^_//' | sort > out/undefined.txt
-: > out/stubs.txt
-: > out/stubs.s
 missing=
 for s in $(cat out/undefined.txt); do
 	case " $(echo $KERNEL) " in *" $s "*) continue ;; esac
 	case $s in
-	lx_os_*|qmi_*|hakios_qmi_*|section\$*) continue ;;
-	ath11k_*|__ath11k_*) ;;
+	lx_os_*|qmi_*|hakios_qmi_*|hakios_ipcr_qmi_handle_init|hakios_dma_arena_*|hakios_dma_endpoint_*|hakios_msi_*|hakios_mhi_worker_*|hakios_ipcr_*|hakios_pcie_*|section\$*) continue ;;
+	ath11k_*|__ath11k_*) echo "mk-ath11k.sh: missing ath11k implementation: $s" >&2; missing=1; continue ;;
 	*) echo "mk-ath11k.sh: nothing defines $s" >&2; missing=1; continue ;;
 	esac
-	echo $s >> out/stubs.txt
-	printf '\t.globl _%s\n_%s:\n\tadrp x0, 1f@PAGE\n\tadd x0, x0, 1f@PAGEOFF\n\tb _lx_stub\n\t.cstring\n1:\t.asciz "%s"\n\t.text\n\t.p2align 2\n' \
-		$s $s $s >> out/stubs.s
 done
 [ -z "$missing" ] || exit 1
-$CC -c out/stubs.s -o out/stubs.o
 # four names are shown: where the kernel enters (lx_prepare(), lx_start(), lx_stop() and lx_transmit() of hakios.lx.h)
 printf '_lx_prepare\n_lx_start\n_lx_stop\n_lx_transmit\n' > out/exported.txt
-$LD -r -arch arm64 -exported_symbols_list out/exported.txt out/all.o out/stubs.o -o out/ath11k.o 2> out/ld.err ||
+$LD -r -arch arm64 -exported_symbols_list out/exported.txt out/all.o -o out/ath11k.o 2> out/ld.err ||
 	{ cat out/ld.err; exit 1; }
 rm -f out/all.o
 echo "mk-ath11k.sh: out/ath11k.o: $(llvm-size out/ath11k.o | awk 'NR == 2 { print $1 + $2 }') bytes of code and data from" \
-	"$(echo $DRIVER | wc -w) of the driver's files; $(wc -l < out/stubs.txt) functions of the others are stubs (out/stubs.txt);" \
+	"$(echo $DRIVER | wc -w) ath11k source files ($ATH11K_PROFILE profile); no unresolved ath11k functions;" \
 	"asks the kernel for $(llvm-nm -u --format=just-symbols out/ath11k.o | grep -vc 'section\$') names"

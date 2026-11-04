@@ -152,6 +152,7 @@ struct qmi_handle {
 };
 
 struct hakios_qrtr_ops;
+struct hakios_qrtr_endpoint;
 
 struct qmi_txn {
 	struct qmi_handle *qmi;
@@ -171,6 +172,8 @@ int qmi_handle_init(struct qmi_handle *qmi, size_t largest, const struct qmi_ops
 /* Bind a handle to a specific processor's QRTR transport (e.g. WPSS or MPSS). */
 int hakios_qmi_handle_init_transport(struct qmi_handle *qmi, size_t largest, const struct qmi_ops *ops,
     const struct qmi_msg_handler *handlers, const struct hakios_qrtr_ops *transport);
+int hakios_qmi_handle_init_endpoint(struct qmi_handle *qmi, size_t largest, const struct qmi_ops *ops,
+    const struct qmi_msg_handler *handlers, const struct hakios_qrtr_endpoint *endpoint);
 void qmi_handle_release(struct qmi_handle *qmi);
 /* Ask for a service: ops->new_server is called for every server of it there is and will be. */
 int qmi_add_lookup(struct qmi_handle *qmi, unsigned int service, unsigned int version, unsigned int instance);

@@ -79,6 +79,7 @@
 #define GIC_PRIORITY_DEFAULT    0xa0
 
 static vm_offset_t gicd_base, gicr_base;
+static vm_size_t   gicd_size;
 static vm_size_t   gicr_size;
 static vm_offset_t gicr_cpu_base[MAX_CPUS]; /* each processor's redistributor frame */
 
@@ -94,20 +95,6 @@ static uint64_t gic_active_iar[MAX_CPUS];
 uint64_t        gic_unhandled_count;
 uint32_t        gic_last_unhandled;
 
-/*
- * The attached SPIs. A slot is filled before its interrupt is enabled and emptied after it has
- * been disabled and no handler of it runs any more (busy), so the handler path reads the table
- * without a lock.
- */
-struct gic_spi {
-	uint32_t intid;                     /* 0: a free slot */
-	void   (*handler)(void *context, uint32_t intid);
-	void    *context;
-	uint32_t busy;                      /* handlers of it running now */
-	uint64_t count;
-};
-static struct gic_spi gic_spi[GIC_SPI_MOST];
-static decl_simple_lock_data(, gic_spi_lock);
 
 void gic_v3_irq_cpu_init(void);
 void gic_v3_irq_quiesce(void);
@@ -130,6 +117,30 @@ static inline void
 gic_write32(vm_offset_t addr, uint32_t value)
 {
 	*(volatile uint32_t *)addr = value;
+}
+
+static uint8_t gic_read8(vm_offset_t address) { return *(volatile uint8_t *)address; }
+static uint64_t gic_read64(vm_offset_t address) { return *(volatile uint64_t *)address; }
+static void gic_write8(vm_offset_t address, uint8_t value) { *(volatile uint8_t *)address = value; }
+static void gic_write64(vm_offset_t address, uint64_t value) { *(volatile uint64_t *)address = value; }
+static void gic_spi_barrier(void) { __asm__ volatile("dsb sy" ::: "memory"); }
+static uint64_t gic_spi_affinity(void)
+{
+	uint64_t mpidr = __builtin_arm_rsr64("MPIDR_EL1");
+	return (mpidr & 0xff00000000ull) | (mpidr & 0xffffff);
+}
+
+#include "gic_v3_spi.inc"
+
+static void gic_complete_irq(uint64_t iar)
+{
+	uint64_t mode = __builtin_arm_rsr64("ICC_CTLR_EL1");
+	__builtin_arm_wsr64("ICC_EOIR1_EL1", iar);
+	__builtin_arm_isb(ISB_SY);
+	if ((mode & (1u << 1)) != 0) {
+		__builtin_arm_wsr64("ICC_DIR_EL1", iar);
+		__builtin_arm_isb(ISB_SY);
+	}
 }
 
 static void
@@ -170,131 +181,6 @@ gic_v3_irq_signal_stop(uint32_t phys_id)
 	gic_send_sgi(phys_id, GIC_SGI_STOP);
 }
 
-/* An SPI that a driver has attached: its handler called. false: nobody has it. */
-static bool
-gic_spi_handle(uint32_t intid)
-{
-	for (unsigned i = 0; i < GIC_SPI_MOST; i++) {
-		struct gic_spi *spi = &gic_spi[i];
-
-		if (os_atomic_load(&spi->intid, acquire) == intid) {
-			os_atomic_inc(&spi->busy, acquire);
-			if (os_atomic_load(&spi->intid, relaxed) == intid) {
-				spi->count++;
-				spi->handler(spi->context, intid);
-			}
-			os_atomic_dec(&spi->busy, release);
-			return true;
-		}
-	}
-	return false;
-}
-
-static void
-gic_distributor_settle(void)
-{
-	while (gic_read32(gicd_base + GICD_CTLR) & GICD_CTLR_RWP) {
-		/* wait for the change to take effect */
-	}
-}
-
-void
-gic_v3_spi_mask(uint32_t intid)
-{
-	if (gicd_base != 0 && intid >= GIC_INTID_SPI_MIN && intid < GIC_INTID_SPURIOUS_MIN) {
-		gic_write32(gicd_base + GICD_ICENABLER(intid / 32), 1u << (intid % 32));
-		gic_distributor_settle();
-	}
-}
-
-void
-gic_v3_spi_unmask(uint32_t intid)
-{
-	if (gicd_base != 0 && intid >= GIC_INTID_SPI_MIN && intid < GIC_INTID_SPURIOUS_MIN) {
-		gic_write32(gicd_base + GICD_ISENABLER(intid / 32), 1u << (intid % 32));
-	}
-}
-
-/*
- * A driver takes an SPI: edge- or level-triggered, Group 1, the default priority, routed to the
- * processor this runs on, and enabled. The handler runs in interrupt context, with interrupts off,
- * before the interrupt is ended; for a level-triggered one it has to quiet the source or mask the
- * interrupt (gic_v3_spi_mask()). Thread context.
- */
-kern_return_t
-gic_v3_spi_attach(uint32_t intid, bool edge, void (*handler)(void *context, uint32_t intid), void *context)
-{
-	uint64_t mpidr = __builtin_arm_rsr64("MPIDR_EL1");
-	struct gic_spi *slot = NULL;
-	uint32_t config;
-
-	if (gicd_base == 0 || intid < GIC_INTID_SPI_MIN || intid >= GIC_INTID_SPURIOUS_MIN || handler == NULL) {
-		return KERN_INVALID_ARGUMENT;
-	}
-	simple_lock(&gic_spi_lock, LCK_GRP_NULL);
-	for (unsigned i = 0; i < GIC_SPI_MOST; i++) {
-		if (gic_spi[i].intid == intid) {
-			simple_unlock(&gic_spi_lock);
-			return KERN_NAME_EXISTS;
-		}
-		if (slot == NULL && gic_spi[i].intid == 0 && gic_spi[i].busy == 0) {
-			slot = &gic_spi[i];
-		}
-	}
-	if (slot == NULL) {
-		simple_unlock(&gic_spi_lock);
-		return KERN_RESOURCE_SHORTAGE;
-	}
-	slot->handler = handler;
-	slot->context = context;
-	slot->count = 0;
-	os_atomic_store(&slot->intid, intid, release);
-	simple_unlock(&gic_spi_lock);
-
-	gic_v3_spi_mask(intid);
-	gic_write32(gicd_base + GICD_ICPENDR(intid / 32), 1u << (intid % 32));
-	gic_write32(gicd_base + GICD_ICACTIVER(intid / 32), 1u << (intid % 32));
-	gic_write32(gicd_base + GICD_IGROUPR(intid / 32), gic_read32(gicd_base + GICD_IGROUPR(intid / 32)) | 1u << (intid % 32));
-	gic_write32(gicd_base + GICD_IGRPMODR(intid / 32), gic_read32(gicd_base + GICD_IGRPMODR(intid / 32)) & ~(1u << (intid % 32)));
-	*(volatile uint8_t *)(gicd_base + GICD_IPRIORITYR(intid)) = GIC_PRIORITY_DEFAULT;
-	config = gic_read32(gicd_base + GICD_ICFGR(intid / 16)) & ~(3u << (intid % 16 * 2));
-	gic_write32(gicd_base + GICD_ICFGR(intid / 16), config | (edge ? 2u : 0u) << (intid % 16 * 2));
-	/* GICD_IROUTER: Aff3 in [39:32], Aff2.Aff1.Aff0 in [23:0]; bit 31 (any processor) clear */
-	*(volatile uint64_t *)(gicd_base + GICD_IROUTER(intid)) = (mpidr & 0xff00000000ull) | (mpidr & 0xffffff);
-	gic_distributor_settle();
-	gic_v3_spi_unmask(intid);
-	return KERN_SUCCESS;
-}
-
-/* ... and gives it back: disabled, nothing pending, and no handler of it running when this returns. */
-void
-gic_v3_spi_detach(uint32_t intid)
-{
-	gic_v3_spi_mask(intid);
-	if (gicd_base != 0 && intid >= GIC_INTID_SPI_MIN && intid < GIC_INTID_SPURIOUS_MIN) {
-		gic_write32(gicd_base + GICD_ICPENDR(intid / 32), 1u << (intid % 32));
-	}
-	for (unsigned i = 0; i < GIC_SPI_MOST; i++) {
-		if (gic_spi[i].intid == intid) {
-			os_atomic_store(&gic_spi[i].intid, 0, release);
-			while (os_atomic_load(&gic_spi[i].busy, acquire) != 0) {
-				/* a handler of it on another processor is finishing */
-			}
-		}
-	}
-}
-
-/* How many have arrived since it was attached. */
-uint64_t
-gic_v3_spi_count(uint32_t intid)
-{
-	for (unsigned i = 0; i < GIC_SPI_MOST; i++) {
-		if (gic_spi[i].intid == intid) {
-			return gic_spi[i].count;
-		}
-	}
-	return 0;
-}
 
 static void
 gic_irq_handler(__unused void *target, __unused void *refCon, __unused void *nub, __unused int source)
@@ -309,6 +195,7 @@ gic_irq_handler(__unused void *target, __unused void *refCon, __unused void *nub
 			break;
 		}
 		gic_active_iar[cpu] = iar | GIC_IAR_TAKEN;
+		struct gic_spi *dispatched = NULL;
 
 		if (intid == GIC_INTID_VTIMER) {
 			/* same sequence as the FIQ path in sleh_fiq() */
@@ -319,7 +206,7 @@ gic_irq_handler(__unused void *target, __unused void *refCon, __unused void *nub
 		} else if (intid == GIC_SGI_STOP) {
 			/* comes back only if nobody has in fact asked for that */
 			psci_smp_stop_here();
-		} else if (intid >= GIC_INTID_SPI_MIN && gic_spi_handle(intid)) {
+		} else if (intid >= GIC_INTID_SPI_MIN && (dispatched = gic_spi_dispatch(intid)) != NULL) {
 			/* a driver's */
 		} else {
 			/* nobody owns this interrupt yet: keep it from storming */
@@ -328,8 +215,8 @@ gic_irq_handler(__unused void *target, __unused void *refCon, __unused void *nub
 			gic_last_unhandled = intid;
 		}
 
-		__builtin_arm_wsr64("ICC_EOIR1_EL1", iar);
-		__builtin_arm_isb(ISB_SY);
+		gic_complete_irq(iar);
+		gic_spi_complete(dispatched);
 		gic_active_iar[cpu] = 0;
 	}
 }
@@ -353,13 +240,12 @@ gic_v3_irq_quiesce(void)
 	for (unsigned i = 0; i < GIC_SPI_MOST; i++) {
 		uint32_t intid = gic_spi[i].intid;
 
-		if (intid != 0) {
+		if (intid != 0 && gic_spi[i].saved) {
 			gic_write32(gicd_base + GICD_ICENABLER(intid / 32), 1u << (intid % 32));
 		}
 	}
 	if (gic_active_iar[cpu] != 0) {
-		__builtin_arm_wsr64("ICC_EOIR1_EL1", gic_active_iar[cpu] & ~GIC_IAR_TAKEN);
-		__builtin_arm_isb(ISB_SY);
+		gic_complete_irq(gic_active_iar[cpu] & ~GIC_IAR_TAKEN);
 		gic_active_iar[cpu] = 0;
 	}
 }
@@ -434,6 +320,7 @@ gic_v3_irq_cpu_init(void)
 		vm_offset_t soc_base = pe_arm_get_soc_base_phys();
 
 		simple_lock_init(&gic_spi_lock, 0);
+		gicd_size = reg[1];
 		gicd_base = ml_io_map(soc_base + reg[0], reg[1]);
 		gicr_base = ml_io_map(soc_base + reg[2], reg[3]);
 		gicr_size = reg[3];
@@ -503,6 +390,19 @@ gic_v3_irq_cpu_init(void)
 	ml_install_interrupt_handler(NULL, 0, NULL, gic_irq_handler, NULL);
 	kprintf("gic: v3, distributor %p, cpu %d's redistributor %p, virtual timer on PPI %d\n",
 	    (void *)gicd_base, cpu, (void *)gicr, GIC_INTID_VTIMER);
+}
+
+void
+gic_v3_irq_cpu_resume(void)
+{
+	int cpu = cpu_number();
+
+	if (cpu < 0 || cpu >= MAX_CPUS || gicr_base == 0) {
+		return;
+	}
+	gicr_cpu_base[cpu] = 0;
+	gic_active_iar[cpu] = 0;
+	gic_v3_irq_cpu_init();
 }
 
 #endif /* GENERIC_GIC_V3_IRQ */

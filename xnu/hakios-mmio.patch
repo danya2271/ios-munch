@@ -1,0 +1,126 @@
+diff --git a/osfmk/arm64/machine_routines_asm.s b/osfmk/arm64/machine_routines_asm.s
+index 2449334..71be712 100644
+--- a/osfmk/arm64/machine_routines_asm.s
++++ b/osfmk/arm64/machine_routines_asm.s
+@@ -736,6 +736,84 @@ Lcopyinframe_done:
+ 	ARM64_STACK_EPILOG
+ 
+ 
++/*
++ * Single-instruction MMIO accessors. Only synchronous external aborts whose
++ * PC falls inside these exact loads/stores are redirected by sleh.c.
++ */
++	.text
++	.align 2
++	.private_extern EXT(hakios_mmio_read8)
++	.globl EXT(hakios_mmio_read8)
++LEXT(hakios_mmio_read8)
++	COPYIO_RECOVER_RANGE Lhakios_mmio_read8_done, EXT(hakios_mmio_abort)
++	ldrb		w2, [x0]
++Lhakios_mmio_read8_done:
++	strb		w2, [x1]
++	mov		w0, #0
++	ret
++
++	.align 2
++	.private_extern EXT(hakios_mmio_read16)
++	.globl EXT(hakios_mmio_read16)
++LEXT(hakios_mmio_read16)
++	COPYIO_RECOVER_RANGE Lhakios_mmio_read16_done, EXT(hakios_mmio_abort)
++	ldrh		w2, [x0]
++Lhakios_mmio_read16_done:
++	strh		w2, [x1]
++	mov		w0, #0
++	ret
++
++	.align 2
++	.private_extern EXT(hakios_mmio_read32)
++	.globl EXT(hakios_mmio_read32)
++LEXT(hakios_mmio_read32)
++	COPYIO_RECOVER_RANGE Lhakios_mmio_read32_done, EXT(hakios_mmio_abort)
++	ldr		w2, [x0]
++Lhakios_mmio_read32_done:
++	str		w2, [x1]
++	mov		w0, #0
++	ret
++
++	.align 2
++	.private_extern EXT(hakios_mmio_write8)
++	.globl EXT(hakios_mmio_write8)
++LEXT(hakios_mmio_write8)
++	COPYIO_RECOVER_RANGE Lhakios_mmio_write8_done, EXT(hakios_mmio_abort)
++	strb		w1, [x0]
++	dsb		sy
++Lhakios_mmio_write8_done:
++	mov		w0, #0
++	ret
++
++	.align 2
++	.private_extern EXT(hakios_mmio_write16)
++	.globl EXT(hakios_mmio_write16)
++LEXT(hakios_mmio_write16)
++	COPYIO_RECOVER_RANGE Lhakios_mmio_write16_done, EXT(hakios_mmio_abort)
++	strh		w1, [x0]
++	dsb		sy
++Lhakios_mmio_write16_done:
++	mov		w0, #0
++	ret
++
++	.align 2
++	.private_extern EXT(hakios_mmio_write32)
++	.globl EXT(hakios_mmio_write32)
++LEXT(hakios_mmio_write32)
++	COPYIO_RECOVER_RANGE Lhakios_mmio_write32_done, EXT(hakios_mmio_abort)
++	str		w1, [x0]
++	dsb		sy
++Lhakios_mmio_write32_done:
++	mov		w0, #0
++	ret
++
++	.align 2
++	.private_extern EXT(hakios_mmio_abort)
++	.globl EXT(hakios_mmio_abort)
++LEXT(hakios_mmio_abort)
++	mov		w0, #EFAULT
++	ret
++
+ /*
+  * hw_lck_ticket_t
+  * hw_lck_ticket_reserve_orig_allow_invalid(hw_lck_ticket_t *lck
+diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
+index 2cc442e..c4d24e4 100644
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -275,6 +275,7 @@ struct copyio_recovery_entry {
+ 
+ extern struct copyio_recovery_entry copyio_recover_table[];
+ extern struct copyio_recovery_entry copyio_recover_table_end[];
++extern void hakios_mmio_abort(void);
+ 
+ static inline ptrdiff_t
+ copyio_recovery_offset(uintptr_t addr)
+@@ -1509,7 +1510,8 @@ handle_kernel_abort(arm_saved_state_t *state, uint32_t esr, vm_offset_t fault_ad
+     fault_status_t fault_code, vm_prot_t fault_type, expected_fault_handler_t expected_fault_handler)
+ {
+ 	thread_t thread = current_thread();
+-	bool recover = find_copyio_recovery_entry(state) != 0;
++	struct copyio_recovery_entry *recovery_entry = find_copyio_recovery_entry(state);
++	bool recover = recovery_entry != 0;
+ 
+ #ifndef CONFIG_XNUPOST
+ 	(void)expected_fault_handler;
+@@ -1537,6 +1539,14 @@ handle_kernel_abort(arm_saved_state_t *state, uint32_t esr, vm_offset_t fault_ad
+ 		panic_with_thread_kernel_state("Unexpected abort while on interrupt stack.", state);
+ 	}
+ 
++	if (fault_code == FSC_SYNC_EXT_ABORT &&
++	    (ESR_ISS(esr) & ISS_DA_S1PTW) == 0 &&
++	    recovery_entry != NULL &&
++	    copyio_recovery_addr(recovery_entry->cre_recovery) == (uintptr_t)hakios_mmio_abort) {
++		handle_kernel_abort_recover(state, esr, fault_addr, thread);
++		return;
++	}
++
+ 	if (is_vm_fault(fault_code)) {
+ 		kern_return_t result = KERN_FAILURE;
+ 		vm_map_t      map;

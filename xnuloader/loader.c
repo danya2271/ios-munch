@@ -849,6 +849,16 @@ __asm__ (
 static uint64_t smc_call(uint64_t id, uint64_t a1, uint64_t a2, uint64_t *r1, uint64_t *r2);
 static uint64_t smc_x3;
 static const struct platform *PLAT;
+enum munch_pci_protocol_index {
+	MUNCH_PCI_HOST_BRIDGE,
+	MUNCH_PCI_ROOT_BRIDGE_IO,
+	MUNCH_PCI_IO,
+	MUNCH_PCI_PROTOCOL_COUNT
+};
+static struct {
+	uint64_t status;
+	uint64_t handles;
+} munch_pci_inventory[MUNCH_PCI_PROTOCOL_COUNT];
 static void clean_dcache(uint64_t start, uint64_t end);
 static void flush_dcache(uint64_t start, uint64_t end);
 
@@ -3045,6 +3055,14 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 	dt_prop(&w, "random-seed", seed, sizeof(seed));
 	dt_prop_u64(&w, "dram-base", phys_base);
 	dt_prop_u64(&w, "dram-size", win_size);
+	if (plat == &platform_munch) {
+		dt_prop_u64(&w, "munch-pci-host-status", munch_pci_inventory[MUNCH_PCI_HOST_BRIDGE].status);
+		dt_prop_u64(&w, "munch-pci-host-count", munch_pci_inventory[MUNCH_PCI_HOST_BRIDGE].handles);
+		dt_prop_u64(&w, "munch-pci-root-status", munch_pci_inventory[MUNCH_PCI_ROOT_BRIDGE_IO].status);
+		dt_prop_u64(&w, "munch-pci-root-count", munch_pci_inventory[MUNCH_PCI_ROOT_BRIDGE_IO].handles);
+		dt_prop_u64(&w, "munch-pci-io-status", munch_pci_inventory[MUNCH_PCI_IO].status);
+		dt_prop_u64(&w, "munch-pci-io-count", munch_pci_inventory[MUNCH_PCI_IO].handles);
+	}
 	dt_prop_u32(&w, "debug-enabled", 1);
 	/* what MobileGestalt answers "main screen scale" from: 3 device pixels per point */
 	dt_prop_u32(&w, "display-scale", 3);
@@ -3906,6 +3924,50 @@ ramfb_phone_screen(void)
 	SCREEN.stride = PHONE_WIDTH * 4;
 }
 
+static void
+munch_pci_protocol_inventory(void)
+{
+	static const efi_guid pci_io_guid = {
+		0x4cf5b200, 0x68b8, 0x4ca5, { 0x9e, 0xec, 0xb2, 0x3e, 0x3f, 0x50, 0x02, 0x9a }
+	};
+	static const efi_guid pci_root_bridge_io_guid = {
+		0x2f707ebb, 0x4a1a, 0x11d4, { 0x9a, 0x38, 0x00, 0x90, 0x27, 0x3f, 0xc1, 0x4d }
+	};
+	static const efi_guid pci_host_bridge_guid = {
+		0xcf8034be, 0x6768, 0x4d8b, { 0xb7, 0x39, 0x7c, 0xce, 0x68, 0x3a, 0x9f, 0xbe }
+	};
+	static const struct {
+		const char *name;
+		const efi_guid *guid;
+	} protocols[] = {
+		{ "PciHostBridgeResourceAllocation", &pci_host_bridge_guid },
+		{ "PciRootBridgeIo", &pci_root_bridge_io_guid },
+		{ "PciIo", &pci_io_guid },
+	};
+
+	print("MUNCH UEFI PCI inventory: protocol database only; no PCI config/MMIO access\n");
+	for (uint32_t i = 0; i < sizeof(protocols) / sizeof(protocols[0]); i++) {
+		efi_handle *handles = NULL;
+		uint64_t count = 0;
+		efi_status status = BS->locate_handle_buffer(ByProtocol, protocols[i].guid, NULL, &count, &handles);
+
+		munch_pci_inventory[i].status = status;
+		munch_pci_inventory[i].handles = EFI_ERROR(status) ? 0 : count;
+		if (EFI_ERROR(status)) {
+			print("MUNCH UEFI PCI inventory: %s status %x\n", protocols[i].name, status);
+			continue;
+		}
+		print("MUNCH UEFI PCI inventory: %s handles %d\n", protocols[i].name, count);
+		if (handles != NULL) {
+			status = BS->free_pool(handles);
+			if (EFI_ERROR(status)) {
+				print("MUNCH UEFI PCI inventory: freeing %s handle list failed (%x)\n",
+				    protocols[i].name, status);
+			}
+		}
+	}
+}
+
 efi_status EFIAPI
 efi_main(efi_handle image, efi_system_table *st)
 {
@@ -3938,6 +4000,9 @@ efi_main(efi_handle image, efi_system_table *st)
 		print("display %d x %d at %x\n", (uint64_t)SCREEN.width, (uint64_t)SCREEN.height, SCREEN.base);
 	}
 	print("platform %s\n", PLAT->name);
+	if (str_eq(PLAT->name, "munch")) {
+		munch_pci_protocol_inventory();
+	}
 
 	install_exception_hook();
 	wdt_arm();

@@ -1,0 +1,84 @@
+--- a/sys/compat/linuxkpi/common/include/linux/mhi.h
++++ b/sys/compat/linuxkpi/common/include/linux/mhi.h
+@@ -28,6 +28,7 @@
+ #ifndef	_LINUXKPI_LINUX_MHI_H
+ #define	_LINUXKPI_LINUX_MHI_H
+ 
+ #include <linux/types.h>
++#include <linux/errno.h>
+ 
+ /* Modem Host Interface (MHI) */
+@@ -142,6 +143,5 @@
+ static __inline int
+ mhi_device_get_sync(struct mhi_device *mhi_dev)
+ {
+-	/* XXX TODO */
+-	return (-1);
++	return (-EOPNOTSUPP);
+ }
+@@ -157,6 +157,5 @@
+ static __inline int
+ mhi_prepare_for_power_up(struct mhi_controller *mhi_ctrl)
+ {
+-	/* XXX TODO */
+-	return (0);
++	return (-EOPNOTSUPP);
+ }
+@@ -164,6 +163,5 @@
+ static __inline int
+ mhi_sync_power_up(struct mhi_controller *mhi_ctrl)
+ {
+-	/* XXX TODO */
+-	return (0);
++	return (-EOPNOTSUPP);
+ }
+@@ -171,6 +169,5 @@
+ static __inline int
+ mhi_async_power_up(struct mhi_controller *mhi_ctrl)
+ {
+-	/* XXX TODO */
+-	return (0);
++	return (-EOPNOTSUPP);
+ }
+@@ -192,6 +189,5 @@
+ static __inline int
+ mhi_pm_suspend(struct mhi_controller *mhi_ctrl)
+ {
+-	/* XXX TODO */
+-	return (0);
++	return (-EOPNOTSUPP);
+ }
+@@ -199,6 +195,5 @@
+ static __inline int
+ mhi_pm_resume(struct mhi_controller *mhi_ctrl)
+ {
+-	/* XXX TODO */
+-	return (0);
++	return (-EOPNOTSUPP);
+ }
+@@ -206,6 +201,5 @@
+ static __inline int
+ mhi_pm_resume_force(struct mhi_controller *mhi_ctrl)
+ {
+-	/* XXX TODO */
+-	return (0);
++	return (-EOPNOTSUPP);
+ }
+@@ -215,6 +209,5 @@
+ static __inline int
+ mhi_force_rddm_mode(struct mhi_controller *mhi_ctrl)
+ {
+-	/* XXX TODO */
+-	return (0);
++	return (-EOPNOTSUPP);
+ }
+--- a/sys/compat/linuxkpi/common/src/linux_mhi.c
++++ b/sys/compat/linuxkpi/common/src/linux_mhi.c
+@@ -77,6 +77,5 @@
+	CHECK_FIELD(write_reg);
+ #undef CHECK_FIELD
+ 
+-	printf("%s: XXX-BZ TODO\n", __func__);
+-	return (0);
++	return (-EOPNOTSUPP);
+ }

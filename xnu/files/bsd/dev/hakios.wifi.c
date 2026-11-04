@@ -1,6 +1,8 @@
 /*
- * The Wi-Fi of the POCO X5 Pro (redwood), from nothing and step by step. Every address below
- * belongs to this phone, and nothing here is touched unless a boot-arg asks for it.
+ * The legacy Wi-Fi path for the POCO X5 Pro (redwood), from nothing and step by step. Every
+ * address below belongs to that phone, and nothing here is touched unless a boot-arg asks for
+ * it. Munch has a QCA6390 on PCIe/MHI; this WCN6750 path is gated by wifi_wcn6750=1 and is not
+ * the Munch driver.
  *
  * The radio is a WCN6750. Its firmware does not run on the application processor but on a
  * processor of its own inside the SoC, the "WPSS" (a Hexagon DSP), which stays in reset until
@@ -78,7 +80,7 @@
  *
  * Nothing here switches a supply rail or changes a pin.
  *
- * wifi=1 is all of it for whoever uses the phone: the steps that are needed (not the ones that
+ * wifi=1 with wifi_wcn6750=1 is all of it for this phone: the steps that are needed (not the ones that
  * only look), ath11k as step 15 for real, its station given to the rest of the kernel to ask
  * (sys/hakios.sta.h: iOS's Wi-Fi side does, through bsd/dev/hakios.apple80211.c), the network
  * of fw/network joined if the small image has that file, and everything left running while the
@@ -128,6 +130,7 @@
  *                      else until the steps are over (wifi_hold=S: S seconds longer)
  *   wifi_station=1     with wifi_lx=2: the driver stays up and its station is the kernel's to
  *                      ask (sys/hakios.sta.h); nothing is joined by the driver itself
+ *   wifi_wcn6750=1     explicitly permit this legacy Redwood-only WCN6750 path
  *   wifi_file=0        with wifi=1: the network of fw/network is not joined at the start
  *   wifi_irq=1         the radio's interrupts (MSI through its SMMU context to the GIC) instead
  *                      of looking at its rings every millisecond (lx_bus.c); wifi=1 stands for it
@@ -162,8 +165,10 @@
 #include <mach/mach_types.h>
 #include <mach/vm_param.h>
 #include <vm/memory_types.h>
+#include <pexpert/device_tree.h>
 #include <pexpert/pexpert.h>
 #include <sys/errno.h>
+#include <sys/hakios.qca6390.h>
 #include <sys/hakios.input.h>
 #include <sys/hakios.qrtr.h>
 #include <sys/hakios.sta.h>
@@ -336,7 +341,7 @@ settle(void)
 
 /* ---- options --------------------------------------------------------------------------------------- */
 
-static bool whole;                      /* wifi=1: all of it, by itself (see the top of this file) */
+static bool whole;                      /* wifi=1 with wifi_wcn6750=1: all of it (see the top of this file) */
 static volatile bool whole_runs;        /* ... and the thread that does it is at work */
 
 /*
@@ -3545,6 +3550,8 @@ static struct block apps_smmu = { "apps smmu", 0x15000000, 0x2000 };
 #define RADIO_STREAM            0x1c00
 #define RADIO_STREAM_MASK       0x0001
 
+static bool wifi_munch_platform(void);
+
 static void
 smmu_look(void)
 {
@@ -3617,11 +3624,13 @@ smmu_look(void)
 	                                                                                  * executed */
 /*
  * Where the radio raises an interrupt by writing (its "MSI"): resource "msi_addr" of the device
- * tree's node for it, a register of the GIC that raises the SPI whose number is written; the
- * node's interrupts are SPI 768..799, so vector v is the GIC's number 800 + v.
+ * tree's node for it, a register of the GIC that raises the interrupt number written. The node
+ * lists GIC_SPI 768..799; the GIC translates those to hardware INTIDs 800..831. This historical
+ * AHB path must not treat that topology as a universal PCI MSI payload or as an ownership grant.
  */
 #define RADIO_MSI_REGISTER      0x17a10040ull
-#define RADIO_FIRST_SPI         768u
+#define RADIO_FIRST_DTS_SPI     768u
+#define RADIO_FIRST_MSI_DATA    (RADIO_FIRST_DTS_SPI + 32u)
 #define PTE_ADDRESS             0x0000fffffffff000ull
 #define SMMU_SGFSR              0x048           /* what the SMMU as a whole has refused ... */
 #define SMMU_SGFSYNR0           0x050
@@ -3804,8 +3813,8 @@ radio_space_faults(void)
 static bool
 radio_space_on(void)
 {
-	uint32_t smr = SMMU_SMR(radio_space.match), s2cr = SMMU_S2CR(radio_space.match), sees = 1u << 31 | RADIO_STREAM_MASK << 16 |
-	    RADIO_STREAM;
+	uint32_t smr = SMMU_SMR(radio_space.match), s2cr = SMMU_S2CR(radio_space.match), sees = 1u << 31 |
+		RADIO_STREAM_MASK << 16 | RADIO_STREAM;
 	uint64_t root = kvtophys(radio_space.tables) | (uint64_t)radio_space.context << 48;     /* tagged with the context's number */
 
 	printf("wifi: %u: THE SMMU IS ABOUT TO BE WRITTEN: context %u gets page tables of ours (root %#llx) and is switched on, and "
@@ -3924,7 +3933,7 @@ hakios_wifi_radio_map(uint64_t physical, uint64_t size, unsigned long long *addr
 /*
  * What the radio is to write, and where, to raise its interrupt vector 0 (vector v: data + v): the
  * GIC's register that raises an SPI, shown to the radio in its SMMU context as a device's page.
- * Once; the GIC's number of the SPI of vector 0 goes to *first_spi.
+ * Once; the GIC INTID of vector 0 goes to *first_spi.
  */
 bool
 hakios_wifi_radio_msi(unsigned long long *address, uint32_t *data, uint32_t *first_spi)
@@ -3932,17 +3941,16 @@ hakios_wifi_radio_msi(unsigned long long *address, uint32_t *data, uint32_t *fir
 	static unsigned long long page;
 
 	if (page == 0) {
-		tell("wifi: wifi_irq: THE RADIO'S SMMU CONTEXT GETS AN ENTRY for the GIC's register that raises an interrupt (%#llx), "
-		    "as a device's page\n", RADIO_MSI_REGISTER);
+		tell("wifi: wifi_irq: THE RADIO'S SMMU CONTEXT GETS AN ENTRY for the GIC's MSI register (%#llx)\n", RADIO_MSI_REGISTER);
 		if (!radio_map(RADIO_MSI_REGISTER & ~4095ull, 4096, RADIO_PTE_DEVICE, &page)) {
 			page = 0;
 			return false;
 		}
 	}
 	*address = page + (RADIO_MSI_REGISTER & 4095);
-	*data = RADIO_FIRST_SPI + 32;
-	*first_spi = RADIO_FIRST_SPI + 32;
-	tell("wifi: wifi_irq: the radio raises its interrupt vector v by writing %u + v at %#llx\n", *data, *address);
+	*data = RADIO_FIRST_MSI_DATA;
+	*first_spi = RADIO_FIRST_MSI_DATA;
+	tell("wifi: wifi_irq: the legacy radio raises vector v by writing %u + v at %#llx\n", *data, *address);
 	return true;
 }
 
@@ -3986,6 +3994,22 @@ hakios_wifi_dsp_is_up(void)
 const uint8_t *
 hakios_wifi_driver_file(const char *name, uint64_t *size)
 {
+	if (strnstr(name, "QCA6390/", strlen(name)) != NULL) {
+		static const char *const qca_files[][2] = {
+			{ "amss.bin", "qca6390/amss20.bin" },
+			{ "m3.bin", "qca6390/m3.bin" },
+			{ "board.bin", "qca6390/bd_l11rgl.elf" },
+		};
+		const char *last = strrchr(name, '/');
+
+		last = last == NULL ? name : last + 1;
+		for (unsigned i = 0; i < sizeof(qca_files) / sizeof(qca_files[0]); i++) {
+			if (strcmp(last, qca_files[i][0]) == 0) {
+				return image_file(qca_files[i][1], size);
+			}
+		}
+		return NULL;
+	}
 	static const char *const files[][2] = { { "board.bin", "bd_m20gl.elf" }, { "regdb.bin", "regdb_xiaomi.bin" } };
 	const char *last = strrchr(name, '/');
 
@@ -3996,6 +4020,12 @@ hakios_wifi_driver_file(const char *name, uint64_t *size)
 		}
 	}
 	return NULL;
+}
+
+static bool
+wifi_munch_platform(void)
+{
+	return hakios_qca6390_platform_matches();
 }
 
 /*
@@ -4263,12 +4293,92 @@ whole_thread(__unused void *parameter, __unused wait_result_t result)
 void
 hakios_wifi_init(void)
 {
-	uint32_t on = 0, back = 0, done = 0;
+	uint32_t on = 0, back = 0, done = 0, wcn6750 = 0;
+	uint32_t qca_probe = 0;
+	uint32_t qca_status = 0;
 	uint64_t size = 0;
 	thread_t thread;
+	bool requested;
 
 	PE_parse_boot_argn("wifi_step", &last_step, sizeof(last_step));
-	if (last_step == 0 && (!PE_parse_boot_argn("wifi", &on, sizeof(on)) || on == 0)) {
+	requested = PE_parse_boot_argn("wifi", &on, sizeof(on)) && on != 0;
+	PE_parse_boot_argn("wifi_wcn6750", &wcn6750, sizeof(wcn6750));
+	PE_parse_boot_argn("wifi_qca_probe", &qca_probe, sizeof(qca_probe));
+	PE_parse_boot_argn("wifi_qca_status", &qca_status, sizeof(qca_status));
+	if (qca_status != 0) {
+		const uint32_t required = HAKIOS_QCA6390_RC0_HANDOFF | HAKIOS_QCA6390_DMA_DOMAIN |
+		    HAKIOS_QCA6390_MSI_ROUTES;
+		uint32_t missing = 0;
+		DTEntry root;
+		DTEntry chosen;
+		const void *model = NULL;
+		unsigned int model_size = 0, shown;
+		int error;
+		bool have_model = SecureDTLookupEntry(NULL, "/", &root) == kSuccess &&
+		    SecureDTGetProperty(root, "model", &model, &model_size) == kSuccess;
+
+		shown = model_size > 96 ? 96 : model_size;
+		if (have_model) {
+			printf("wifi: QCA6390 status: root model (%u bytes) \"%.*s\"; loader Munch match=%u\n",
+			    model_size, (int)shown, (const char *)model, wifi_munch_platform());
+		} else {
+			printf("wifi: QCA6390 status: root model unavailable; loader Munch match=%u\n",
+			    wifi_munch_platform());
+		}
+		error = hakios_qca6390_preflight(required, &missing);
+		printf("wifi: QCA6390 software preflight returned %d; missing %#x (RC0=%u DMA=%u MSI=%u)\n",
+		    error, missing, (missing & HAKIOS_QCA6390_RC0_HANDOFF) != 0,
+		    (missing & HAKIOS_QCA6390_DMA_DOMAIN) != 0, (missing & HAKIOS_QCA6390_MSI_ROUTES) != 0);
+		if (SecureDTLookupEntry(NULL, "/chosen", &chosen) == kSuccess) {
+			static const char *const names[] = {
+				"munch-pci-host", "munch-pci-root", "munch-pci-io"
+			};
+			static const char *const suffixes[] = { "status", "count" };
+
+			for (unsigned i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+				for (unsigned j = 0; j < sizeof(suffixes) / sizeof(suffixes[0]); j++) {
+					char property[40];
+					const void *value;
+					unsigned int size;
+
+					snprintf(property, sizeof(property), "%s-%s", names[i], suffixes[j]);
+					if (SecureDTGetProperty(chosen, property, &value, &size) == kSuccess && size == sizeof(uint64_t)) {
+						uint64_t observed;
+
+						bcopy(value, &observed, sizeof(observed));
+						printf("wifi: UEFI PCI inventory: %s=%#llx\n", property, observed);
+					} else {
+						printf("wifi: UEFI PCI inventory: %s unavailable\n", property);
+					}
+				}
+			}
+		} else {
+			printf("wifi: UEFI PCI inventory: /chosen unavailable\n");
+		}
+	}
+	if (wifi_munch_platform()) {
+		if (qca_probe != 0) {
+			uint32_t missing = 0;
+			int error = hakios_qca6390_preflight(HAKIOS_QCA6390_RC0_HANDOFF, &missing);
+
+			if (error != 0) {
+				printf("wifi: QCA6390 probe refused before PCIe access: preflight error %d, missing %#x\n",
+				    error, missing);
+			} else {
+				error = hakios_qca6390_probe();
+				printf("wifi: QCA6390 gated RC0 probe returned %d; MHI and ath11k remain disabled\n", error);
+			}
+		}
+		if (last_step != 0 || requested) {
+			printf("wifi: Munch uses QCA6390 on PCIe/MHI; that backend is not wired up yet, and the legacy WCN6750 path is refused\n");
+		}
+		return;
+	}
+	if ((last_step != 0 || requested) && !wcn6750) {
+		printf("wifi: this path is for Redwood/WCN6750; Munch uses QCA6390 on PCIe/MHI, whose driver is not wired up yet\n");
+		return;
+	}
+	if (last_step == 0 && !requested) {
 		return;
 	}
 	if (last_step == 0 && on != 1) {
