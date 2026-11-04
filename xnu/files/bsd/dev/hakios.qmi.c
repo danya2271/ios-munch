@@ -758,15 +758,23 @@ qmi_server(void *context, bool arrived, uint32_t service, uint32_t version, uint
 	}
 }
 
-int
-hakios_qmi_handle_init_transport(struct qmi_handle *qmi, size_t largest, const struct qmi_ops *ops,
-    const struct qmi_msg_handler *handlers, const struct hakios_qrtr_ops *transport)
+static int
+qmi_handle_init_bound(struct qmi_handle *qmi, size_t largest, const struct qmi_ops *ops,
+    const struct qmi_msg_handler *handlers, const struct hakios_qrtr_ops *transport,
+    const struct hakios_qrtr_endpoint *endpoint)
 {
 	struct qmi_state *s;
 
+	if (qmi == NULL) {
+		return -EINVAL;
+	}
 	qmi->sock = NULL;
 	if (transport == NULL) {
 		return -ENXIO;
+	}
+	if (transport->send == NULL || transport->lookup == NULL || transport->close == NULL ||
+	    (endpoint == NULL ? transport->open == NULL : endpoint->open == NULL || endpoint->owner == NULL)) {
+		return -EINVAL;
 	}
 	s = os_alloc(sizeof(*s));
 	if (s == NULL) {
@@ -781,7 +789,8 @@ hakios_qmi_handle_init_transport(struct qmi_handle *qmi, size_t largest, const s
 	}
 	os_lock_init(&s->lock);
 	qmi->sock = (struct socket *)(void *)s;         /* before the port: callbacks may come at once */
-	s->port = transport->open(qmi_receive, qmi_server, s);
+	s->port = endpoint != NULL ? endpoint->open(endpoint->owner, qmi_receive, qmi_server, s) :
+	    transport->open(qmi_receive, qmi_server, s);
 	if (s->port == NULL) {
 		qmi->sock = NULL;
 		os_lock_destroy(&s->lock);
@@ -789,6 +798,23 @@ hakios_qmi_handle_init_transport(struct qmi_handle *qmi, size_t largest, const s
 		return -ENXIO;
 	}
 	return 0;
+}
+
+int
+hakios_qmi_handle_init_transport(struct qmi_handle *qmi, size_t largest, const struct qmi_ops *ops,
+    const struct qmi_msg_handler *handlers, const struct hakios_qrtr_ops *transport)
+{
+	return qmi_handle_init_bound(qmi, largest, ops, handlers, transport, NULL);
+}
+
+int
+hakios_qmi_handle_init_endpoint(struct qmi_handle *qmi, size_t largest, const struct qmi_ops *ops,
+    const struct qmi_msg_handler *handlers, const struct hakios_qrtr_endpoint *endpoint)
+{
+	if (endpoint == NULL) {
+		return -EINVAL;
+	}
+	return qmi_handle_init_bound(qmi, largest, ops, handlers, endpoint->operations, endpoint);
 }
 
 int

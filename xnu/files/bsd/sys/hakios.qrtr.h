@@ -43,6 +43,12 @@ struct hakios_qrtr_ops {
 	void (*close)(struct hakios_qrtr_port *port);
 };
 
+struct hakios_qrtr_endpoint {
+	const struct hakios_qrtr_ops *operations;
+	void *owner;
+	struct hakios_qrtr_port *(*open)(void *owner, hakios_qrtr_receive_t receive, hakios_qrtr_server_t server, void *context);
+};
+
 /* The transport there is; NULL takes it away (handles made before keep the one they were made with). */
 void hakios_qmi_set_transport(const struct hakios_qrtr_ops *ops);
 

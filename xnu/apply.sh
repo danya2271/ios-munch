@@ -26,5 +26,7 @@ git checkout -q -b hakios "$TAG"
 [ "$(git rev-parse HEAD)" = "$BASE" ] || { echo "apply.sh: $TAG is $(git rev-parse HEAD), expected $BASE" >&2; false; }
 echo 'BUILD/' >> .git/info/exclude
 git apply --whitespace=nowarn "$HERE/hakios.patch"
+git apply --whitespace=nowarn "$HERE/hakios-mmio.patch"
 cp -a "$HERE/files/." .
-echo "apply.sh: $DIR: $TAG + $(grep -c '^diff --git' "$HERE/hakios.patch") changed and $(find "$HERE/files" -type f | wc -l) new files"
+python3 "$HERE/register-qca-sources.py" "$DIR"
+echo "apply.sh: $DIR: $TAG + $(($(grep -c '^diff --git' "$HERE/hakios.patch") + $(grep -c '^diff --git' "$HERE/hakios-mmio.patch"))) changed and $(find "$HERE/files" -type f | wc -l) new files"

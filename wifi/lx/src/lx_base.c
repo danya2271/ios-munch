@@ -10,6 +10,10 @@
  * every little while to look again, so that a wake-up that came between a look and the sleep
  * costs milliseconds and nothing else.
  */
+#if defined(CONFIG_ATH11K_PCI) && !defined(LX_QCA_NATIVE_DMA)
+#error "lx_base.c DMA/SKB storage is AHB-only; native endpoint DMA binding is required"
+#endif
+
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/callout.h>
@@ -71,30 +75,6 @@ lx_tell(const char *format, ...)
 	vsnprintf(line, sizeof(line), format, list);
 	va_end(list);
 	lx_os_tell(line);
-}
-
-/* A function of a part of the driver that is not built yet (out/stubs.s): its name, a few times; the answer is 0. */
-long
-lx_stub(const char *name)
-{
-	static struct {
-		const char *name;
-		unsigned calls;
-	} seen[128];
-
-	for (unsigned i = 0; i < nitems(seen); i++) {
-		if (seen[i].name == NULL) {
-			seen[i].name = name;
-		}
-		if (seen[i].name == name) {
-			if (seen[i].calls++ < 3) {
-				printf("lx: %s() is not there yet: answers 0%s\n", name, seen[i].calls == 3 ? " (said for the last time)" : "");
-				lx_mark(name);
-			}
-			break;
-		}
-	}
-	return (0);
 }
 
 /*
@@ -755,6 +735,7 @@ iounmap(void *address)
  * or the other way round. The first part of it is handed out for good, a stretch at a time
  * (rings); the rest is slots of one size, taken and given back (buffers).
  */
+#if !defined(CONFIG_ATH11K_PCI)
 #define POOL_SIZE	(44u << 20)
 #define POOL_RINGS	(12u << 20)		/* (the data path's rings and link descriptors come to about 6 MB) */
 #define POOL_SLOT	4096u
@@ -918,6 +899,7 @@ linuxkpi_kfree_skb(struct sk_buff *skb)
 	}
 	lkpi_kfree(skb->m);
 }
+#endif
 
 /* ---- firmware files ---------------------------------------------------------------------------- */
 
@@ -1218,8 +1200,12 @@ linux_dmi_first_match(const struct dmi_system_id *list)
 void
 lx_memory_say(void)
 {
+#if defined(CONFIG_ATH11K_PCI)
+	lx_tell("lx: native PCI DMA arena; kernel allocations: %ld pieces, %ld KB\n", allocations, allocated >> 10);
+#else
 	lx_tell("lx: memory: %ld pieces of the kernel's out, %ld KB; of the radio's %u MB: %u KB of rings, %u of %u buffers out\n",
 	    allocations, allocated >> 10, POOL_SIZE >> 20, pool.rings_used >> 10, POOL_SLOTS - pool.free_count, POOL_SLOTS);
+#endif
 }
 
 int
@@ -1230,6 +1216,7 @@ lx_base_init(void)
 	if (begun) {
 		return (0);
 	}
-	begun = true;
-	return (lx_os_thread("wifi-ticks", ticker, NULL));
+	int error = lx_os_thread("wifi-ticks", ticker, NULL);
+	if (error == 0) { begun = true; }
+	return error;
 }

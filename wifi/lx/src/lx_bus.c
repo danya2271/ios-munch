@@ -25,6 +25,16 @@
  * networks around (bsd/dev/hakios.wifi.c, step_driver(), has the account).
  */
 #define LX_QMI_AS_IT_IS				/* (this file is where the driver's requests go past) */
+#if defined(CONFIG_ATH11K_PCI)
+#error "lx_bus.c is the WCN6750 AHB backend, not a native QCA6390 PCI backend"
+#endif
+
+int
+lx_backend_is_pci(void)
+{
+	return 0;
+}
+
 #include <linux/kernel.h>
 #include <linux/device.h>
 #include <linux/io.h>
@@ -80,76 +90,6 @@ static const struct ath11k_msi_config msi_config = {
 	.users = msi_users,
 	.hw_rev = ATH11K_HW_WCN6750_HW10,
 };
-
-/* ---- what the driver says ---------------------------------------------------------------------- */
-
-static void
-driver_says(const char *kind, const char *format, va_list list)
-{
-	char line[320];
-	size_t length;
-
-	vsnprintf(line, sizeof(line), format, list);
-	length = strlen(line);
-	/* (Linux ends a line for whoever has not) */
-	printf("ath11k%s: %s%s", kind, line, length != 0 && line[length - 1] == '\n' ? "" : "\n");
-}
-
-void
-ath11k_info(struct ath11k_base *ab, const char *format, ...)
-{
-	va_list list;
-
-	va_start(list, format);
-	driver_says("", format, list);
-	va_end(list);
-}
-
-/* (the driver's warnings and errors are said whatever happens to the rest) */
-static void
-driver_complains(const char *kind, const char *format, va_list list)
-{
-	char line[320];
-
-	vsnprintf(line, sizeof(line), format, list);
-	lx_tell("ath11k %s: %s%s", kind, line, line[0] != 0 && line[strlen(line) - 1] == '\n' ? "" : "\n");
-}
-
-void
-ath11k_warn(struct ath11k_base *ab, const char *format, ...)
-{
-	va_list list;
-
-	va_start(list, format);
-	driver_complains("WARNS", format, list);
-	va_end(list);
-}
-
-void
-ath11k_err(struct ath11k_base *ab, const char *format, ...)
-{
-	va_list list;
-
-	va_start(list, format);
-	driver_complains("ERROR", format, list);
-	va_end(list);
-}
-
-void
-__ath11k_dbg(struct ath11k_base *ab, enum ath11k_debug_mask mask, const char *format, ...)
-{
-	va_list list;
-
-	va_start(list, format);
-	driver_says(" (debug)", format, list);
-	va_end(list);
-}
-
-void
-ath11k_dbg_dump(struct ath11k_base *ab, enum ath11k_debug_mask mask, const char *msg, const char *prefix, const void *buf,
-    size_t len)
-{
-}
 
 /* ---- the chip's registers ---------------------------------------------------------------------- */
 
@@ -640,37 +580,6 @@ static const struct ath11k_hif_ops bus_ops_irq = {
 	.get_msi_address = bus_get_msi_address,
 	.get_ce_msi_idx = bus_get_ce_msi_idx,
 };
-
-/* ---- the device tree, of which there is none ------------------------------------------------------ */
-
-int
-of_property_read_string(const struct device_node *np, const char *name, const char **out)
-{
-	return (-EINVAL);
-}
-
-bool
-of_machine_is_compatible(const char *compatible)
-{
-	return (false);
-}
-
-int
-of_reserved_mem_region_to_resource(const struct device_node *np, unsigned int index, struct resource *res)
-{
-	return (-ENODEV);
-}
-
-/*
- * The radio's own address, which the driver asks its device for before it falls back on what the
- * firmware says (mac.c: ath11k_mac_register()); this radio's firmware says none. The kernel has
- * it, if it was given one. Nothing here says the address.
- */
-int
-linuxkpi_device_get_mac_address(struct device *dev, char *address)
-{
-	return (lx_os_radio_address((unsigned char *)address) ? 0 : -ENOENT);
-}
 
 /* ---- what the firmware has said of the radio ------------------------------------------------------- */
 

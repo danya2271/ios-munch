@@ -15,6 +15,32 @@
 
 #include "hakios.sta.h"
 
+struct hakios_dma_arena_config;
+
+/*
+ * Native QCA6390 platform callbacks. The XNU side owns the endpoint, DMA, MSI,
+ * MHI and IPCR resources; the LinuxKPI object only consumes this opaque ABI.
+ * A missing owner is a hard failure, not a probe-success fallback.
+ */
+#define HAKIOS_LX_QCA_PLATFORM_VERSION 1u
+struct hakios_lx_qca_platform {
+	uint32_t version;
+	int (*prepare)(void *owner, void *device, void *resources);
+	int (*attach_irqs)(void *owner, void *driver);
+	int (*close_admission)(void *owner);
+	int (*fence)(void *owner);
+	int (*detach_irqs)(void *owner);
+	int (*release)(void *owner);
+	int (*power)(void *owner, int operation);
+	int (*irqs)(void *owner, uint32_t vectors, bool enable);
+	int (*drain)(void *owner, uint32_t vectors);
+	void (*fault)(void *owner, int error);
+};
+
+/* Returns 0 with a complete owner/configuration, or an errno while fail-closed. */
+int	 lx_os_qca_platform(struct hakios_lx_qca_platform *platform, void **owner,
+	    struct hakios_dma_arena_config *config);
+
 /* ---- memory ---- */
 void	*lx_os_alloc(unsigned long size);			/* zeroed; NULL when there is none */
 void	 lx_os_free(void *memory, unsigned long size);
@@ -68,6 +94,9 @@ int	 lx_os_network(unsigned char *name, unsigned *name_length, unsigned char *pa
 void	 lx_os_net_attach(const unsigned char *address);	/* there is a radio, and this is its address */
 void	 lx_os_net_link(int up);				/* frames can pass now (a network is joined) / no longer */
 void	 lx_os_net_input(const unsigned char *frame, unsigned long length);	/* an Ethernet frame has arrived */
+
+/* 1 when the linked driver object is the native QCA6390 PCI profile. */
+int	 lx_backend_is_pci(void);
 
 /*
  * ---- the radio's interrupts (wifi_irq=1). The radio raises one by writing a number to an address
