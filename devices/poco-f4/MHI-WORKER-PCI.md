@@ -160,15 +160,18 @@ Probe performs these real stages:
    supplied HIF power-up. Zero means asynchronous probe completed, **not**
    firmware-ready, registered radio, associated station or usable networking.
 
-Remove and failed-probe rollback mark `UNREGISTERING`, close admission and
-require the explicit fence before destroying anything. They cancel QMI event
-work when initialized, reset/dump/restart/11d work and the RX-replenish timer;
-then use normal core deinit or the pinned driver's `QMI_FAIL` cleanup. A QMI
-handle left open by a failed core initialization is explicitly released.
-QMI unbind precedes IRQ detach, CE/HAL/firmware/core destruction and final
-owner release. Partial HAL initialization frees only its allocated config,
-not an uninitialized lockdep context. CE allocation failures use upstream's
-own partial-allocation cleanup.
+Remove and failed-probe rollback mark `UNREGISTERING` and close new owner
+admission first. They cancel QMI event work when initialized, reset/dump/restart/
+11d work and the RX-replenish timer, then use normal core deinit or the pinned
+driver's `QMI_FAIL` cleanup while DMA map/unmap/free admission is still open.
+The QMI handle is unbound next. HIF IRQ admission is then closed and drained;
+the platform fence stops and joins MHI/IPCR and confirms device DMA quiescence
+before IRQ detach or CE/HAL/firmware/core memory destruction. Final resource
+release runs last. Each successful stage is remembered so a failed later stage
+can be retried without repeating completed teardown or touching released HIF
+state. Partial HAL initialization frees only its allocated config, not an
+uninitialized lockdep context. CE allocation failures use upstream's own
+partial-allocation cleanup.
 
 On any cleanup failure, probe/remove returns that error and leaves a non-NULL
 state handle. The caller must retain it and retry `lx_qca_pci_remove`; it must

@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef PCIE_TEST_RUNTIME
+#include <sys/hakios.dma.arena.h>
+#endif
 #include "core.h"
 #include <lx_qca_pci.h>
 
@@ -52,6 +55,9 @@ static struct {
 	bool refuse_fence;
 	bool hif_closed;
 	unsigned cold_boot_calls;
+#ifdef PCIE_TEST_RUNTIME
+	struct hakios_dma_arena *arena;
+#endif
 } model;
 
 static int
@@ -100,7 +106,7 @@ void
 kfree(void *memory)
 {
 	if (memory != NULL) {
-		assert(model.fenced || !model.prepared);
+		assert(model.fenced || !model.prepared || model.closed);
 		model.frees++;
 		free(memory);
 	}
@@ -277,7 +283,7 @@ hakios_ipcr_qmi_bind(struct hakios_ipcr *ipcr, struct qmi_handle *qmi)
 int
 hakios_ipcr_qmi_unbind(struct hakios_ipcr *ipcr, struct qmi_handle *qmi)
 {
-	assert(ipcr == &model.ipcr && qmi == model.binding && qmi->sock == NULL && model.fenced);
+	assert(ipcr == &model.ipcr && qmi == model.binding && qmi->sock == NULL && model.closed && !model.fenced);
 	int error = failure(FAIL_UNBIND);
 	if (error == 0) {
 		model.binding = NULL;
@@ -342,6 +348,7 @@ int
 lx_qca_hif_close(struct lx_qca_hif *hif)
 {
 	assert(hif == &model.hif && model.closed);
+	assert(model.hif_closed || !model.fenced);
 	model.hif_closed = true;
 	return 0;
 }
@@ -350,7 +357,7 @@ lx_qca_hif_close(struct lx_qca_hif *hif)
 bool
 cancel_work_sync(struct work_struct *work)
 {
-	assert(model.closed && model.fenced && work->tag < 5);
+	assert(model.closed && !model.fenced && work->tag < 5);
 	model.cancelled |= 1u << work->tag;
 	return false;
 }
@@ -358,14 +365,14 @@ cancel_work_sync(struct work_struct *work)
 int
 del_timer_sync(struct timer_list *timer)
 {
-	assert(timer == &model.base->rx_replenish_retry && model.fenced);
+	assert(timer == &model.base->rx_replenish_retry && model.closed && !model.fenced);
 	return 0;
 }
 
 void
 qmi_handle_release(struct qmi_handle *qmi)
 {
-	assert(qmi == model.binding && model.fenced);
+	assert(qmi == model.binding && model.closed && !model.fenced);
 	kfree(qmi->sock);
 	qmi->sock = NULL;
 }
@@ -373,7 +380,11 @@ qmi_handle_release(struct qmi_handle *qmi)
 void
 ath11k_core_deinit(struct ath11k_base *base)
 {
-	assert(base == model.base && model.fenced && model.cancelled == 31 && model.core_deinit == 0);
+	assert(base == model.base && model.closed && !model.fenced && model.cancelled == 31 && model.core_deinit == 0);
+#ifdef PCIE_TEST_RUNTIME
+	struct hakios_dma_arena_status arena_status;
+	assert(model.arena != NULL && hakios_dma_arena_status(model.arena, &arena_status) == 0 && !arena_status.closed);
+#endif
 	model.core_deinit++;
 	qmi_handle_release(&base->qmi.handle);
 }
@@ -381,13 +392,13 @@ ath11k_core_deinit(struct ath11k_base *base)
 void
 ath11k_debugfs_soc_destroy(struct ath11k_base *base)
 {
-	assert(base == model.base && model.fenced && model.cancelled == 31);
+	assert(base == model.base && model.closed && !model.fenced && model.cancelled == 31);
 }
 
 void
 ath11k_qmi_deinit_service(struct ath11k_base *base)
 {
-	assert(base == model.base && model.special_deinit == 0);
+	assert(base == model.base && model.closed && !model.fenced && model.special_deinit == 0);
 	model.special_deinit++;
 	qmi_handle_release(&base->qmi.handle);
 }
@@ -435,7 +446,7 @@ static int read_block(struct ath11k_base *base, void *bytes, uint32_t start, uin
 { (void)base; (void)bytes; (void)start; (void)end; abort(); }
 static void hif_void(struct ath11k_base *base) { (void)base; abort(); }
 static int hif_int(struct ath11k_base *base) { (void)base; abort(); }
-static void power_down(struct ath11k_base *base, bool suspend) { assert(base == model.base && model.fenced && !suspend); }
+static void power_down(struct ath11k_base *base, bool suspend) { assert(base == model.base && model.closed && !model.fenced && !suspend); }
 static int map_pipe(struct ath11k_base *base, uint16_t service, uint8_t *uplink, uint8_t *downlink)
 { (void)base; (void)service; (void)uplink; (void)downlink; abort(); }
 static int msi_vector(struct ath11k_base *base, char *name, int *count, uint32_t *data, uint32_t *vector)
@@ -511,7 +522,12 @@ test_probe_failures(void)
 		model.refuse_fence = true;
 		struct lx_qca_pci *state;
 		assert(lx_qca_pci_probe(&model.device, &hif, &operations, &model, &state) == -ETIMEDOUT && state != NULL);
-		assert(model.frees == 0 && !model.fenced && model.cancelled == 0);
+		assert(!model.fenced);
+		if (partial == 0) {
+			assert(model.frees == 0 && model.cancelled == 0);
+		} else {
+			assert(model.frees == 1 && model.cancelled == 30 && model.base != NULL && model.ce && model.hal);
+		}
 		model.refuse_fence = false;
 		assert(lx_qca_pci_remove(&state) == 0);
 		check_clean(state);
@@ -525,8 +541,11 @@ test_probe_failures(void)
 			model.fail_site = site;
 			model.fail_error = negative != 0 ? -ETIMEDOUT : ETIMEDOUT;
 			assert(lx_qca_pci_remove(&state) == (negative != 0 ? -EIO : -ETIMEDOUT) && state != NULL);
-			if (site <= FAIL_FENCE) {
+			if (site == FAIL_CLOSE) {
 				assert(model.frees == 0 && model.core_deinit == 0 && model.cancelled == 0);
+			}
+			if (site == FAIL_FENCE) {
+				assert(model.core_deinit == 1 && model.cancelled == 31 && model.hif_closed && model.base != NULL);
 			}
 			assert(lx_qca_pci_remove(&state) == 0);
 			assert(model.core_deinit == 1);
@@ -567,7 +586,8 @@ test_rejections(void)
 		assert(lx_qca_pci_probe(&model.device, &hif, &operations, &model, &state) == 0);
 		model.bad_fence_worker = bad_ipcr == 0;
 		model.bad_fence_ipcr = bad_ipcr != 0;
-		assert(lx_qca_pci_remove(&state) == -EBUSY && state != NULL && model.frees == 0);
+		assert(lx_qca_pci_remove(&state) == -EBUSY && state != NULL && model.frees == 1 &&
+		    model.core_deinit == 1 && model.base != NULL && model.ce && model.hal);
 		model.bad_fence_worker = model.bad_fence_ipcr = false;
 		assert(lx_qca_pci_remove(&state) == 0);
 		check_clean(state);

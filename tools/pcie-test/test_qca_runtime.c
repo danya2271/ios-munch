@@ -71,12 +71,17 @@ static int runtime_attach(void *owner, struct ath11k_base *base)
 	struct lx_qca_pci_resources resources;
 	assert(lx_qca_pci_resources(base, &resources) == 0 && resources.arena != NULL && resources.hif != NULL);
 	assert(lx_qca_hif_status(resources.hif) == 0);
+	model.arena = resources.arena;
 	return attach(&model, base);
 }
 static int runtime_close(void *owner) { assert(owner == &platform); return close_admission(&model); }
 static int runtime_fence(void *owner)
 {
 	assert(owner == &platform);
+	struct hakios_dma_arena_status status;
+	if (model.arena != NULL) {
+		assert(hakios_dma_arena_status(model.arena, &status) == 0 && status.closed);
+	}
 	model.hif_closed = true;
 	return fence(&model);
 }
@@ -87,7 +92,7 @@ static int runtime_release(void *owner)
 	struct hakios_dma_arena *arena = hakios_dma_arena_get(&model.device);
 	assert(arena == NULL);
 	int error = release(&model);
-	if (error == 0) { free(platform.memory); platform.memory = NULL; }
+	if (error == 0) { free(platform.memory); platform.memory = NULL; model.arena = NULL; }
 	return error;
 }
 static int runtime_power(void *owner, enum lx_qca_power operation)
@@ -171,7 +176,12 @@ static void test_runtime_failures(void)
 		if (scenario >= 3) { model.fail_site = scenario == 3 ? FAIL_PREPARE : FAIL_CORE; model.refuse_fence = true; }
 		assert(start() < 0);
 		if (scenario >= 3) {
-			assert(runtime != NULL && model.frees == 0);
+			assert(runtime != NULL);
+			if (scenario == 3) {
+				assert(model.frees == 0 && model.cancelled == 0);
+			} else {
+				assert(model.frees == 1 && model.cancelled == 30 && model.base != NULL && model.ce && model.hal);
+			}
 			model.refuse_fence = false;
 			assert(lx_qca_runtime_stop(&runtime) == 0);
 		}
