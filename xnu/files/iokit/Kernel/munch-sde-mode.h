@@ -295,6 +295,99 @@ munch_mode_branch(struct munch_mode *mode, uint32_t offset, bool enable)
 }
 
 static inline bool
+munch_mode_registers_match(struct munch_mode *mode, enum munch_mode_space space, uint32_t base,
+    const struct munch_mode_register *registers, unsigned count, uint32_t mask)
+{
+	for (unsigned index = 0; index < count; index++) {
+		uint32_t offset = base + registers[index].offset;
+		if (!munch_mode_register_readable(space, offset)) continue;
+		if ((munch_mode_read(mode, space, offset) & mask) != (registers[index].value & mask))
+			return false;
+	}
+	return true;
+}
+
+static inline bool
+munch_mode_expected(struct munch_mode *mode, uint32_t refresh_hz)
+{
+	const struct munch_mode_register *tear;
+	unsigned tear_count;
+	const struct munch_mode_register *dsi_timing;
+	unsigned dsi_timing_count;
+	const struct munch_mode_register *intf_timing;
+	unsigned intf_timing_count;
+
+	if (refresh_hz != 60 && refresh_hz != 120) return false;
+	tear = refresh_hz == 120 ? munch_l11r_tear_120hz : munch_l11r_tear;
+	tear_count = refresh_hz == 120 ?
+	    sizeof(munch_l11r_tear_120hz) / sizeof(munch_l11r_tear_120hz[0]) :
+	    sizeof(munch_l11r_tear) / sizeof(munch_l11r_tear[0]);
+	dsi_timing = refresh_hz == 120 ? munch_l11r_dsi_timing_120 : munch_l11r_dsi_timing_60;
+	dsi_timing_count = refresh_hz == 120 ?
+	    sizeof(munch_l11r_dsi_timing_120) / sizeof(munch_l11r_dsi_timing_120[0]) :
+	    sizeof(munch_l11r_dsi_timing_60) / sizeof(munch_l11r_dsi_timing_60[0]);
+	intf_timing = refresh_hz == 120 ? munch_l11r_intf_timing_120 : munch_l11r_intf_timing_60;
+	intf_timing_count = refresh_hz == 120 ?
+	    sizeof(munch_l11r_intf_timing_120) / sizeof(munch_l11r_intf_timing_120[0]) :
+	    sizeof(munch_l11r_intf_timing_60) / sizeof(munch_l11r_intf_timing_60[0]);
+	if ((munch_mode_read(mode, MUNCH_MODE_PHY, 0x6b0) & 1) != 1 ||
+	    munch_mode_read(mode, MUNCH_MODE_PHY, 0x010) != 0x31 ||
+	    (munch_mode_read(mode, MUNCH_MODE_PHY, 0x014) & 0x3f) != 0x31 ||
+	    (munch_mode_read(mode, MUNCH_MODE_DSI, 0x004) & 0x1f7) != 0x1f5 ||
+	    (munch_mode_read(mode, MUNCH_MODE_DSI, 0x110) & (1u << 24)) ||
+	    !munch_mode_registers_match(mode, MUNCH_MODE_MDP, 0x81000, munch_l11r_dsc,
+	        sizeof(munch_l11r_dsc) / sizeof(munch_l11r_dsc[0]), UINT32_MAX) ||
+	    !munch_mode_registers_match(mode, MUNCH_MODE_DSI, 0, munch_l11r_stream,
+	        sizeof(munch_l11r_stream) / sizeof(munch_l11r_stream[0]), UINT32_MAX) ||
+	    !munch_mode_registers_match(mode, MUNCH_MODE_DSI, 0, dsi_timing, dsi_timing_count, UINT32_MAX) ||
+	    !munch_mode_registers_match(mode, MUNCH_MODE_MDP, 0x6b800, intf_timing, intf_timing_count, UINT32_MAX))
+		return false;
+	for (unsigned index = 0; index < tear_count; index++) {
+		uint32_t expected = tear[index].value;
+		if (index == 0 && mode->teConnected) expected |= MUNCH_SDE_EXTERNAL_TE;
+		if (munch_mode_read(mode, MUNCH_MODE_MDP, 0x6b800 + tear[index].offset) != expected)
+			return false;
+	}
+	return munch_mode_read(mode, MUNCH_MODE_MDP, 0x6ba84) & 1;
+}
+
+static inline bool
+munch_mode_adopt(struct munch_mode *mode)
+{
+	const struct munch_mode_register *intf_timing_60 = munch_l11r_intf_timing_60;
+	const struct munch_mode_register *intf_timing_120 = munch_l11r_intf_timing_120;
+	unsigned intf_timing_count = sizeof(munch_l11r_intf_timing_60) /
+	    sizeof(munch_l11r_intf_timing_60[0]);
+	bool inherited60 = munch_mode_registers_match(mode, MUNCH_MODE_MDP, 0x6b800,
+	    intf_timing_60, intf_timing_count, UINT32_MAX);
+	bool inherited120 = munch_mode_registers_match(mode, MUNCH_MODE_MDP, 0x6b800,
+	    intf_timing_120, intf_timing_count, UINT32_MAX);
+	uint32_t vsync = munch_mode_read(mode, MUNCH_MODE_MDP, 0x6b800 + 0x288);
+	uint32_t inherited_refresh;
+
+	if (mode->touched || mode->configured || !mode->scratch || mode->scratch_size < 136 ||
+	    !mode->scratch_iova || (mode->scratch_iova & 7) ||
+	    (uint64_t)mode->scratch_iova + mode->scratch_size > (1ULL << 32) ||
+	    inherited60 == inherited120 || (!inherited60 && !inherited120))
+		return false;
+	inherited_refresh = inherited120 ? 120 : 60;
+	mode->refresh_hz = inherited_refresh;
+	mode->teConnected = (vsync & MUNCH_SDE_EXTERNAL_TE) != 0;
+	mode->configured = true;
+	mode->lit = true;
+	mode->phase = "native-inherited";
+	if (!munch_mode_expected(mode, inherited_refresh)) {
+		mode->configured = false;
+		mode->lit = false;
+		mode->phase = "native-handoff-rejected";
+		return false;
+	}
+	mode->touched = true;
+	mode->vblankFrameValid = false;
+	return true;
+}
+
+static inline bool
 munch_mode_configure(struct munch_mode *mode, uint32_t refresh_hz)
 {
 	static const uint32_t branches[] = { 0x2004, 0x202c, 0x2028, 0x2038, 0x2024 };

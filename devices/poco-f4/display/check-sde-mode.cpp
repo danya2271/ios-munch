@@ -297,5 +297,5 @@ int main()
 		assert(machine.elapsed < 1000000);
 		if (scenario >= 6) assert(!machine.writes);
 	}
-	printf("Native mode: full Android-style transaction, panel init, TE validation, brightness DMA, independent hardware vblank, %u fault boundaries and 13 rejection paths passed\n", totalWrites);
+	printf("Native mode: continuous-splash handoff, dynamic timing, TE validation, brightness DMA, independent hardware vblank, %u fault boundaries and 13 rejection paths passed\n", totalWrites);
 }

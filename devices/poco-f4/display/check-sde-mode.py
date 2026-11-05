@@ -19,14 +19,15 @@ submit = runtime[runtime.index('munchSdeSubmitFrame('):runtime.index('munchSdeCo
 complete = runtime[runtime.index('munchSdeCompleteFrame('):runtime.index('munchSdeEndFrame(')]
 assert submit.index('munchSdeGuard(') < submit.index('munch_sde_pause_refresh(')
 assert 'munch_sde_check_buffers(' not in submit
-assert submit.index('munch_sde_pause_refresh(') < submit.index('munch_mode_configure(') < submit.index('munch_sde_submit(')
+assert submit.index('munch_sde_pause_refresh(') < submit.index('munch_mode_adopt(') < submit.index('munch_sde_submit(')
 assert complete.index('munchSdePollFrame(') < complete.index('munch_mode_light(')
 assert 'munchSdeSubmitFrame(state)' in runtime[runtime.index('munchSdeEndFrame('):runtime.index('munchSdeSampleVBlank(')]
 assert 'ml_io_map(0x0af00000, 0x4000)' in initialize
 mode = (root / 'xnu/files/iokit/Kernel/munch-sde-mode.h').read_text()
-for phase in ('native-panel-sleep', 'native-phy', 'native-clocks', 'native-host',
-              'native-dsc', 'native-route', 'native-panel-init', 'native-tearcheck'):
+for phase in ('native-inherited', 'native-panel-sleep', 'native-phy', 'native-clocks',
+              'native-host', 'native-dsc', 'native-route', 'native-panel-init', 'native-tearcheck'):
     assert phase in mode
+assert mode.index('munch_mode_adopt(') < mode.index('munch_mode_configure(')
 assert mode.index('native-panel-sleep') < mode.index('native-phy') < mode.index('native-clocks')
 assert mode.index('native-clocks') < mode.index('native-host') < mode.index('native-dsc')
 assert mode.index('native-dsc') < mode.index('native-route') < mode.index('native-panel-init')
