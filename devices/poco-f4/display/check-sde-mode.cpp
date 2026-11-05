@@ -250,6 +250,13 @@ int main()
 		assert(machine.mode.commands == panelCommandCount120() * 2 + 3);
 		assert(machine.packets == panelBatchCount(munch_l11r_on_120hz, sizeof(munch_l11r_on_120hz)) * 2 + 3);
 	}
+	{
+		Machine machine;
+		assert(munch_mode_configure(&machine.mode, 60));
+		assert(munch_mode_switch_refresh(&machine.mode, 120));
+		assert(machine.mode.refresh_hz == 120);
+		assert(machine.mdp[0x6ba88 / 4] == 0x80042);
+	}
 	for (unsigned drift = 0; drift < 3; drift++) {
 		Machine machine;
 		assert(munch_mode_configure(&machine.mode, 60));

@@ -833,7 +833,10 @@ munchSdeSubmitFrame(MunchSDE *state)
 			state->mode.scratch = state->pixels[index] + offset;
 			state->mode.scratch_iova = state->buffers[index].iova + offset;
 			state->mode.scratch_size = state->buffers[index].length - offset;
-			if (!munch_mode_configure(&state->mode, state->nativeRefreshHz)) {
+			uint32_t init_refresh = state->nativeRefreshHz == 120 ? 60 : state->nativeRefreshHz;
+			if (!munch_mode_configure(&state->mode, init_refresh) ||
+			    (state->nativeRefreshHz != init_refresh &&
+			    !munch_mode_switch_refresh(&state->mode, state->nativeRefreshHz))) {
 				volatile uint32_t *dma = (volatile uint32_t *)state->mode.scratch;
 				IOLog("MUNCH SDE DSI FAIL: ctrl=%08x status=%08x fifo=%08x dma=%08x addr=%08x len=%08x "
 				    "dfifo=%08x tpgfifo=%08x trig=%08x sched=%08x/%08x sw=%08x int=%08x "
