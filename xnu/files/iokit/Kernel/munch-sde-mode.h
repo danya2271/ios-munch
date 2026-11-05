@@ -283,7 +283,7 @@ munch_mode_configure(struct munch_mode *mode, uint32_t refresh_hz)
 	unsigned intf_timing_count;
 	static const struct munch_mode_register host[] = {
 		{ 0x004, 0x1f0 }, { 0x084, 0x80000004 }, { 0x0c4, 0 }, { 0x0cc, 1 },
-		{ 0x11c, 0x23f },
+		{ 0x10c, 0x03f03fc0 }, { 0x110, 0x02200202 }, { 0x11c, 0x23f },
 	};
 	static const struct munch_mode_register route[] = {
 		{ 0x05000, 0x09600438 }, { 0x05008, 0 }, { 0x0500c, 0x09600438 }, { 0x05010, 0 },
