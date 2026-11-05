@@ -70,6 +70,7 @@ static inline bool
 munch_mode_register_readable(enum munch_mode_space space, uint32_t offset)
 {
 	return !(space == MUNCH_MODE_DSI && offset == 0x1e4) &&
+	    !(space == MUNCH_MODE_DSI && offset == 0x10c) &&
 	    !(space == MUNCH_MODE_MDP && offset == MUNCH_SDE_INTF1_OFFSET + 0x0a8);
 }
 
