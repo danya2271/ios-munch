@@ -144,7 +144,7 @@ munch_mode_command_batch(struct munch_mode *mode, const struct munch_mode_comman
 			munch_mode_write(mode, MUNCH_MODE_DSI, 0x1ec, 1);
 			mode->io.delay(mode->io.cookie, 1);
 			munch_mode_write(mode, MUNCH_MODE_DSI, 0x1ec, 0);
-			munch_mode_write(mode, MUNCH_MODE_DSI, 0x110, mask | 1);
+			munch_mode_write(mode, MUNCH_MODE_DSI, 0x110, (mask & ~2u) | 1u);
 			mode->commands += count;
 			return munch_mode_healthy(mode);
 		}
