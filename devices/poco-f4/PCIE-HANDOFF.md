@@ -46,6 +46,12 @@ prove that its root bridge owns Kona RC0, that QCA6390 is behind it, or that
 the interface remains callable/exclusive after XNU starts on another core.
 Handle counts never clear the RC0 gate.
 
+`wifi_qca_status=1` also performs a one-shot, abort-safe, read-only SMMU
+snapshot for RID `0x100` / SID `0x1c01`: global geometry, matching SMR/S2CR
+pairs, and referenced translation-context registers. It does not clear faults,
+select a context, or write SMMU registers. The snapshot informs the DMA owner
+design; it does not authorize taking over a stream or context.
+
 ## What the boot sources establish
 
 The checked sources are `xnuloader/loader.c`,

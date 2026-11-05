@@ -20,6 +20,9 @@ build input is needed. The runner uses a fresh temporary directory and removes
 only that directory on exit. The native PCIe service, Kona CFG0/lifecycle
 engine, and Kona provider adapter are linked into the test executable.
 The shim replaces only kernel allocation, mutexes and basic library headers.
+A separate memory-backed test links the read-only QCA SMMU diagnostic and
+checks SID matches, translated/bypass routes, extended-SID mode, CB aperture
+bounds, abort handling and unmapping.
 A second executable links the real `hakios.dma.pagetable.c` implementation
 against an independent walker/cache model. It exercises 4 KiB/39-bit geometry,
 permissions and output-width limits, scatter-backed 64 MiB mapping, atomic

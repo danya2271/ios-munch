@@ -22,6 +22,9 @@ FLAGS=(-std=c11 -D_DEFAULT_SOURCE -O1 -g -Wall -Wextra -Werror -pthread
     "$HERE/test_gic_spi.c" -o "$BUILD/test-gic-spi"
 "$BUILD/test-gic-spi"
 "${CC:-cc}" "${FLAGS[@]}" -I"$HERE/shim" -I"$BUILD/include" \
+    "$HERE/test_qca_smmu.c" "$ROOT/xnu/files/bsd/dev/hakios.qca6390.diag.c" -o "$BUILD/test-qca-smmu"
+"$BUILD/test-qca-smmu"
+"${CC:-cc}" "${FLAGS[@]}" -I"$HERE/shim" -I"$BUILD/include" \
     "$HERE/test_pcie.c" "$ROOT/xnu/files/bsd/dev/hakios.pcie.c" \
     "$ROOT/xnu/files/bsd/dev/hakios.pcie.kona.c" \
     "$ROOT/xnu/files/bsd/dev/hakios.pcie.kona.platform.c" -o "$BUILD/test-pcie"

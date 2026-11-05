@@ -10,13 +10,19 @@ SPEC = importlib.util.spec_from_file_location("register_qca_sources", SOURCE)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 QCA_DRIVER = ROOT / "xnu/files/bsd/dev/hakios.qca6390.c"
+QCA_DIAGNOSTIC = ROOT / "xnu/files/bsd/dev/hakios.qca6390.diag.c"
 QCA_HEADER = ROOT / "xnu/files/bsd/sys/hakios.qca6390.h"
 
 
 def run():
     qca_source = QCA_DRIVER.read_text()
+    diagnostic = QCA_DIAGNOSTIC.read_text()
     qca_header = QCA_HEADER.read_text()
     assert "hakios_qca6390_dma_register" in qca_source
+    assert "hakios_qca6390_smmu_report" in qca_header
+    assert "hakios_mmio_read32" in diagnostic
+    assert "hakios_mmio_write" not in diagnostic
+    assert "ml_io_unmap(mapping, QCA_SMMU_SIZE)" in diagnostic
     assert "int (*status)" in qca_header and "int (*stop)" in qca_header
     assert "int (*map)" not in qca_header
     for legacy in ("SMMU_", "qca_smmu", "ml_io_map_unmappable", "kvtophys", "hakios_smmu_lock",
@@ -41,6 +47,7 @@ def run():
         for name in MODULE.QCA_SOURCES:
             entry = f"bsd/dev/{name}.c"
             assert text.splitlines().count(f"{entry}\tstandard") == 1
+        assert "bsd/dev/hakios.qca6390.diag.c\tstandard" in text
 
     with tempfile.TemporaryDirectory(prefix="qca-manifest-missing-") as temporary:
         root = Path(temporary)
@@ -55,7 +62,7 @@ def run():
             raise AssertionError("missing QCA sources must be rejected")
         assert manifest.read_text() == "base.c standard\n"
 
-    print("qca-manifest-test: PASS (provider-only QCA DMA, source check, idempotent registration)")
+    print("qca-manifest-test: PASS (read-only SMMU diagnostic, provider-only DMA, source registration)")
 
 
 if __name__ == "__main__":

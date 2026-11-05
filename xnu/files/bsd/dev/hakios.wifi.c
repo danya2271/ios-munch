@@ -4355,6 +4355,9 @@ hakios_wifi_init(void)
 		} else {
 			printf("wifi: UEFI PCI inventory: /chosen unavailable\n");
 		}
+		if (wifi_munch_platform()) {
+			hakios_qca6390_smmu_report();
+		}
 	}
 	if (wifi_munch_platform()) {
 		if (qca_probe != 0) {

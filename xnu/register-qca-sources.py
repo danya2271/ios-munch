@@ -29,6 +29,7 @@ QCA_SOURCES = (
     "hakios.ipcr",
     "hakios.qrtr.wire",
     "hakios.qrtr.mhi",
+    "hakios.qca6390.diag",
     "hakios.qca6390",
 )
 
