@@ -3,9 +3,14 @@
 ## Scope and current gate
 
 This is a source-level contract for QCA6390 HW2.0 on Kona RC0, not a claim
-that firmware has transferred any resources. Authorized local compilation and
-host tests are recorded in `PCIE-VALIDATION.md`; no device operations have
-been performed for this work.
+that firmware has transferred any resources. Local compilation, host tests,
+and device observations are recorded in `PCIE-VALIDATION.md`.
+
+The r69 device trial reused the working r66 kernel and added
+`wifi_qca_status=1`; XNU rebooted before USB logging began. This implicates the
+previous combined status path, but does not identify which diagnostic operation
+caused the reboot. The status path now performs no MMIO; SMMU and RC0 reads are
+separately gated.
 
 `hakios_qca6390_preflight(required, missing)` is a software-only prerequisite
 query. It returns `EINVAL` for a missing output, an empty request, or unknown
@@ -38,26 +43,29 @@ access goes through that boundary rather than inline QCA RC0 mappings.
 Resolving RC0 handoff alone must not enable DMA/MSI. The API and provider
 obligations are documented in `PCIE-NATIVE-API.md`.
 
-The loader's read-only PCI inventory counts UEFI
+`wifi_qca_status=1` performs only software preflight and reads the loader's
+read-only PCI inventory. The inventory counts UEFI
 `PciHostBridgeResourceAllocation`, `PciRootBridgeIo`, and `PciIo` protocol
 handles and publishes those counts under `/chosen` for `wifi_qca_status=1`.
 This discovers whether a standard firmware PCI interface exists. It does not
 prove that its root bridge owns Kona RC0, that QCA6390 is behind it, or that
 the interface remains callable/exclusive after XNU starts on another core.
-Handle counts never clear the RC0 gate.
+Handle counts never clear the RC0 gate. This mode performs no MMIO.
 
-`wifi_qca_status=1` also performs a one-shot, abort-safe, read-only SMMU
-snapshot for RID `0x100` / SID `0x1c01`: global geometry, matching SMR/S2CR
-pairs, and referenced translation-context registers. It does not clear faults,
-select a context, or write SMMU registers. The snapshot informs the DMA owner
-design; it does not authorize taking over a stream or context.
+The SMMU snapshot is separately gated by `wifi_qca_smmu_status=1`. It reads
+RID `0x100` / SID `0x1c01`, global geometry, matching SMR/S2CR pairs, and
+referenced translation-context registers. It does not clear faults, select a
+context, or write SMMU registers. The snapshot informs the DMA owner design;
+it does not authorize taking over a stream or context.
 
-The same diagnostic records current RC0 link, PHY, clock/reset, GPIO, iATU0,
-and CRC8 RID-to-SID state. It reads endpoint CFG0 identity only if the existing
-iATU0 values already describe the QCA bus-1 configuration aperture and link
-status is up; it never programs iATU to obtain the read. These snapshots show
-what the current boot left behind, not exclusive ownership or permission to
-retrain/reset the controller.
+The RC0 snapshot is separately gated by `wifi_qca_rc0_status=1`. It reads
+current RC0 link, PHY, clock/reset, GPIO, iATU0, and CRC8 RID-to-SID state. It
+reads endpoint CFG0 identity only if the existing iATU0 values already
+describe the QCA bus-1 configuration aperture and link status is up; it never
+programs iATU to obtain the read. These snapshots show what the current boot
+left behind, not exclusive ownership or permission to retrain/reset the
+controller. Keep this mode disabled until the early reboot seen with the
+previous combined status path is understood.
 
 ## What the boot sources establish
 

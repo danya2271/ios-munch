@@ -12,12 +12,14 @@ SPEC.loader.exec_module(MODULE)
 QCA_DRIVER = ROOT / "xnu/files/bsd/dev/hakios.qca6390.c"
 QCA_DIAGNOSTIC = ROOT / "xnu/files/bsd/dev/hakios.qca6390.diag.c"
 QCA_HEADER = ROOT / "xnu/files/bsd/sys/hakios.qca6390.h"
+WIFI_SOURCE = ROOT / "xnu/files/bsd/dev/hakios.wifi.c"
 
 
 def run():
     qca_source = QCA_DRIVER.read_text()
     diagnostic = QCA_DIAGNOSTIC.read_text()
     qca_header = QCA_HEADER.read_text()
+    wifi_source = WIFI_SOURCE.read_text()
     assert "hakios_qca6390_dma_register" in qca_source
     assert "hakios_qca6390_smmu_report" in qca_header
     assert "hakios_qca6390_rc0_report" in qca_header
@@ -28,6 +30,14 @@ def run():
     assert "existing CFG0" in diagnostic
     assert "int (*status)" in qca_header and "int (*stop)" in qca_header
     assert "int (*map)" not in qca_header
+    status_body = wifi_source.split("if (qca_status != 0) {", 1)[1].split(
+        "\n\tif (qca_smmu_status != 0)", 1)[0]
+    assert "hakios_qca6390_smmu_report()" not in status_body
+    assert "hakios_qca6390_rc0_report()" not in status_body
+    assert 'PE_parse_boot_argn("wifi_qca_smmu_status"' in wifi_source
+    assert 'PE_parse_boot_argn("wifi_qca_rc0_status"' in wifi_source
+    assert "if (qca_smmu_status != 0)" in wifi_source
+    assert "if (qca_rc0_status != 0)" in wifi_source
     for legacy in ("SMMU_", "qca_smmu", "ml_io_map_unmappable", "kvtophys", "hakios_smmu_lock",
                    "hakios_qca6390_dma_map", "hakios_qca6390_dma_stop"):
         assert legacy not in qca_source and legacy not in qca_header

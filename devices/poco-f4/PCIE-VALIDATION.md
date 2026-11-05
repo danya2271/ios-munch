@@ -75,7 +75,8 @@ exclusion.
 | GCC/Clang host model, ASan + UBSan | PASS | SID/context selection, translated/bypass routes, extended SID, abort cleanup, RC0 snapshot and guarded CFG0 admission |
 | ARM64 object compilation | PASS, 27 units | Includes `hakios.qca6390.diag.c` and the `wifi_qca_status=1` call site |
 | Device snapshot | PASS | `logs/qca-smmu-r58.log`; SID `0x1c01` absent, no RC0 snapshot in this pre-RC0 diagnostic image |
-| RC0 diagnostic device snapshot | PENDING | Status image records link/iATU/PARF/SID/GPIO/clock/reset state without programming hardware |
+| Combined status device trial, r69 | FAIL | Reused working r66 kernel SHA; adding `wifi_qca_status=1` rebooted during XNU before USB logging, so the failing diagnostic operation is not isolated |
+| Explicit RC0 diagnostic device snapshot | NOT RUN | `wifi_qca_rc0_status=1` is now separate and remains disabled pending review of the early reboot |
 
 The diagnostic reports the SMMU ID registers and global fault state, matching
 SMR/S2CR entries for RID `0x100` / SID `0x1c01`, and referenced translation

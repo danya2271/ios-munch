@@ -51,10 +51,12 @@ protocol before handing DWC3 to XNU. Do not add `--usb-debug` to the same
 command; the two profiles are mutually exclusive. The default
 `loader_return_after=600` returns from XNU after ten minutes, after which the
 one-shot loader reboots the phone. Use `loader_return_after=0` to disable this
-timer for a longer run. With `wifi_qca_status=1`, XNU also reports the
-read-only UEFI PCI protocol inventory published in `/chosen`; protocol counts
-are evidence of installed firmware interfaces, not proof of exclusive RC0
-ownership.
+timer for a longer run. `wifi_qca_status=1` reports software preflight and the
+read-only UEFI PCI protocol inventory without MMIO. The separate
+`wifi_qca_smmu_status=1` and `wifi_qca_rc0_status=1` options request hardware
+snapshots; leave them disabled unless that specific read path is under test.
+Protocol counts are evidence of installed firmware interfaces, not proof of
+exclusive RC0 ownership.
 
 ## Boot and Capture Logs
 
