@@ -44,6 +44,7 @@ struct hakios_qca6390_msi_provider {
 int hakios_qca6390_preflight(uint32_t required, uint32_t *missing);
 bool hakios_qca6390_platform_matches(void);
 void hakios_qca6390_smmu_report(void);
+void hakios_qca6390_rc0_report(void);
 int hakios_qca6390_dma_register(const struct hakios_qca6390_dma_provider *provider, void *context);
 int hakios_qca6390_dma_unregister(void *context);
 int hakios_qca6390_msi_register(const struct hakios_qca6390_msi_provider *provider, void *context);

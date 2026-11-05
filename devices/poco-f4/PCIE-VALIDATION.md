@@ -72,17 +72,21 @@ exclusion.
 
 | Check | Result | Scope |
 | --- | --- | --- |
-| GCC host model, ASan + UBSan | PASS | SID coverage, translated/bypass routes, extended-SID validity, CB geometry and abort cleanup |
+| GCC/Clang host model, ASan + UBSan | PASS | SID/context selection, translated/bypass routes, extended SID, abort cleanup, RC0 snapshot and guarded CFG0 admission |
 | ARM64 object compilation | PASS, 27 units | Includes `hakios.qca6390.diag.c` and the `wifi_qca_status=1` call site |
-| Device snapshot | NOT RUN | Existing diagnostic option only; the function performs reads and cleanup |
+| Device snapshot | PASS | `logs/qca-smmu-r58.log`; SID `0x1c01` absent, no RC0 snapshot in this pre-RC0 diagnostic image |
+| RC0 diagnostic device snapshot | PENDING | Status image records link/iATU/PARF/SID/GPIO/clock/reset state without programming hardware |
 
 The diagnostic reports the SMMU ID registers and global fault state, matching
 SMR/S2CR entries for RID `0x100` / SID `0x1c01`, and referenced translation
 contexts. It uses the synchronous-abort-safe MMIO reader, checks IDR geometry
 against the 1 MiB DT aperture before reading a context, and unmaps its view on
 every mapped path. It does not acknowledge faults, program SMMU registers or
-clear a QCA readiness gate. The host test exercises software and cleanup with
-a memory-backed register window; it does not establish live device state.
+clear a QCA readiness gate. The RC0 snapshot reads an existing CFG0 aperture
+only when its live iATU registers already match the QCA configuration window.
+Host tests use a memory-backed register window and do not establish ownership
+or live hardware behavior.
+The RC0 mock verifies that a nonmatching iATU window skips CFG0 entirely.
 
 ## Resource-backed Kona MMIO/config/BAR backend — November 5, 2026
 

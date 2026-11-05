@@ -4357,6 +4357,7 @@ hakios_wifi_init(void)
 		}
 		if (wifi_munch_platform()) {
 			hakios_qca6390_smmu_report();
+			hakios_qca6390_rc0_report();
 		}
 	}
 	if (wifi_munch_platform()) {

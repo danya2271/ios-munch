@@ -20,9 +20,12 @@ def run():
     qca_header = QCA_HEADER.read_text()
     assert "hakios_qca6390_dma_register" in qca_source
     assert "hakios_qca6390_smmu_report" in qca_header
+    assert "hakios_qca6390_rc0_report" in qca_header
     assert "hakios_mmio_read32" in diagnostic
     assert "hakios_mmio_write" not in diagnostic
     assert "ml_io_unmap(mapping, QCA_SMMU_SIZE)" in diagnostic
+    assert "qca_cfg0 = iatu[0] == 4u" in diagnostic
+    assert "existing CFG0" in diagnostic
     assert "int (*status)" in qca_header and "int (*stop)" in qca_header
     assert "int (*map)" not in qca_header
     for legacy in ("SMMU_", "qca_smmu", "ml_io_map_unmappable", "kvtophys", "hakios_smmu_lock",

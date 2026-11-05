@@ -52,6 +52,13 @@ pairs, and referenced translation-context registers. It does not clear faults,
 select a context, or write SMMU registers. The snapshot informs the DMA owner
 design; it does not authorize taking over a stream or context.
 
+The same diagnostic records current RC0 link, PHY, clock/reset, GPIO, iATU0,
+and CRC8 RID-to-SID state. It reads endpoint CFG0 identity only if the existing
+iATU0 values already describe the QCA bus-1 configuration aperture and link
+status is up; it never programs iATU to obtain the read. These snapshots show
+what the current boot left behind, not exclusive ownership or permission to
+retrain/reset the controller.
+
 ## What the boot sources establish
 
 The checked sources are `xnuloader/loader.c`,

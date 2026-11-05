@@ -39,6 +39,197 @@ extern lck_mtx_t hakios_smmu_lock;
 #define QCA_SMMU_S2CR_EXIDVALID (1u << 10)
 #define QCA_SMMU_CB_OFFSET 0x1000u
 
+struct qca_diag_region {
+	uint64_t physical;
+	vm_size_t size;
+	vm_offset_t mapping;
+};
+
+enum qca_diag_region_index {
+	QCA_DIAG_HOST,
+	QCA_DIAG_PARF,
+	QCA_DIAG_PHY,
+	QCA_DIAG_TLMM,
+	QCA_DIAG_GCC,
+	QCA_DIAG_CONFIG,
+	QCA_DIAG_REGION_COUNT,
+};
+
+static LCK_GRP_DECLARE(qca_diag_lock_group, "qca6390-diagnostic");
+static LCK_MTX_DECLARE(qca_diag_lock, &qca_diag_lock_group);
+
+static struct qca_diag_region qca_diag_regions[QCA_DIAG_REGION_COUNT] = {
+	[QCA_DIAG_HOST] = {.physical = 0x60000000ull, .size = 0x2000, .mapping = 0},
+	[QCA_DIAG_PARF] = {.physical = 0x01c00000ull, .size = 0x3000, .mapping = 0},
+	[QCA_DIAG_PHY] = {.physical = 0x01c06000ull, .size = 0x1000, .mapping = 0},
+	[QCA_DIAG_TLMM] = {.physical = 0x0f100000ull, .size = 0x100000, .mapping = 0},
+	[QCA_DIAG_GCC] = {.physical = 0x00100000ull, .size = 0x90000, .mapping = 0},
+	[QCA_DIAG_CONFIG] = {.physical = 0x60100000ull, .size = 0x1000, .mapping = 0},
+};
+
+static int
+qca_diag_read32(volatile uint8_t *base, vm_size_t size, uint32_t offset, uint32_t *value)
+{
+	if (base == NULL || value == NULL || (offset & 3) != 0 ||
+	    (uint64_t)offset + sizeof(*value) > size) {
+		return EINVAL;
+	}
+	int error = hakios_mmio_read32(base + offset, value);
+	return error < 0 ? EIO : error;
+}
+
+static bool
+qca_diag_read(struct qca_diag_region *region, const char *name, uint32_t offset, uint32_t *value)
+{
+	int error = region->mapping == 0 ? ENXIO :
+	    qca_diag_read32((volatile uint8_t *)region->mapping, region->size, offset, value);
+	if (error != 0) {
+		printf("qca6390: RC0 %s[%#x] unavailable (%d)\n", name, offset, error);
+		return false;
+	}
+	return true;
+}
+
+static uint8_t
+qca_diag_sid_hash(uint16_t requester_id)
+{
+	uint8_t bytes[2] = {(uint8_t)(requester_id >> 8), (uint8_t)requester_id};
+	uint8_t crc = 0;
+
+	for (uint32_t byte = 0; byte < sizeof(bytes); byte++) {
+		crc ^= bytes[byte];
+		for (uint32_t bit = 0; bit < 8; bit++) {
+			crc = (crc & 0x80u) != 0 ? (uint8_t)((crc << 1) ^ 0x07u) : (uint8_t)(crc << 1);
+		}
+	}
+	return crc;
+}
+
+static void
+qca_diag_rc0_map_all(void)
+{
+	for (uint32_t index = 0; index < QCA_DIAG_REGION_COUNT; index++) {
+		struct qca_diag_region *region = &qca_diag_regions[index];
+		if (index == QCA_DIAG_CONFIG) continue;
+		region->mapping = ml_io_map_unmappable((vm_offset_t)region->physical, region->size, VM_WIMG_IO);
+	}
+}
+
+static void
+qca_diag_rc0_unmap_all(void)
+{
+	for (uint32_t index = 0; index < QCA_DIAG_REGION_COUNT; index++) {
+		struct qca_diag_region *region = &qca_diag_regions[index];
+		if (region->mapping != 0) {
+			ml_io_unmap(region->mapping, region->size);
+			region->mapping = 0;
+		}
+	}
+}
+
+void
+hakios_qca6390_rc0_report(void)
+{
+	uint32_t dbi_link = 0, elbi_status = 0, ltssm = 0, phy_control = 0;
+	uint32_t phy_status = 0, phy_power = 0, device_type = 0, iatu[7] = {0};
+	uint32_t clock_control = 0, wifi_ref_clock = 0, phy_refgen = 0;
+	uint32_t sid_entry = 0, gpio_cfg = 0, gpio_io = 0;
+	bool dbi_read, elbi_read, iatu_read = true, qca_cfg0 = false;
+
+	if (!hakios_qca6390_platform_matches()) {
+		printf("qca6390: RC0 diagnostic skipped: not Munch\n");
+		return;
+	}
+	lck_mtx_lock(&qca_diag_lock);
+	qca_diag_rc0_map_all();
+	dbi_read = qca_diag_read(&qca_diag_regions[QCA_DIAG_HOST], "DBI", 0x80, &dbi_link);
+	elbi_read = qca_diag_read(&qca_diag_regions[QCA_DIAG_HOST], "ELBI", 0xf28, &elbi_status);
+	qca_diag_read(&qca_diag_regions[QCA_DIAG_PARF], "PARF", 0x1b0, &ltssm);
+	qca_diag_read(&qca_diag_regions[QCA_DIAG_PARF], "PARF", 0x40, &phy_control);
+	qca_diag_read(&qca_diag_regions[QCA_DIAG_PARF], "PARF", 0x1000, &device_type);
+	qca_diag_read(&qca_diag_regions[QCA_DIAG_PHY], "PHY", 0x814, &phy_status);
+	qca_diag_read(&qca_diag_regions[QCA_DIAG_PHY], "PHY", 0x840, &phy_power);
+	printf("qca6390: RC0 read-only DBI_LINK=%#x ELBI_SYS_STTS=%#x PARF_LTSSM=%#x PHY_CTRL=%#x DEVICE_TYPE=%#x PHY_STATUS=%#x PHY_POWER=%#x\n",
+	    dbi_link, elbi_status, ltssm, phy_control, device_type, phy_status, phy_power);
+	if (dbi_read && elbi_read) {
+		printf("qca6390: RC0 link snapshot DBI-up=%u ELBI-up=%u LTSSM-state=%#x\n",
+		    (dbi_link & (1u << 29)) != 0, (elbi_status & 0x400u) != 0, (ltssm >> 12) & 0x3fu);
+	}
+
+	for (uint32_t index = 0; index < 7; index++) {
+		if (!qca_diag_read(&qca_diag_regions[QCA_DIAG_HOST], "iATU0", index * 4, &iatu[index])) {
+			iatu_read = false;
+			break;
+		}
+	}
+	if (iatu_read) {
+		qca_cfg0 = iatu[0] == 4u && iatu[1] == 0x80000000u &&
+		    iatu[2] == 0x60100000u && iatu[3] == 0 &&
+		    iatu[4] == 0x601fffffu && iatu[5] == 0x01000000u && iatu[6] == 0;
+		printf("qca6390: RC0 iATU0 CTRL1=%#x CTRL2=%#x BASE=%#x:%08x LIMIT=%#x TARGET=%#x:%08x QCA-CFG0=%u\n",
+		    iatu[0], iatu[1], iatu[3], iatu[2], iatu[4], iatu[6], iatu[5], qca_cfg0);
+	}
+
+	if (qca_diag_read(&qca_diag_regions[QCA_DIAG_PARF], "BDF-to-SID", 0x2000, &sid_entry)) {
+		uint32_t hash = qca_diag_sid_hash(0x0100u);
+		bool found = false;
+		bool sid_matches = false;
+		for (uint32_t hop = 0; hop < 256; hop++) {
+			if (!qca_diag_read(&qca_diag_regions[QCA_DIAG_PARF], "BDF-to-SID",
+			    0x2000 + hash * 4, &sid_entry)) {
+				break;
+			}
+			uint16_t bdf = (uint16_t)(sid_entry >> 16);
+			uint32_t sid = 0x1c00u + ((sid_entry >> 8) & 0xffu);
+			printf("qca6390: RC0 SID-table hash=%#x entry=%#x BDF=%#x SID=%#x next=%#x\n",
+			    hash, sid_entry, bdf, sid, sid_entry & 0xffu);
+			if (sid_entry == 0 || bdf == 0x0100u) {
+				found = bdf == 0x0100u;
+				sid_matches = found && sid == 0x1c01u;
+				break;
+			}
+			hash = sid_entry & 0xffu;
+			if (hash == 0) break;
+		}
+		printf("qca6390: RC0 RID 0x100 SID-table %s\n",
+		    sid_matches ? "matches SID 0x1c01" : found ? "entry maps to a different SID" :
+		    "not present in its CRC8 chain");
+	}
+
+	if (qca_diag_read(&qca_diag_regions[QCA_DIAG_TLMM], "TLMM GPIO79 CFG", 79u * 0x1000u, &gpio_cfg) &&
+	    qca_diag_read(&qca_diag_regions[QCA_DIAG_TLMM], "TLMM GPIO79 IO", 79u * 0x1000u + 4, &gpio_io)) {
+		printf("qca6390: RC0 PERST GPIO79 CFG=%#x IO=%#x (raw level/polarity not inferred)\n", gpio_cfg, gpio_io);
+	}
+	if (qca_diag_read(&qca_diag_regions[QCA_DIAG_TLMM], "TLMM GPIO81 CFG", 81u * 0x1000u, &gpio_cfg) &&
+	    qca_diag_read(&qca_diag_regions[QCA_DIAG_TLMM], "TLMM GPIO81 IO", 81u * 0x1000u + 4, &gpio_io)) {
+		printf("qca6390: RC0 WAKE GPIO81 CFG=%#x IO=%#x (raw)\n", gpio_cfg, gpio_io);
+	}
+	uint32_t core_reset = 0, phy_reset = 0;
+	if (qca_diag_read(&qca_diag_regions[QCA_DIAG_GCC], "GCC PCIE clocks", 0x52008, &clock_control) &&
+	    qca_diag_read(&qca_diag_regions[QCA_DIAG_GCC], "GCC WIFI refclk", 0x8c004, &wifi_ref_clock) &&
+	    qca_diag_read(&qca_diag_regions[QCA_DIAG_GCC], "GCC PHY refgen", 0x6f02c, &phy_refgen) &&
+	    qca_diag_read(&qca_diag_regions[QCA_DIAG_GCC], "GCC CORE reset", 0x6b000, &core_reset) &&
+	    qca_diag_read(&qca_diag_regions[QCA_DIAG_GCC], "GCC PHY reset", 0x6c01c, &phy_reset)) {
+		printf("qca6390: RC0 GCC clocks 0x52008=%#x WIFI_REF=%#x PHY_REFGEN=%#x resets CORE=%#x PHY=%#x (raw)\n",
+		    clock_control, wifi_ref_clock, phy_refgen, core_reset, phy_reset);
+	}
+
+	if (qca_cfg0 && dbi_read && (dbi_link & (1u << 29)) != 0) {
+		qca_diag_regions[QCA_DIAG_CONFIG].mapping =
+		    ml_io_map_unmappable((vm_offset_t)qca_diag_regions[QCA_DIAG_CONFIG].physical,
+		    qca_diag_regions[QCA_DIAG_CONFIG].size, VM_WIMG_IO);
+		uint32_t identity, class_revision;
+		if (qca_diag_read(&qca_diag_regions[QCA_DIAG_CONFIG], "CFG0 endpoint", 0, &identity) &&
+		    qca_diag_read(&qca_diag_regions[QCA_DIAG_CONFIG], "CFG0 endpoint", 8, &class_revision)) {
+			printf("qca6390: RC0 existing CFG0 identity=%#x class/revision=%#x expected-QCA=%u\n",
+			    identity, class_revision, identity == 0x110117cbu && class_revision == 0x02800001u);
+		}
+	} else {
+		printf("qca6390: RC0 CFG0 endpoint read skipped: no verified pre-existing QCA CFG0 iATU/link window\n");
+	}
+	qca_diag_rc0_unmap_all();
+	lck_mtx_unlock(&qca_diag_lock);
+}
 static int
 qca_smmu_read32(volatile uint8_t *base, uint32_t offset, uint32_t *value)
 {
