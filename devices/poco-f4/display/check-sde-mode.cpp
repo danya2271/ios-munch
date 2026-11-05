@@ -109,9 +109,9 @@ struct Machine {
 			unsigned offset_in_buffer = 0;
 			bool last = false;
 			while (offset_in_buffer < bytes) {
-				uint8_t type = buffer[offset_in_buffer + 2];
-				unsigned length = type == 0x39 ? buffer[offset_in_buffer] |
-				    (unsigned)buffer[offset_in_buffer + 1] << 8 : 0;
+				uint8_t type = buffer[offset_in_buffer + 1];
+				unsigned length = type == 0x39 ? buffer[offset_in_buffer + 2] |
+				    (unsigned)buffer[offset_in_buffer] << 8 : 0;
 				unsigned packet_bytes = type == 0x39 ? (4 + length + 3) & ~3u : 4;
 				assert(packet_bytes <= bytes - offset_in_buffer);
 				if (type == 0x39) {
@@ -120,8 +120,8 @@ struct Machine {
 					    buffer + offset_in_buffer + 4 + length);
 				} else {
 					assert(!(buffer[offset_in_buffer + 3] & 0x40));
-					machine.payloads.push_back({buffer[offset_in_buffer],
-					    (uint8_t)(length > 1 ? buffer[offset_in_buffer + 1] : 0)});
+					machine.payloads.push_back({buffer[offset_in_buffer + 2],
+					    (uint8_t)(length > 1 ? buffer[offset_in_buffer] : 0)});
 				}
 				last = buffer[offset_in_buffer + 3] & 0x80;
 				offset_in_buffer += packet_bytes;
