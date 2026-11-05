@@ -175,6 +175,15 @@ MiniIOSurfaceClearKept(void)
 	IOLockUnlock(gSurfaceKeptLock);
 }
 
+void
+MiniIOSurfaceScheduleClear(void)
+{
+	if (gSurfaceKeptLock == NULL || !gSurfaceClear || gSurfaceClearing == NULL) {
+		return;
+	}
+	thread_call_enter(gSurfaceClearing);
+}
+
 static void
 surfaceMemoryClear(thread_call_param_t unused0 __unused, thread_call_param_t unused1 __unused)
 {

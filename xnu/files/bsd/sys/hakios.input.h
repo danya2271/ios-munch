@@ -72,7 +72,11 @@ struct hakios_battery_state {
 };
 void hakios_battery_report(const struct hakios_battery_state *state);
 void hakios_net_init(void);            /* en0, if there is something to carry its frames: sys/hakios.net.h */
-void hakios_cpufreq_init(void);        /* boot-arg cpufreq=1: the phone's processor at full speed */
+void hakios_cpufreq_init(void);        /* cpufreq=1: maximum; cpufreq=2: load-based Munch EPSS scaling */
+void hakios_cpufreq_set_screen_on(uint32_t on); /* display blank/unblank cap */
+void hakios_lpm_init(void);
+bool hakios_lpm_idle(uint64_t idle_timeout_ticks);
+void hakios_lpm_cpu_wake(void);
 void hakios_adreno_init(void);         /* boot-arg adreno=N: the first N steps of waking the phone's GPU */
 void hakios_adreno_quiesce(void);      /* on the way back to the loader: the GPU block stopped, out of our memory */
 void hakios_adreno_stop(void);         /* before that, where the ending is no panic's: the GPU given back in order */

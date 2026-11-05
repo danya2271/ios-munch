@@ -67,7 +67,7 @@ void hakios_gpu_dvfs_tick(void);
 
 void HakiosGPUStart(void);
 void HakiosGPUStop(void);
-void MiniIOMobileFramebufferShow(const uint8_t * pixels, uint32_t width, uint32_t height, uint32_t rowBytes);
+int MiniIOMobileFramebufferShow(const uint8_t * pixels, uint32_t width, uint32_t height, uint32_t rowBytes);
 }
 extern "C" kern_return_t thread_terminate(thread_t thread);
 
@@ -202,7 +202,7 @@ gpuDVFSMain(__unused void * parameter, __unused wait_result_t result)
 		if (!active) {
 			break;
 		}
-		delay_for_interval(100, NSEC_PER_MSEC);
+		delay_for_interval(20, NSEC_PER_MSEC);
 	}
 	thread_terminate(current_thread());
 }
@@ -1082,7 +1082,9 @@ HakiosGPUUserClient::show(const struct hakios_show * request)
 	if (copyin((user_addr_t) request->pixels, pixels, size) != 0) {
 		ret = kIOReturnVMError;
 	} else {
-		MiniIOMobileFramebufferShow(pixels, request->width, request->height, request->rowBytes);
+		if (!MiniIOMobileFramebufferShow(pixels, request->width, request->height, request->rowBytes)) {
+			ret = kIOReturnUnsupported;
+		}
 	}
 	IOFreeData(pixels, size);
 	return ret;

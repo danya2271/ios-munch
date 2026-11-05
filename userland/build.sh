@@ -91,6 +91,22 @@ DYN="xnu-clang -arch arm64 -isysroot ${THEOS:-$HOME/theos}/sdks/iPhoneOS16.5.sdk
 IOS=../sysimage
 CACHE=$IOS/20F66__iPhone10,3_6
 REPO_ROOT=$(cd .. && pwd)
+JB=${JB:-1}
+case "$JB" in
+	0|1) ;;
+	*) echo 'build.sh: JB must be 0 or 1' >&2; exit 1 ;;
+esac
+if [ "$JB" = 1 ] && { [ ! -d ../jb/root/var/jb ] || [ ! -f ../jb/.complete ]; }; then
+	../tools/mk-jb.sh
+fi
+JB_STATE=.jb-mode
+JB_REBUILD=0
+if [ ! -f "$JB_STATE" ] || [ "$(cat "$JB_STATE")" != "$JB" ]; then
+	JB_REBUILD=1
+fi
+if [ "$JB" = 1 ] && [ -f ../jb/.complete ] && [ ../jb/.complete -nt system.apfs ]; then
+	JB_REBUILD=1
+fi
 MUNCH_DEBLOAT=${MUNCH_DEBLOAT:-1}
 MUNCH_DEBLOAT_PROFILE=${MUNCH_DEBLOAT_PROFILE:-$REPO_ROOT/devices/poco-f4/debloat/munch-safe.json}
 case "$MUNCH_DEBLOAT" in
@@ -390,7 +406,13 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 		done
 	fi
 	cp ${RC:-rc.launchd} root/etc/rc
-	cp ${RC_JOBS:-rc.jobs} root/etc/rc.jobs
+	jobs=${RC_JOBS:-rc.jobs}
+	if [ "$JB" = 1 ] && ! grep -qF '/var/jb/prep.sh' "$jobs"; then
+		printf '%s\n' '/var/jb/bin/sh /var/jb/prep.sh' > root/etc/rc.jobs
+		cat "$jobs" >> root/etc/rc.jobs
+	else
+		cp "$jobs" root/etc/rc.jobs
+	fi
 	# QUIET=1: launchd's own standard error goes nowhere (src/init.c). It says a few thousand
 	# lines about its own business in the first minutes and pushes everything else out of the
 	# kernel's log; the daemons keep their own standard error on the console all the same.
@@ -428,6 +450,17 @@ if [ -f ../fw-wifi/wpss.mdt ]; then
 	rm -f root/fw/network
 	# SHARE=1: leave it out, for an image that is going to somebody else -- it is a passphrase
 	if [ -z "$SHARE" ] && [ -f ../fw-wifi/network ]; then install -m 0600 ../fw-wifi/network root/fw/network; fi
+fi
+# QCA6390 on Munch runs over PCIe/MHI. Keep Android's filenames under fw/qca6390;
+# hakios_wifi_driver_file() maps ath11k's Linux firmware names to these files.
+
+if [ -f ../fw-wifi/qca6390/amss20.bin ] && [ -f ../fw-wifi/qca6390/m3.bin ] &&
+	[ -f ../fw-wifi/qca6390/bd_l11rgl.elf ]; then
+	install -d -m 0755 root/fw/qca6390
+	install -m 0644 ../fw-wifi/qca6390/amss20.bin ../fw-wifi/qca6390/m3.bin \
+		../fw-wifi/qca6390/bd_l11rgl.elf root/fw/qca6390/
+elif [ -e ../fw-wifi/qca6390 ]; then
+	echo 'userland/build.sh: incomplete fw-wifi/qca6390 firmware set; skipping Wi-Fi firmware' >&2
 fi
 # ... and the vibration motor's waveforms, the phone's /vendor/firmware/aw8697_haptic.bin, from ../fw-haptic
 # (bsd/dev/hakios.haptic.c, haptic=3; 3.6 KB, the vendor's and not in the repository either)
@@ -544,7 +577,7 @@ if [ -n "$FLASHBOOT" ] && [ -f $CACHE/dyld_shared_cache_arm64 ]; then
 	# the package manager's prefix, when tools/mk-jb.sh has fetched one: /jb of the boot volume, which is
 	# /private/preboot/jb once the iOS volume is the root -- the volume where a rootless jailbreak keeps its
 	# Procursus on an iPhone as well; init grafts it onto /var/jb (src/init.c, mount_writable)
-	if [ -d ../jb/root/var/jb ]; then
+	if [ "$JB" = 1 ] && [ -d ../jb/root/var/jb ]; then
 		cp -a ../jb/root/var/jb flashboot/jb
 		mkdir -p flashboot/jb-rw        # where init mounts the prefix's writable copy (src/init.c)
 		# and what Sileo runs from /bin, for init to put over the iOS volume's /bin (see the system image below)
@@ -576,7 +609,8 @@ fi
 # --- the system image -----------------------------------------------------------------------------
 if [ -f $IOS/system.manifest ] && [ -f $CACHE/dyld_shared_cache_arm64 ] &&
 	{ [ ! -f system.apfs ] || [ obj/stage0 -nt system.apfs ] || [ $IOS/system.manifest -nt system.apfs ] ||
-	  [ $IOS/cryptex -nt system.apfs ] || [ $IOS/cryptex-app -nt system.apfs ] || [ -n "$SYSTEM" ]; }; then
+	  [ $IOS/cryptex -nt system.apfs ] || [ $IOS/cryptex-app -nt system.apfs ] || [ -n "$SYSTEM" ] ||
+	  [ "$JB_REBUILD" = 1 ]; }; then
 	# what sysimage/select-system.py has chosen since sysimage/rootfs was extracted is not in it, and would not be
 	# in the image either (so it was once with the audio plug-ins and the system's sounds: iOS found no
 	# speaker and played nothing, though our device was there and the kernel's side worked)
@@ -631,7 +665,7 @@ if [ -f $IOS/system.manifest ] && [ -f $CACHE/dyld_shared_cache_arm64 ] &&
 	# the package manager's prefix, when tools/mk-jb.sh has fetched one: the Procursus bootstrap with
 	# Sileo in it, as /jb. It cannot live at /var/jb in the image -- /private/var is a memory
 	# filesystem made afresh at every boot -- so init copies it there (src/init.c, copy_tree).
-	if [ -d ../jb/root/var/jb ]; then
+	if [ "$JB" = 1 ] && [ -d ../jb/root/var/jb ]; then
 		rm -rf sysroot/jb
 		cp -a ../jb/root/var/jb sysroot/jb
 		# the applications of the prefix are system applications here: LaunchServices builds its
@@ -669,5 +703,6 @@ if [ -f $IOS/system.manifest ] && [ -f $CACHE/dyld_shared_cache_arm64 ] &&
 	# files in 2.5 GB, what fits into the phone's RAM beside iOS
 	python3 ../tools/apfs/mkapfs.py -z -o system.apfs System=sysroot,manifest=$IOS/system.manifest | tail -1
 	[ -z "$CHECK" ] || ../tools/apfs/check-image.sh system.apfs System=sysroot,manifest=$IOS/system.manifest
+	printf '%s\n' "$JB" > "$JB_STATE"
 	rm -rf sysroot
 fi

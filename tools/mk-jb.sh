@@ -1,6 +1,6 @@
 #!/bin/bash
-# Fetch what Sileo needs into jb/ (never in the repository, like fw-*): the Procursus bootstrap for
-# iOS and the Sileo package, both for arm64 and both "rootless" -- everything under /var/jb.
+# Fetch the rootless jailbreak payload into jb/ (never in the repository, like fw-*): the Procursus
+# bootstrap, Sileo, Filza, CocoaTop, and NewTerm 3.
 #
 # Rootless is what fits this port: / is an APFS image that cannot be written to, and /private/var
 # is the only writable filesystem there is (a memory filesystem, made afresh at every boot), so the
@@ -19,7 +19,9 @@ SILEO=org.coolstar.sileo_2.5.1_iphoneos-arm64.deb
 MIRROR=https://apt.procurs.us
 ROOT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
 OUT=$ROOT/jb
+STAMP=$OUT/.complete
 mkdir -p "$OUT/debs"
+rm -f "$STAMP"
 
 get() {                                                 # fetch into jb/, once
 	[ -s "$OUT/debs/$2" ] || curl -sL --fail -o "$OUT/debs/$2" "$1"
@@ -108,11 +110,34 @@ ln -s /var/jb/usr/lib/TweakInject "$OUT/root/var/jb/Library/MobileSubstrate/Dyna
 # port can be worked on. Nothing starts it -- a scenario does (userland/rc.jobs.ssh) -- and the
 # key that lets anyone in is not in the repository. dropbear would have been smaller, but its
 # package here depends on libtomcrypt1 and libtommath1, which are in no suite of this repository.
-PREINSTALL=${PREINSTALL-"debianutils launchctl preferenceloader openssh-server openssh-client openssh-sftp-server libssl3 libmd0"}
+PREINSTALL=${PREINSTALL-"debianutils launchctl preferenceloader openssh-server openssh-client openssh-sftp-server libssl3 libmd0 coreutils libncursesw6 ncurses-term system-cmds zsh"}
 if [ -n "$PREINSTALL" ]; then
 	get "$MIRROR/dists/iphoneos-arm64-rootless/$SUITE/main/binary-iphoneos-arm64/Packages" Packages
 	MIRROR="$MIRROR" python3 "$ROOT/tools/jb-preinstall.py" "$OUT/root" "$OUT/debs/Packages" "$OUT/debs" $PREINSTALL
 fi
+
+# These packages are fetched from their publishers because they are not part of Procursus. The
+# versions and hashes are pinned so a rebuild does not silently change the application payload.
+install_external() {
+	local name="$1" url="$2" deb="$3" sha256="$4"
+	get "$url" "$deb"
+	python3 "$ROOT/tools/jb-install-deb.py" --prefix "$OUT/root" --deb "$OUT/debs/$deb" --sha256 "$sha256" "${@:5}"
+}
+
+install_external filza \
+	https://tigisoftware.com/repo/com.tigisoftware.filza_4.0.1-2_iphoneos-arm64.deb \
+	filza.deb 0cefbaf52f293dca9a3068e4288e3e159e20d72b6d5047281608671944c08ad3
+install_external newterm \
+	https://chariz.com/download/ws.hbang.newterm3_3.0~beta1_iphoneos-arm64.deb \
+	newterm3.deb cbd965fbdc25634e4e447ba4609598a67a0f354a63fce2dbf9e0dce99042b055
+install_external cocoatop \
+	https://github.com/D0m0/CocoaTop/releases/download/2.2.3/ru.domo.cocoatop64_2.2.3_iphoneos-arm.deb \
+	cocoatop.deb 6952c1af0b9d579a0e9eaeb3b71b26865b1f0c723c0a709f24a766f200019dec \
+	--legacy-app --chmod var/jb/Applications/CocoaTop.app/CocoaTop=4755
+
+# Filza's rootless postinst normally creates this command alias. Maintainer scripts are not run on
+# the host, so create the same link while the package tree is still being assembled.
+ln -sf /var/jb/usr/libexec/filza/Filza "$OUT/root/var/jb/usr/bin/Filza"
 
 # the repositories Sileo starts with: Procursus itself, where everything here came from
 mkdir -p "$OUT/root/var/jb/etc/apt/sources.list.d"
@@ -131,6 +156,10 @@ EOF
 mkdir -p "$OUT/root/var/jb/etc/apt/apt.conf.d"
 cat > "$OUT/root/var/jb/etc/apt/apt.conf.d/10redwood.conf" <<'EOF'
 Acquire::https::CaInfo "/var/jb/etc/ssl/certs/cacert.pem";
+EOF
+cat > "$OUT/root/var/jb/etc/apt/sources.list.d/external-apps.list" <<'EOF'
+deb https://repo.chariz.com/ ./
+deb https://tigisoftware.com/repo/ ./
 EOF
 
 # Three packages of the bootstrap have no meaning on this port and only break apt: libkrw0 and
@@ -197,6 +226,11 @@ cat > "$OUT/root/var/jb/prep.sh" <<'PREP'
 #!/var/jb/bin/sh
 # Run once per boot, after the prefix has been grafted onto /var/jb (rc.jobs.sileo does it).
 /var/jb/usr/libexec/firmware
+# Filza ships a root helper daemon. Its maintainer script is intentionally not run while building
+# on a non-iOS host, so reproduce the rootless postinst action after the prefix is grafted.
+if [ -x /var/jb/usr/libexec/filza/FilzaHelper ] && [ -f /var/jb/Library/LaunchDaemons/com.tigisoftware.filza.helper.plist ]; then
+	/var/jb/usr/bin/launchctl load -w /var/jb/Library/LaunchDaemons/com.tigisoftware.filza.helper.plist >/dev/null 2>&1 || true
+fi
 # The prefix's applications: in the system image they are in /Applications already (userland/build.sh),
 # where LaunchServices finds them by itself; with the iOS volume on the flash as the root they are not,
 # and are registered from the prefix as a rootless jailbreak does it (uikittools' uicache) -- by where the
@@ -237,3 +271,4 @@ rm -f "$OUT/root/var/jb/prep_bootstrap.sh"
 
 echo "mk-jb.sh: $OUT/root/var/jb ($(du -sh "$OUT/root/var/jb" | cut -f1), $(find "$OUT/root/var/jb" | wc -l) entries)"
 echo "          Sileo $(grep -m1 '^Version:' "$TMP/control/control" | cut -d' ' -f2), $(grep -c '^Package:' "$OUT/root/var/jb/Library/dpkg/status") packages in dpkg's database"
+touch "$STAMP"

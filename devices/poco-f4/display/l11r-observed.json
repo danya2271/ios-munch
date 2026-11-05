@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "selected_panel": "qcom,mdss_dsi_l11r_38_08_0a_dsc_cmd",
+  "profile": {
+    "panel": "qcom,mdss_dsi_l11r_38_08_0a_dsc_cmd",
+    "type": "dsi_cmd_mode",
+    "controller": [
+      0
+    ],
+    "phy": [
+      0
+    ],
+    "bpp": 24,
+    "lanes": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "te_pin": 1,
+    "te_check": true,
+    "te_external": true,
+    "modes": [
+      {
+        "qcom,mdss-dsi-panel-framerate": 60,
+        "qcom,mdss-dsi-panel-width": 1080,
+        "qcom,mdss-dsi-panel-height": 2400,
+        "qcom,mdss-dsi-panel-clockrate": 1100000000,
+        "qcom,mdss-dsi-h-front-porch": 16,
+        "qcom,mdss-dsi-h-back-porch": 8,
+        "qcom,mdss-dsi-h-pulse-width": 8,
+        "qcom,mdss-dsi-v-front-porch": 600,
+        "qcom,mdss-dsi-v-back-porch": 560,
+        "qcom,mdss-dsi-v-pulse-width": 32,
+        "qcom,mdss-mdp-transfer-time-us": 14000,
+        "qcom,mdss-dsc-slice-width": 540,
+        "qcom,mdss-dsc-slice-height": 8,
+        "qcom,mdss-dsc-slice-per-pkt": 2,
+        "qcom,mdss-dsc-bit-per-component": 8,
+        "qcom,mdss-dsc-bit-per-pixel": 8,
+        "qcom,compression-mode": "dsc",
+        "qcom,mdss-dsc-block-prediction-enable": true,
+        "qcom,display-topology": [
+          1,
+          1,
+          1
+        ],
+        "qcom,default-topology-index": [
+          0
+        ],
+        "qcom,mdss-dsi-panel-phy-timings": "00240a0a26240a0a060204001e1a",
+        "qcom,mdss-dsi-on-command": {
+          "sha256": "b3ffa89b394d00876f0f6607d7e2941bdc19afdd2625d34f19c02a9ce79c352b",
+          "packets": 55,
+          "state": "dsi_lp_mode"
+        },
+        "pps": "110000893080096004380008021c021c0200020e002000bb0007000c0db70cb7180010f0030c2000060b0b330e1c2a38465462697077797b7d7e01020100094009be19fc19fa19f81a381a781ab62af62b342b743b746bf400000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "qcom,mdss-dsi-off-command": {
+          "sha256": "11ac3b478030cc15a34d1077e8aa13db0b746897373f3aaf058f0fd9f45e6f9e",
+          "packets": 3,
+          "state": "dsi_lp_mode"
+        },
+        "qcom,mdss-dsi-timing-switch-command": {
+          "sha256": "1e55906c6c586d2c65a028ca7a4ad25e60c325cbcc974aabfe1bcbe4e8f5f2ac",
+          "packets": 17,
+          "state": "dsi_lp_mode"
+        }
+      },
+      {
+        "qcom,mdss-dsi-panel-framerate": 120,
+        "qcom,mdss-dsi-panel-width": 1080,
+        "qcom,mdss-dsi-panel-height": 2400,
+        "qcom,mdss-dsi-panel-clockrate": 1100000000,
+        "qcom,mdss-dsi-h-front-porch": 16,
+        "qcom,mdss-dsi-h-back-porch": 8,
+        "qcom,mdss-dsi-h-pulse-width": 8,
+        "qcom,mdss-dsi-v-front-porch": 4,
+        "qcom,mdss-dsi-v-back-porch": 8,
+        "qcom,mdss-dsi-v-pulse-width": 4,
+        "qcom,mdss-mdp-transfer-time-us": 7000,
+        "qcom,mdss-dsc-slice-width": 540,
+        "qcom,mdss-dsc-slice-height": 8,
+        "qcom,mdss-dsc-slice-per-pkt": 2,
+        "qcom,mdss-dsc-bit-per-component": 8,
+        "qcom,mdss-dsc-bit-per-pixel": 8,
+        "qcom,compression-mode": "dsc",
+        "qcom,mdss-dsc-block-prediction-enable": true,
+        "qcom,display-topology": [
+          1,
+          1,
+          1
+        ],
+        "qcom,default-topology-index": [
+          0
+        ],
+        "qcom,mdss-dsi-panel-phy-timings": "00240a0a26240a0a060204001e1a",
+        "qcom,mdss-dsi-on-command": {
+          "sha256": "ff1d2418fe92c05ceefdc455a865ff9b0369ea3f18dd7f818194e6f0e7e59ed3",
+          "packets": 55,
+          "state": "dsi_lp_mode"
+        },
+        "pps": "110000893080096004380008021c021c0200020e002000bb0007000c0db70cb7180010f0030c2000060b0b330e1c2a38465462697077797b7d7e01020100094009be19fc19fa19f81a381a781ab62af62b342b743b746bf400000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "qcom,mdss-dsi-off-command": {
+          "sha256": "11ac3b478030cc15a34d1077e8aa13db0b746897373f3aaf058f0fd9f45e6f9e",
+          "packets": 3,
+          "state": "dsi_lp_mode"
+        },
+        "qcom,mdss-dsi-timing-switch-command": {
+          "sha256": "e492a99a00a31259f15daf0294c57a52a2aad78a2d17afabafe026c53f5b2749",
+          "packets": 21,
+          "state": "dsi_lp_mode"
+        }
+      },
+      {
+        "qcom,mdss-dsi-panel-framerate": 144,
+        "qcom,mdss-dsi-panel-width": 1080,
+        "qcom,mdss-dsi-panel-height": 2400,
+        "qcom,mdss-dsi-panel-clockrate": 1100000000,
+        "qcom,mdss-dsi-h-front-porch": 16,
+        "qcom,mdss-dsi-h-back-porch": 8,
+        "qcom,mdss-dsi-h-pulse-width": 8,
+        "qcom,mdss-dsi-v-front-porch": 580,
+        "qcom,mdss-dsi-v-back-porch": 580,
+        "qcom,mdss-dsi-v-pulse-width": 32,
+        "qcom,mdss-mdp-transfer-time-us": 7000,
+        "qcom,mdss-dsc-slice-width": 540,
+        "qcom,mdss-dsc-slice-height": 8,
+        "qcom,mdss-dsc-slice-per-pkt": 2,
+        "qcom,mdss-dsc-bit-per-component": 8,
+        "qcom,mdss-dsc-bit-per-pixel": 8,
+        "qcom,compression-mode": "dsc",
+        "qcom,mdss-dsc-block-prediction-enable": true,
+        "qcom,display-topology": [
+          1,
+          1,
+          1
+        ],
+        "qcom,default-topology-index": [
+          0
+        ],
+        "qcom,mdss-dsi-panel-phy-timings": "00240a0a26240a0a060204001e1a",
+        "qcom,mdss-dsi-on-command": {
+          "sha256": "8033a3579dec15c04fa74849418d29e9ec305d9def6290e063f1da45e3becb18",
+          "packets": 55,
+          "state": "dsi_lp_mode"
+        },
+        "pps": "110000893080096004380008021c021c0200020e002000bb0007000c0db70cb7180010f0030c2000060b0b330e1c2a38465462697077797b7d7e01020100094009be19fc19fa19f81a381a781ab62af62b342b743b746bf400000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "qcom,mdss-dsi-off-command": {
+          "sha256": "11ac3b478030cc15a34d1077e8aa13db0b746897373f3aaf058f0fd9f45e6f9e",
+          "packets": 3,
+          "state": "dsi_lp_mode"
+        },
+        "qcom,mdss-dsi-timing-switch-command": {
+          "sha256": "934dc6ca8247ac28b191250799ddd06d6b3e13b63e560047b3bebd77ee539db6",
+          "packets": 32,
+          "state": "dsi_lp_mode"
+        }
+      }
+    ]
+  },
+  "te_gpio": [
+    66,
+    0
+  ],
+  "linux_source": "arch/arm64/boot/dts/vendor/qcom/dsi-panel-l11r-38-08-0a-dsc-cmd.dtsi",
+  "linux_source_sha256": "507dd9f8861cdb1bb1b0ac90f684c62387155dcead08a97942c96b5745e6b5a1",
+  "live_dtb_sha256": "0c905edac6646fcf7c0a08ce0e0f1d89820109c2997ae5e5d7556139f952d393",
+  "matches_linux": false,
+  "differences": [
+    "60Hz/qcom,display-topology",
+    "60Hz/qcom,default-topology-index",
+    "60Hz/qcom,mdss-dsi-panel-phy-timings",
+    "120Hz/qcom,display-topology",
+    "120Hz/qcom,default-topology-index",
+    "120Hz/qcom,mdss-dsi-panel-phy-timings",
+    "144Hz/qcom,mdss-dsi-panel-phy-timings"
+  ],
+  "active_bootloader_mode_verified": false,
+  "scanout_takeover_allowed": false
+}

@@ -36,6 +36,9 @@ This supersedes the summary in `NOTICE`, which stays as the short, canonical lis
 | ath11k (Wi-Fi driver) | `tools/mk-ath11k.sh` | Linux | BSD-3-Clause-Clear |
 | Mesa (GL=1 images) | `tools/mk-mesa.sh` | Mesa project | MIT and others |
 | Procursus / Sileo packages | `tools/mk-jb.sh` | Procursus team | their own licenses |
+| Filza File Manager | `tools/mk-jb.sh` (`JB=1`) | TIGI Software repository | publisher's license; fetched at build time |
+| NewTerm 3 Beta | `tools/mk-jb.sh` (`JB=1`) | HASHBANG Productions / Chariz | publisher's license; fetched at build time |
+| CocoaTop 2.2.3 | `tools/mk-jb.sh` (`JB=1`) | D0m0 / SXX, GitHub release | GPL-3.0 for the project; fetched at build time |
 | Phone firmware (GPU, Wi-Fi, DSP, modem, haptics, cameras) | `devices/poco-x5-pro/pull-firmware.sh` | Qualcomm / Xiaomi | vendor's — user's own device |
 
 ## How to rebuild the inventory

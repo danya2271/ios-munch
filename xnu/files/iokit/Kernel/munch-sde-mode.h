@@ -1,0 +1,388 @@
+#ifndef _IOKIT_MUNCH_SDE_MODE_H
+#define _IOKIT_MUNCH_SDE_MODE_H
+
+#include "munch-kona-display.h"
+#include "munch-sde-mode-data.h"
+
+enum munch_mode_space { MUNCH_MODE_MDP, MUNCH_MODE_DSI, MUNCH_MODE_PHY, MUNCH_MODE_CC };
+
+struct munch_mode_io {
+	void *cookie;
+	uint32_t (*read)(void *, enum munch_mode_space, uint32_t);
+	void (*write)(void *, enum munch_mode_space, uint32_t, uint32_t);
+	void (*delay)(void *, uint32_t);
+	void (*clean)(void *, uint8_t *, uint32_t);
+	bool (*healthy)(void *);
+};
+
+struct munch_mode {
+	struct munch_mode_io io;
+	uint8_t *scratch;
+	uint32_t scratch_iova, scratch_size;
+	const char *phase;
+	uint32_t commands, failed_offset, failed_value;
+	enum munch_mode_space failed_space;
+	bool touched, configured, lit, failed, teConnected, vblankFrameValid;
+	uint32_t vblankFrame;
+};
+
+static inline bool
+munch_mode_healthy(struct munch_mode *mode)
+{
+	if (!mode->failed && mode->io.healthy(mode->io.cookie)) return true;
+	mode->failed = true;
+	return false;
+}
+
+static inline uint32_t
+munch_mode_read(struct munch_mode *mode, enum munch_mode_space space, uint32_t offset)
+{
+	return munch_mode_healthy(mode) ? mode->io.read(mode->io.cookie, space, offset) : 0;
+}
+
+static inline void
+munch_mode_write(struct munch_mode *mode, enum munch_mode_space space, uint32_t offset, uint32_t value)
+{
+	if (!munch_mode_healthy(mode)) return;
+	mode->touched = true;
+	mode->io.write(mode->io.cookie, space, offset, value);
+}
+
+static inline bool
+munch_mode_poll(struct munch_mode *mode, enum munch_mode_space space, uint32_t offset,
+    uint32_t mask, uint32_t expected, uint32_t timeout)
+{
+	for (uint32_t elapsed = 0; elapsed <= timeout; elapsed += 10) {
+		uint32_t value = munch_mode_read(mode, space, offset);
+		if (mode->failed) return false;
+		if ((value & mask) == expected) return true;
+		mode->failed_space = space;
+		mode->failed_offset = offset;
+		mode->failed_value = value;
+		mode->io.delay(mode->io.cookie, 10);
+	}
+	mode->failed = true;
+	return false;
+}
+
+static inline bool
+munch_mode_program(struct munch_mode *mode, enum munch_mode_space space, uint32_t base,
+    const struct munch_mode_register *registers, unsigned count, bool verify)
+{
+	for (unsigned index = 0; index < count; index++) {
+		uint32_t offset = base + registers[index].offset;
+		munch_mode_write(mode, space, offset, registers[index].value);
+		uint32_t mask = space == MUNCH_MODE_MDP && base == 0x81000 && registers[index].offset >= 0xec ? 63 : UINT32_MAX;
+		if (verify && !munch_mode_poll(mode, space, offset, mask, registers[index].value & mask, 0))
+			return false;
+	}
+	return munch_mode_healthy(mode);
+}
+
+static inline bool
+munch_mode_command(struct munch_mode *mode, uint8_t type, const uint8_t *payload, unsigned length)
+{
+	bool long_packet = type == 0x39;
+	uint32_t bytes = long_packet ? (4 + length + 3) & ~3u : 4;
+	if (!length || (!long_packet && (type != 0x05 && type != 0x15)) ||
+	    (!long_packet && length > 2) || !mode->scratch || bytes > mode->scratch_size ||
+	    !mode->scratch_iova || (mode->scratch_iova & 7) ||
+	    (uint64_t)mode->scratch_iova + bytes > (1ULL << 32)) {
+		mode->failed = true;
+		return false;
+	}
+	if (!munch_mode_poll(mode, MUNCH_MODE_DSI, 0x008, 6, 0, 10000)) return false;
+	uint32_t mask = munch_mode_read(mode, MUNCH_MODE_DSI, 0x110) & 0xaaaaaaaau;
+	if (munch_mode_read(mode, MUNCH_MODE_DSI, 0x110) & (1u << 24)) {
+		mode->failed = true;
+		return false;
+	}
+	for (uint32_t index = 0; index < bytes; index++) mode->scratch[index] = 0xff;
+	mode->scratch[0] = long_packet ? (uint8_t)length : payload[0];
+	mode->scratch[1] = long_packet ? (uint8_t)(length >> 8) : (length > 1 ? payload[1] : 0);
+	mode->scratch[2] = type;
+	mode->scratch[3] = long_packet ? 0xc0 : 0x80;
+	if (long_packet) {
+		for (unsigned index = 0; index < length; index++) mode->scratch[4 + index] = payload[index];
+	}
+	mode->io.clean(mode->io.cookie, mode->scratch, bytes);
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x110, mask | 3);
+	if (!munch_mode_poll(mode, MUNCH_MODE_DSI, 0x110, 1, 0, 0)) return false;
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x19c, 0);
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x03c, (1u << 28) | (1u << 26));
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x050, (1u << 20) | (1u << 16));
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x048, mode->scratch_iova);
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x04c, bytes);
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x090, 1);
+	for (uint32_t elapsed = 0; elapsed < 100000; elapsed += 10) {
+		uint32_t status = munch_mode_read(mode, MUNCH_MODE_DSI, 0x110);
+		if (mode->failed || (status & (1u << 24))) break;
+		if (status & 1) {
+			munch_mode_write(mode, MUNCH_MODE_DSI, 0x110, mask | 1);
+			mode->commands++;
+			return munch_mode_healthy(mode);
+		}
+		mode->io.delay(mode->io.cookie, 10);
+	}
+	mode->failed_offset = 0x110;
+	mode->failed_space = MUNCH_MODE_DSI;
+	mode->failed_value = munch_mode_read(mode, MUNCH_MODE_DSI, 0x110);
+	mode->failed = true;
+	return false;
+}
+
+static inline bool
+munch_mode_command_sequence(struct munch_mode *mode, const struct munch_mode_command *commands,
+    unsigned count)
+{
+	for (unsigned index = 0; index < count; index++) {
+		const struct munch_mode_command *command = &commands[index];
+		if (!munch_mode_command(mode, command->type, command->payload, command->length)) return false;
+		if (command->delay_ms) mode->io.delay(mode->io.cookie, command->delay_ms * 1000);
+	}
+	return munch_mode_healthy(mode);
+}
+
+static inline bool
+munch_mode_byte_sequence(struct munch_mode *mode, const uint8_t *bytes, unsigned size)
+{
+	for (unsigned offset = 0; offset < size;) {
+		if (size - offset < 7) {
+			mode->failed = true;
+			return false;
+		}
+		uint8_t type = bytes[offset];
+		uint8_t delay = bytes[offset + 4];
+		unsigned length = ((unsigned)bytes[offset + 5] << 8) | bytes[offset + 6];
+		if (!length || length > size - offset - 7 ||
+		    (type != 0x05 && type != 0x15 && type != 0x39)) {
+			mode->failed = true;
+			return false;
+		}
+		if (!munch_mode_command(mode, type, bytes + offset + 7, length)) return false;
+		if (delay) mode->io.delay(mode->io.cookie, delay * 1000);
+		offset += 7 + length;
+	}
+	return munch_mode_healthy(mode);
+}
+
+static inline bool
+munch_mode_clock(struct munch_mode *mode, uint32_t offset, uint32_t config)
+{
+	munch_mode_write(mode, MUNCH_MODE_CC, offset + 4, config);
+	uint32_t command = munch_mode_read(mode, MUNCH_MODE_CC, offset);
+	munch_mode_write(mode, MUNCH_MODE_CC, offset, command | 1);
+	return munch_mode_poll(mode, MUNCH_MODE_CC, offset, 1, 0, 1000) &&
+	    munch_mode_poll(mode, MUNCH_MODE_CC, offset + 4, 0x371f, config, 0);
+}
+
+static inline bool
+munch_mode_branch(struct munch_mode *mode, uint32_t offset, bool enable)
+{
+	uint32_t original = munch_mode_read(mode, MUNCH_MODE_CC, offset);
+	munch_mode_write(mode, MUNCH_MODE_CC, offset, (original & ~1u) | (enable ? 1 : 0));
+	return munch_mode_poll(mode, MUNCH_MODE_CC, offset, 0x80000001u, enable ? 1 : 0x80000000u, 1000);
+}
+
+static inline bool
+munch_mode_configure(struct munch_mode *mode)
+{
+	static const uint32_t branches[] = { 0x2004, 0x202c, 0x2028, 0x2038, 0x2024 };
+	static const uint8_t display_off[] = { 0x28 }, sleep_in[] = { 0x10 }, dimming[] = { 0x53, 0x20 };
+	static const struct munch_mode_register host[] = {
+		{ 0x004, 0x1f0 }, { 0x084, 0x80000004 }, { 0x0c4, 0 }, { 0x0cc, 1 },
+		{ 0x11c, 0x23f },
+	};
+	static const struct munch_mode_register route[] = {
+		{ 0x05000, 0x09600438 }, { 0x05008, 0 }, { 0x0500c, 0x09600438 }, { 0x05010, 0 },
+		{ 0x05024, 0x10e0 }, { 0x05030, 0x237ff }, { 0x05034, 0x03020001 },
+		{ 0x05038, 0x80000000 }, { 0x05050, 0 }, { 0x05070, 0 }, { 0x050b4, 0 }, { 0x05170, 0 },
+		{ 0x05100, 0 }, { 0x05104, 0 }, { 0x05108, 0x09600438 },
+		{ 0x05110, 0 }, { 0x05114, 0 }, { 0x05118, 0x09600438 },
+		{ 0x05120, 0 }, { 0x05124, 0 }, { 0x05128, 0x09600438 },
+		{ 0x05a04, 0 }, { 0x06a00, 2 }, { 0x45000, 0 }, { 0x45004, 0x09600438 },
+		{ 0x45068, 0x400 }, { 0x4506c, 0x00ff0000 },
+		{ 0x02000, 0x01000005 }, { 0x02014, 0x20000 }, { 0x020f4, 2 },
+		{ 0x6ba5c, 0 },
+	};
+	mode->phase = "native-preflight";
+	if (mode->touched || mode->configured || !mode->scratch || mode->scratch_size < 136 ||
+	    !mode->scratch_iova || (mode->scratch_iova & 7) ||
+	    (uint64_t)mode->scratch_iova + mode->scratch_size > (1ULL << 32) ||
+	    !munch_mode_healthy(mode)) return false;
+	if (munch_mode_read(mode, MUNCH_MODE_MDP, 0x2018) || munch_mode_read(mode, MUNCH_MODE_MDP, 0x201c) ||
+	    (munch_mode_read(mode, MUNCH_MODE_MDP, 0x6bab4) & (1u << 31))) return false;
+	if ((munch_mode_read(mode, MUNCH_MODE_PHY, 0x014) & 0x0c) ||
+	    (munch_mode_read(mode, MUNCH_MODE_PHY, 0x018) & 0x40) ||
+	    (munch_mode_read(mode, MUNCH_MODE_DSI, 0x004) & 0x1f7) != 0x1f5) return false;
+	if (!munch_mode_poll(mode, MUNCH_MODE_PHY, 0x140, 1, 1, 1000)) return false;
+	mode->phase = "native-panel-sleep";
+	if (!munch_mode_command(mode, 5, display_off, sizeof(display_off))) return false;
+	mode->io.delay(mode->io.cookie, 20000);
+	if (!munch_mode_command(mode, 0x39, dimming, sizeof(dimming)) ||
+	    !munch_mode_command(mode, 5, sleep_in, sizeof(sleep_in))) return false;
+	mode->io.delay(mode->io.cookie, 120000);
+	mode->phase = "native-link-stop";
+	munch_mode_write(mode, MUNCH_MODE_MDP, 0x6ba84, 0);
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x004, 0x1f0);
+	for (unsigned index = 0; index < sizeof(branches) / sizeof(branches[0]); index++) {
+		if (!munch_mode_branch(mode, branches[index], false)) return false;
+	}
+	munch_mode_write(mode, MUNCH_MODE_PHY, 0x014, 0);
+	munch_mode_write(mode, MUNCH_MODE_PHY, 0x03c, 0);
+	mode->phase = "native-phy";
+	if ((munch_mode_read(mode, MUNCH_MODE_PHY, 0) & 0xf0) == 0x20)
+		munch_mode_write(mode, MUNCH_MODE_PHY, 0x114, 4);
+	if (!munch_mode_program(mode, MUNCH_MODE_PHY, 0, munch_l11r_phy,
+	    sizeof(munch_l11r_phy) / sizeof(munch_l11r_phy[0]), true)) return false;
+	mode->phase = "native-pll";
+	if (!munch_mode_program(mode, MUNCH_MODE_PHY, 0x500, munch_l11r_pll,
+	    sizeof(munch_l11r_pll) / sizeof(munch_l11r_pll[0]), false)) return false;
+	munch_mode_write(mode, MUNCH_MODE_PHY, 0x010, 0x31);
+	munch_mode_write(mode, MUNCH_MODE_PHY, 0x014, 1);
+	munch_mode_write(mode, MUNCH_MODE_PHY, 0x528, 0xc0);
+	mode->io.delay(mode->io.cookie, 1);
+	munch_mode_write(mode, MUNCH_MODE_PHY, 0x03c, 1);
+	if (!munch_mode_poll(mode, MUNCH_MODE_PHY, 0x6b0, 1, 1, 5000)) return false;
+	munch_mode_write(mode, MUNCH_MODE_PHY, 0x128, 1);
+	munch_mode_write(mode, MUNCH_MODE_PHY, 0x128, 0);
+	munch_mode_write(mode, MUNCH_MODE_PHY, 0x030, 4);
+	munch_mode_write(mode, MUNCH_MODE_PHY, 0x014, 0x31);
+	mode->phase = "native-clocks";
+	if (!munch_mode_clock(mode, 0x2110, 0x101) || !munch_mode_clock(mode, 0x2098, 0x101) ||
+	    !munch_mode_clock(mode, 0x2148, 1) || !munch_mode_clock(mode, 0x20f8, 1)) return false;
+	munch_mode_write(mode, MUNCH_MODE_CC, 0x2128, 1);
+	for (unsigned index = sizeof(branches) / sizeof(branches[0]); index > 0; index--) {
+		if (!munch_mode_branch(mode, branches[index - 1], true)) return false;
+	}
+	mode->phase = "native-host";
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x11c, 0x200b3f);
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x118, 1);
+	mode->io.delay(mode->io.cookie, 1);
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x118, 0);
+	if (!munch_mode_program(mode, MUNCH_MODE_DSI, 0, host, sizeof(host) / sizeof(host[0]), true)) return false;
+	if (!munch_mode_program(mode, MUNCH_MODE_DSI, 0, munch_l11r_stream,
+	    sizeof(munch_l11r_stream) / sizeof(munch_l11r_stream[0]), true)) return false;
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x004, 0x1f5);
+	mode->phase = "native-dsc";
+	if (!munch_mode_program(mode, MUNCH_MODE_MDP, 0x81000, munch_l11r_dsc,
+	    sizeof(munch_l11r_dsc) / sizeof(munch_l11r_dsc[0]), true)) return false;
+	munch_mode_write(mode, MUNCH_MODE_MDP, 0x82800, 0);
+	munch_mode_write(mode, MUNCH_MODE_MDP, 0x710a0, 1);
+	mode->phase = "native-route";
+	if (!munch_mode_program(mode, MUNCH_MODE_MDP, 0, route, sizeof(route) / sizeof(route[0]), true)) return false;
+	mode->phase = "native-panel-init";
+	for (unsigned offset = 0; offset < sizeof(munch_l11r_on);) {
+		if (sizeof(munch_l11r_on) - offset < 7) { mode->failed = true; return false; }
+		unsigned length = ((unsigned)munch_l11r_on[offset + 5] << 8) | munch_l11r_on[offset + 6];
+		if (length > sizeof(munch_l11r_on) - offset - 7 || munch_l11r_on[offset + 2] || munch_l11r_on[offset + 3]) {
+			mode->failed = true;
+			return false;
+		}
+		if (!munch_mode_command(mode, munch_l11r_on[offset], munch_l11r_on + offset + 7, length)) return false;
+		mode->io.delay(mode->io.cookie, (uint32_t)munch_l11r_on[offset + 4] * 1000);
+		offset += length + 7;
+	}
+	mode->phase = "native-tearcheck";
+	if (!munch_mode_program(mode, MUNCH_MODE_MDP, 0x6b800, munch_l11r_tear,
+	    sizeof(munch_l11r_tear) / sizeof(munch_l11r_tear[0]), true)) return false;
+	munch_mode_write(mode, MUNCH_MODE_MDP, 0x6ba80, 0);
+	munch_mode_write(mode, MUNCH_MODE_MDP, 0x6bab4, 0);
+	munch_mode_write(mode, MUNCH_MODE_MDP, 0x6ba84, 1);
+	munch_mode_write(mode, MUNCH_MODE_MDP, 0x6e808, 4);
+	munch_mode_write(mode, MUNCH_MODE_MDP, 0x6e800, munch_mode_read(mode, MUNCH_MODE_MDP, 0x6e800) | 4);
+	mode->configured = munch_mode_healthy(mode);
+	mode->phase = "native-first-frame";
+	mode->teConnected = false;
+	return mode->configured;
+}
+
+static inline bool
+munch_mode_connect_te(struct munch_mode *mode, bool enable)
+{
+	if (!mode->configured || mode->failed || !munch_mode_healthy(mode)) return false;
+	uint32_t value = munch_mode_read(mode, MUNCH_MODE_MDP, 0x6b800 + 0x288);
+	value = enable ? value | MUNCH_SDE_EXTERNAL_TE : value & ~MUNCH_SDE_EXTERNAL_TE;
+	munch_mode_write(mode, MUNCH_MODE_MDP, 0x6b800 + 0x288, value);
+	if (!munch_mode_healthy(mode)) return false;
+	mode->teConnected = enable;
+	return (munch_mode_read(mode, MUNCH_MODE_MDP, 0x6b800 + 0x288) & MUNCH_SDE_EXTERNAL_TE) ==
+	    (enable ? MUNCH_SDE_EXTERNAL_TE : 0);
+}
+
+static inline bool
+munch_mode_check(struct munch_mode *mode)
+{
+	if (!mode->configured || mode->failed || !munch_mode_healthy(mode)) return false;
+	if (!munch_mode_poll(mode, MUNCH_MODE_PHY, 0x6b0, 1, 1, 0) ||
+	    !munch_mode_poll(mode, MUNCH_MODE_PHY, 0x010, 0xff, 0x31, 0) ||
+	    !munch_mode_poll(mode, MUNCH_MODE_PHY, 0x014, 0x3f, 0x31, 0) ||
+	    !munch_mode_poll(mode, MUNCH_MODE_DSI, 0x004, 0x1f7, 0x1f5, 0) ||
+	    !munch_mode_poll(mode, MUNCH_MODE_DSI, 0x110, 1u << 24, 0, 0)) return false;
+	for (unsigned index = 0; index < sizeof(munch_l11r_dsc) / sizeof(munch_l11r_dsc[0]); index++) {
+		uint32_t mask = munch_l11r_dsc[index].offset >= 0xec ? 63 : UINT32_MAX;
+		if (!munch_mode_poll(mode, MUNCH_MODE_MDP, 0x81000 + munch_l11r_dsc[index].offset,
+		    mask, munch_l11r_dsc[index].value & mask, 0)) return false;
+	}
+	for (unsigned index = 0; index < sizeof(munch_l11r_stream) / sizeof(munch_l11r_stream[0]); index++) {
+		if (!munch_mode_poll(mode, MUNCH_MODE_DSI, munch_l11r_stream[index].offset,
+		    UINT32_MAX, munch_l11r_stream[index].value, 0)) return false;
+	}
+	for (unsigned index = 0; index < sizeof(munch_l11r_tear) / sizeof(munch_l11r_tear[0]); index++) {
+		uint32_t value = munch_l11r_tear[index].value;
+		if (index == 0 && mode->teConnected) value |= MUNCH_SDE_EXTERNAL_TE;
+		if (!munch_mode_poll(mode, MUNCH_MODE_MDP, 0x6b800 + munch_l11r_tear[index].offset,
+		    UINT32_MAX, value, 0)) return false;
+	}
+	if (!munch_mode_poll(mode, MUNCH_MODE_MDP, 0x6ba84, 1, 1, 0)) return false;
+	return true;
+}
+
+static inline uint32_t
+munch_mode_vblank_count(struct munch_mode *mode)
+{
+	if (!mode->configured || !mode->lit || mode->failed || !munch_mode_healthy(mode)) return 0;
+	uint32_t frame = munch_mode_read(mode, MUNCH_MODE_MDP,
+	    MUNCH_SDE_INTF1_OFFSET + MUNCH_SDE_INTF_FRAME_COUNT);
+	if (!mode->vblankFrameValid) {
+		mode->vblankFrame = frame;
+		mode->vblankFrameValid = true;
+		return 0;
+	}
+	uint32_t count = frame - mode->vblankFrame;
+	mode->vblankFrame = frame;
+	return count;
+}
+
+static inline bool
+munch_mode_vblank(struct munch_mode *mode)
+{
+	return munch_mode_vblank_count(mode) != 0;
+}
+
+static inline bool
+munch_mode_light(struct munch_mode *mode)
+{
+	static const uint8_t brightness[] = { 0x51, 0x02, 0x00 };
+	if (!mode->configured || mode->failed) return false;
+	if (mode->lit) return true;
+	mode->phase = "native-first-backlight";
+	mode->lit = munch_mode_command(mode, 0x39, brightness, sizeof(brightness));
+	if (mode->lit) {
+		mode->vblankFrame = munch_mode_read(mode, MUNCH_MODE_MDP,
+		    MUNCH_SDE_INTF1_OFFSET + MUNCH_SDE_INTF_FRAME_COUNT);
+		mode->vblankFrameValid = true;
+	}
+	return mode->lit;
+}
+
+static inline bool
+munch_mode_panel_on(struct munch_mode *mode)
+{
+	if (!mode->configured || mode->failed) return false;
+	mode->phase = "native-panel-on";
+	mode->lit = false;
+	return munch_mode_byte_sequence(mode, munch_l11r_on, sizeof(munch_l11r_on));
+}
+
+#endif

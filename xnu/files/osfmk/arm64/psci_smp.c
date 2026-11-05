@@ -52,6 +52,7 @@
 
 #define PSCI_CPU_OFF            0x84000002u
 #define PSCI_CPU_ON             0xC4000003u
+#define PSCI_CPU_SUSPEND        0xC4000001u
 #define PSCI_AFFINITY_INFO      0xC4000004u
 #define PSCI_AFFINITY_OFF       1
 
@@ -61,6 +62,8 @@
 extern void loader_return(void);
 extern void loader_log_putc(char c);
 extern unsigned long gVirtBase, gPhysBase;
+extern uintptr_t resume_idle_cpu;
+extern unsigned int LowResetVectorBase;
 
 /* The firmware is called with HVC, not SMC. (start.s reads this too, at its physical address.) */
 uint32_t psci_smp_hvc;
@@ -77,6 +80,7 @@ _Static_assert(sizeof(struct psci_smp_start_fault) == 64, "one cache line");
 
 static uint32_t psci_smp_cpu_stage[MAX_CPUS];   /* PSCI_SMP_CPU_*, by cpu number */
 static uint32_t psci_smp_started;               /* a bit per core that CPU_ON was granted for */
+static uint32_t psci_smp_suspend_failure_logged;
 
 static int      psci_smp_stop_owner = -1;       /* the processor that began the return to the boot loader */
 static bool     psci_smp_boot_wanted;           /* it was not the boot processor: that one is to finish */
@@ -224,6 +228,56 @@ psci_smp_start_cpu(int cpu)
 		    stage >= PSCI_SMP_CPU_IN_KERNEL ? "it got as far as arm_init_cpu()" : "no sign of it since the firmware took the request");
 	}
 	return KERN_FAILURE;
+}
+
+kern_return_t
+psci_smp_cpu_suspend(uint32_t state)
+{
+	cpu_data_t *cdp = getCpuDatap();
+	int64_t status;
+
+	/*
+	 * CPU rail power-collapse restarts at LowResetVectorBase, which selects
+	 * the existing resume_idle_cpu handler for this processor. It restores
+	 * the idle thread and calls cpu_idle_exit(TRUE).
+	 */
+	cdp->cpu_active_thread = current_thread();
+	CleanPoC_DcacheRegion((vm_offset_t)cdp, sizeof(*cdp));
+	__builtin_arm_dsb(DSB_SY);
+	status = psci_call(PSCI_CPU_SUSPEND, state, ml_static_vtop((vm_offset_t)&LowResetVectorBase), 0);
+	if (status != 0 && os_atomic_cmpxchg(&psci_smp_suspend_failure_logged, 0, 1, relaxed)) {
+		printf("psci: CPU_SUSPEND state %#x returned %lld\n", state, status);
+	}
+	return status == 0 ? KERN_SUCCESS : KERN_FAILURE;
+}
+
+uint64_t
+psci_smp_next_idle_deadline(uint64_t local_timeout)
+{
+	const ml_topology_info_t *topology = ml_get_topology_info();
+	uint64_t now = mach_absolute_time();
+	uint64_t deadline = EndOfAllTime;
+
+	if (local_timeout != 0 && local_timeout < EndOfAllTime - now) {
+		deadline = now + local_timeout;
+	}
+	for (uint32_t cpu = 0; cpu < topology->num_cpus && cpu < MAX_CPUS; cpu++) {
+		cpu_data_t *data = cpu_datap((int)cpu);
+		uint64_t candidate;
+
+		if (data == NULL) {
+			continue;
+		}
+		candidate = data->idle_timer_deadline;
+		if (candidate > now && candidate < deadline) {
+			deadline = candidate;
+		}
+		candidate = data->rtclock_timer.deadline;
+		if (candidate > now && candidate < deadline) {
+			deadline = candidate;
+		}
+	}
+	return deadline;
 }
 
 /*

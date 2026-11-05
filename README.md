@@ -69,6 +69,11 @@ qemu/run-ios.sh 1200 -display gtk > logs/qemu.log     # a 20-minute session
 The lock screen appears after two or three minutes. The mouse with the button held is a finger;
 `H` is Home, `L` is the power button, `↑`/`↓` are volume.
 
+The image build enables the rootless jailbreak by default. It fetches Procursus/Sileo, Filza File
+Manager, CocoaTop, and NewTerm 3, placing them under `/var/jb`; use `JB=0` to build without this
+payload. External application archives are pinned by SHA-256 in `tools/mk-jb.sh` and remain outside
+the repository.
+
 ## On the phone
 
 A phone with a port (`devices/poco-x5-pro/`, POCO X5 Pro 5G), its boot loader unlocked, `adb` and
@@ -79,7 +84,7 @@ devices/poco-x5-pro/pull-firmware.sh    # GPU, Wi-Fi, audio/battery, haptics, mo
 ./xl enter                          # Android -> fastboot -> our loader in RAM
 ./xl ramdisk userland/system.apfs   # the system image into the phone's RAM (~80 s), once per loader session
 XL_SB_DELAY=8 XL_SECS=600 \
-XL_CMDLINE="bootcpu=7 cpus=8 cpufreq=1 ufs=2 touchscreen=1 gpu=1 adsp=1 sound=4 wifi=1 haptic=5 modem=1" \
+XL_CMDLINE="bootcpu=7 cpus=8 cpufreq=2 ufs=2 touchscreen=1 gpu=1 adsp=1 sound=4 wifi=1 haptic=5 modem=1" \
 ./xl run                            # a 10-minute session, the log goes to logs/
 ./xl reboot                         # back to Android
 ```
@@ -90,7 +95,7 @@ The main kernel arguments (the full list is in `docs/ru/notes.md`):
 
 | Argument | What it does |
 |---|---|
-| `cpus=8 bootcpu=7 cpufreq=1` | all CPU cores and their clocks |
+| `cpus=8 bootcpu=7 cpufreq=2` | all CPU cores with load-based scaling; `cpufreq=1` is max-frequency diagnostic mode |
 | `touchscreen=1` | the touch screen |
 | `gpu=1` | rendering on Adreno (an image built with `GL=1`, firmware in `fw-gpu/`) |
 | `adsp=1 sound=4 mic=4` | the audio DSP: speakers, microphone; battery and charging come with it |

@@ -45,6 +45,8 @@ extern void gic_v3_irq_cpu_shutdown(void);
 void loader_log_putc(char c);
 void loader_return(void);
 extern void hakios_adreno_quiesce(void);
+extern int munch_sde_quiesce(void);
+extern int munch_sde_native_owned(void);
 extern void hakios_adreno_stop(void);
 extern void hakios_adreno_minute(void);
 extern void hakios_wifi_stop(void);
@@ -76,6 +78,9 @@ static bool     loader_log_wrapped;
 static bool     loader_log_linear;       /* the pieces have been put in order: only appending from now on */
 static char     loader_log_scratch[LOADER_LOG_RING];
 static uint64_t loader_log_total;
+static char    *loader_msgbuf_data;
+static int      loader_msgbuf_size;
+static int      loader_msgbuf_cursor = -1;
 
 /*
  * Characters come from every processor, and from interrupt handlers on top of whatever was
@@ -395,6 +400,69 @@ struct msgbuf {
 extern struct msgbuf *msgbufp;
 
 static void
+loader_log_puts_locked(const char *s)
+{
+	for (; *s; s++) {
+		loader_log_put_locked(*s);
+	}
+}
+
+/*
+ * Copy the kernel message buffer into the USB-visible loader log without
+ * consuming msg_bufr, which remains owned by /dev/klog and dmesg.
+ */
+void
+loader_log_append_msgbuf_delta(void)
+{
+	struct msgbuf *mb = msgbufp;
+	uint64_t daif;
+	bool locked = false;
+	int cursor;
+	int position;
+
+	if (mb == NULL || mb->msg_bufc == NULL || mb->msg_size <= 0 ||
+	    mb->msg_bufx < 0 || mb->msg_bufx >= mb->msg_size) {
+		return;
+	}
+	daif = __builtin_arm_rsr64("DAIF");
+	__builtin_arm_wsr("DAIFSet", DAIFSC_IRQF | DAIFSC_FIQF);
+	for (uint32_t tries = 0; !locked && tries < 10000000; tries++) {
+		locked = os_atomic_cmpxchg(&loader_log_lock, 0, 1, acquire);
+	}
+	position = mb->msg_bufx;
+	if (loader_msgbuf_data != mb->msg_bufc || loader_msgbuf_size != mb->msg_size ||
+	    loader_msgbuf_cursor < 0 || loader_msgbuf_cursor >= mb->msg_size) {
+		loader_msgbuf_data = mb->msg_bufc;
+		loader_msgbuf_size = mb->msg_size;
+		loader_msgbuf_cursor = position;
+		loader_log_puts_locked("\n--- kernel message buffer ---\n");
+		for (cursor = position; cursor < mb->msg_size; cursor++) {
+			if (mb->msg_bufc[cursor] != 0) {
+				loader_log_put_locked(mb->msg_bufc[cursor]);
+			}
+		}
+		for (cursor = 0; cursor < position; cursor++) {
+			if (mb->msg_bufc[cursor] != 0) {
+				loader_log_put_locked(mb->msg_bufc[cursor]);
+			}
+		}
+	} else {
+		cursor = loader_msgbuf_cursor;
+		while (cursor != position) {
+			loader_log_put_locked(mb->msg_bufc[cursor]);
+			if (++cursor == mb->msg_size) {
+				cursor = 0;
+			}
+		}
+	}
+	loader_msgbuf_cursor = position;
+	if (locked) {
+		os_atomic_store(&loader_log_lock, 0, release);
+	}
+	__builtin_arm_wsr64("DAIF", daif);
+}
+
+static void
 loader_log_puts(const char *s)
 {
 	for (; *s; s++) {
@@ -430,6 +498,10 @@ loader_log_append_msgbuf(void)
 void
 loader_return(void)
 {
+	if (munch_sde_native_owned()) {
+		printf("MUNCH SDE: native mode owns the link; loader return refused before CPU shutdown\n");
+		return;
+	}
 #if defined(GENERIC_PSCI_SMP)
 	/*
 	 * With more than one processor: the others switch themselves off first, and the rest of
@@ -438,6 +510,10 @@ loader_return(void)
 	 */
 	psci_smp_stop_others();
 #endif
+	if (!munch_sde_quiesce()) {
+		printf("MUNCH SDE: unsafe loader handoff refused; scanout memory remains pinned\n");
+		return;
+	}
 	hakios_ufs_quiesce();          /* this kernel's requests to the storage done, UEFI's list as it was, for the log */
 	hakios_adreno_quiesce();       /* the GPU block, if it was started, has tables in memory that is about to be reused */
 	hakios_wifi_quiesce();         /* the Wi-Fi DSP, if it still runs (a panic), is not left to itself */
@@ -504,6 +580,10 @@ loader_return_timer(__unused thread_call_param_t p0, __unused thread_call_param_
 	for (const char *c = banner; *c; c++) {
 		loader_log_putc(*c);
 	}
+	if (munch_sde_native_owned()) {
+		printf("MUNCH SDE: native mode owns the link; timed loader return deferred\n");
+		return;
+	}
 	PE_parse_boot_argn("return_panic", &as_panic, sizeof(as_panic));
 	if (!as_panic) {
 		hakios_var_save_on_return();   /* the data volume kept, while the system is still whole */
@@ -552,6 +632,10 @@ loader_stop_poll(__unused thread_call_param_t p0, __unused thread_call_param_t p
 		static const char banner[] = "\n--- the host asked for the end of the run: back to the loader ---\n";
 		for (const char *c = banner; *c; c++) {
 			loader_log_putc(*c);
+		}
+		if (munch_sde_native_owned()) {
+			printf("MUNCH SDE: native mode owns the link; host loader return deferred\n");
+			return;
 		}
 		hakios_var_save_on_return();
 		hakios_adreno_stop();

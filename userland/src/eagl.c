@@ -334,7 +334,7 @@ static struct group_texture *group_of(struct eagl *e, GLuint texture);
 static __thread struct eagl *current;
 static struct eagl *contexts[8];
 static uint32_t slot_calls[SLOTS];
-static int check_errors = 1;            /* ask the library for an error after every call (the first frames) */
+static int check_errors = 0;            /* boot-arg glerrors=1: ask the library for an error after every call */
 static int share_surfaces = 1;          /* boot-arg glcopy=1: 0 */
 /*
  * A frame is not drawn into its surface's memory but into a texture of the library's own, and the
@@ -1127,7 +1127,7 @@ frame_end(struct eagl *e, bool finished)
 		summary(e);
 	}
 	census_report();
-	if (e->frames == 600 && e->errors == 0) {
+	if (check_errors && e->frames == 600 && e->errors == 0) {
 		check_errors = 0;
 	}
 	e->last_draws = e->draws;
@@ -4117,6 +4117,7 @@ install(void)
 		census_on = strstr(arguments, "glcensus=1") != NULL;
 		frame_lines = strstr(arguments, "glframes=1") != NULL;
 		latency_lines = strstr(arguments, "touch_lat=1") != NULL;
+		check_errors = strstr(arguments, "glerrors=1") != NULL;
 		if ((argument = strstr(arguments, "glslow=")) != NULL) {
 			slow_calls_us = strtoull(argument + 7, NULL, 10);
 		}

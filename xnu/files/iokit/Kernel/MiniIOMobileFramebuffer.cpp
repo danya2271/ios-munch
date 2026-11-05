@@ -3,8 +3,8 @@
  * IOMobileFramebuffer.framework (and through it by CoreAnimation's window server).
  *
  * The display is the framebuffer the boot loader left us (the one the kernel's text console
- * draws on). There is no hardware behind it that we drive: a "swap" copies the pixels of the
- * surfaces of its layers into that memory, and "vsync" is a timer.
+ * draws on). A "swap" copies the pixels of the surfaces of its layers into that memory, and
+ * "vsync" is a timer. Panel blanking uses DCS commands but does not reconfigure scanout.
  *
  * The protocol (selectors and the layout of the swap request) was worked out from the
  * user-space side of iOS 16.5. Everything not implemented is logged once.
@@ -21,10 +21,13 @@
 #include <libkern/c++/OSDictionary.h>
 #include <libkern/c++/OSArray.h>
 #include <libkern/c++/OSBoolean.h>
+#include <libkern/kernel_mach_header.h>
 #include <kern/thread_call.h>
 #include <kern/thread.h>
 #include <kern/clock.h>
+#include <kern/locks.h>
 #include <pexpert/pexpert.h>
+#include <pexpert/device_tree.h>
 #include <sys/systm.h>
 #include <sys/proc.h>
 
@@ -34,10 +37,39 @@ extern struct vc_info vinfo;            /* the boot framebuffer, as the text con
 }
 
 #include <IOKit/IOBufferMemoryDescriptor.h>
+#include <IOKit/IOMemoryDescriptor.h>
+#include <IOKit/IOMessage.h>
 
 #include "MiniIOSurface.h"
+#include "munch-sde.h"
 
+extern "C" vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
 extern "C" void hakios_tl(const char * format, ...) __printflike(1, 2);
+extern "C" void loader_log_line(const char *line);
+extern "C" void hakios_cpufreq_set_screen_on(uint32_t on);
+extern "C" lck_mtx_t hakios_smmu_lock;
+extern "C" uint64_t kvtophys(vm_offset_t);
+extern "C" vm_offset_t ml_static_ptovirt(vm_offset_t);
+
+#define MUNCH_DSI_CTRL_BASE             0x0ae94000
+#define MUNCH_DSI_CTRL_SIZE             0x400
+#define MUNCH_DSI_CTRL                  0x004
+#define MUNCH_DSI_STATUS                0x008
+#define MUNCH_DSI_COMMAND_MODE_DMA_CTRL 0x03c
+#define MUNCH_DSI_DMA_CMD_LENGTH        0x04c
+#define MUNCH_DSI_DMA_FIFO_CTRL         0x050
+#define MUNCH_DSI_CMD_DMA_SW_TRIGGER    0x090
+#define MUNCH_DSI_INT_CTRL              0x110
+#define MUNCH_DSI_TPG_CTRL              0x15c
+#define MUNCH_DSI_TPG_DMA_INIT          0x17c
+#define MUNCH_DSI_TPG_DMA_FIFO_RESET    0x1ec
+#define MUNCH_DSI_CMD_DMA_DONE          (1u << 0)
+#define MUNCH_DSI_CMD_DMA_DONE_MASK     (1u << 1)
+#define MUNCH_DSI_ERROR_STATUS          (1u << 24)
+#define MUNCH_DSI_CMD_MODE_MDP_BUSY     (1u << 2)
+#define MUNCH_DISPLAY_GCC_BASE          0x0010b000
+#define MUNCH_DISPLAY_CC_BASE           0x0af02000
+#define MUNCH_DISPLAY_POWER_BASE        0x0af03000
 
 /* IOConnectCallMethod selectors of the framebuffer user client (iOS 16.5) */
 enum {
@@ -77,10 +109,12 @@ enum {
 #define kFBNotifyVSync          5
 #define kFBNotifyTypes          8
 #define kFBRefreshHz            60                      /* unless boot-arg fb_hz says otherwise */
+#define kFBNativeRefreshHz      60                      /* native handoff inherits the bootloader's ~60-Hz mode */
 
 #define FRAME_TIMES             64                      /* milliseconds told apart between two frames */
 #define FRAME_PAUSE             90                      /* from so many on, nothing was moving: not a slow frame */
 #define SWAP_GPU_MS             500                     /* a frame the GPU has not drawn by then is shown as it is */
+#define SWAP_GPU_FRAME_MS       50
 #define SWAP_HELD_MS            700                     /* a swap that cannot be taken by then is not shown at all */
 
 #define FOURCC(a, b, c, d) ((uint32_t)(a) << 24 | (uint32_t)(b) << 16 | (uint32_t)(c) << 8 | (uint32_t)(d))
@@ -143,22 +177,22 @@ static TUNABLE(uint32_t, gRecRing, "rec_ring", 0);
 static TUNABLE(uint32_t, gRecStep, "rec_step", 3);
 static TUNABLE(uint32_t, gDiff, "fb_diff", 0);
 /*
- * Boot-arg fb_filter=0: the picture is scaled to the panel nearest neighbour, as it once was. The
- * iPhone's 1125 x 2436 on this panel's 1080 x 2400 is 45 columns and 36 rows fewer: nearest
- * neighbour leaves out every 25th column and every 67th row, and where one of them goes through a
- * letter or a slanting line, that is a step in it or a stroke a pixel thinner -- text and lines a
- * little crooked, here and there and never in the same places twice. By default every pixel of the
- * panel is worked out from the four of the picture around where it falls (bilinear).
+ * Boot-arg fb_filter=1: use bilinear filtering. The default nearest-neighbour path is substantially
+ * cheaper on the CPU; fb_filter=1 restores the quality-first behavior for comparison. On the normal
+ * 1125x2436-to-1080x2400 panel, nearest neighbour leaves out 45 columns and 36 rows.
  */
-static TUNABLE(uint32_t, gFilter, "fb_filter", 1);
+static TUNABLE(uint32_t, gFilter, "fb_filter", 0);
 static TUNABLE(uint32_t, gRefreshHz, "fb_hz", kFBRefreshHz);
-static TUNABLE(uint32_t, gOnTheBeat, "fb_beat", 1);
+static TUNABLE(uint32_t, gOnTheBeat, "fb_beat", 0);
+static TUNABLE(uint32_t, gMunchSDEProbe, "munch_sde_probe", 0);
+static TUNABLE(uint32_t, gMunchSDEPresent, "munch_sde", 0);
+static TUNABLE(uint32_t, gMunchSDENative, "munch_sde_native", 0);
+static TUNABLE(uint32_t, gMunchSDETakeover, "munch_sde_takeover", 0);
 /*
  * Boot-arg fb_threads=N (1 to 8): so many processors scale a frame onto the panel together (see
- * drawRows()). Three by default: a frame is in the panel's memory 3 ms after its turn instead of 9
- * to 10 (the phone, 15 October; fb_threads=1 is how it was).
+ * drawRows()). Eight by default on the eight-CPU boot; lower it only for comparison.
  */
-static TUNABLE(uint32_t, gThreads, "fb_threads", 3);
+static TUNABLE(uint32_t, gThreads, "fb_threads", 8);
 #define SWAP_QUEUE              2                       /* frames that may wait for the panel at most (fb_queue) */
 static TUNABLE(uint32_t, gQueue, "fb_queue", 2);
 static inline unsigned
@@ -186,6 +220,7 @@ micros(uint64_t absolute)
 static inline uint32_t
 refreshHz(void)
 {
+	if (gMunchSDENative) return kFBNativeRefreshHz;
 	return gRefreshHz >= 1 && gRefreshHz <= 240 ? gRefreshHz : kFBRefreshHz;
 }
 static inline uint32_t
@@ -220,6 +255,7 @@ swapWord(const uint8_t * swap, unsigned offset)
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 struct RowJob;
+struct MunchSDE;
 
 class IOMobileFramebuffer : public IOService
 {
@@ -274,6 +310,9 @@ public:
 	/* how the display is doing: frames and time spent drawing them here since fStatSince */
 	uint32_t        fStatFrames;
 	uint64_t        fStatSince, fStatDrawing;
+	uint64_t        fStatSDEAcquire, fStatSDECompose, fStatSDECommit, fStatSDECompletion;
+	uint32_t        fStatSDEPreserved, fStatSDEOverlapped, fStatSDERetired, fStatSDEQueued, fStatSDEFullCompose;
+	uint32_t        fStatGPUBudgetMisses;
 	/* ... and how evenly: the time from each frame to the next, counted by the millisecond (the last count: longer) */
 	uint64_t        fLastFrame;
 	uint32_t        fFrameTimes[FRAME_TIMES + 1], fFramePauses, fFrameLongest;
@@ -293,19 +332,58 @@ public:
 	bool            fRecWrapped;            /* (rec_ring) the memory has been full once: frames go over the oldest */
 
 	virtual bool start(IOService * provider) APPLE_KEXT_OVERRIDE;
+	virtual IOReturn setPowerState(unsigned long powerStateOrdinal, IOService * whatDevice) APPLE_KEXT_OVERRIDE;
 	void publishModes(void);
 	MiniIOSurface * defaultSurface(void);
-	void present(const uint8_t * swap);
+	IOReturn present(const uint8_t * swap);
+	IOReturn submitSwap(const void *bytes, uint32_t size);
+	IOReturn waitSwap(uint32_t swapID);
+	void finishSwap(uint32_t swapID, IOReturn result);
+	bool presentationTime(uint64_t *count, uint64_t *time);
+	MunchSDE *fSDE;
+	bool fSDERequested;
+	bool fSDENativeRequested;
+	bool fDisplayBlanked;
+	IOReturn fSDEError;
+	enum munch_sde_result fSDEInitResult;
+	const char *fSDEInitPhase;
+	uint64_t fSDESwapRequests, fSDEAcceptedRequests, fSDEStatusTime;
+	uint32_t fSDELastSwapID, fSDELastSwapSize;
+	IOReturn fSDELastSwapResult;
+	bool fSDEStatusLogged;
+	void reportSDEStatus(uint64_t now);
+	struct { uint32_t id; IOReturn result; bool pending, valid; } fSwapResults[64];
+	bool fSDEInFlight;
+	uint32_t fSDEInFlightID;
+	uint8_t fSDEInFlightSwap[SWAP_SIZE];
+	MiniIOSurface *fSDEInFlightSurfaces[SWAP_LAYERS];
+	uint64_t fSDEInFlightBegan, fSDEInFlightReady, fSDEInFlightShown, fSDEInFlightSubmitted;
+	uint64_t fHardwareFrames, fHardwareTime;
 	void show(const uint8_t * swap, MiniIOSurface ** surfaces);
+	void retireNativeSwap(uint32_t swapID, MiniIOSurface ** surfaces);
+	void finishNativeSwapInOrder(uint32_t swapID, IOReturn result);
+	enum munch_sde_result waitNativeFrame(bool allowQueued = false);
+	void reportNativeFailure(enum munch_sde_result result, IOReturn swapResult, uint32_t swapID);
+	void completeNativeSwap(enum munch_sde_result result);
+	void dropNativeSurfaces(MiniIOSurface ** surfaces);
 	void presenter(void);
 	static void presenterMain(void * self, wait_result_t result);
 	void reportFrameTimes(void);
+	void reportSDEPerformance(uint64_t now);
 	void drawLayer(MiniIOSurface * s, const int32_t * src, const int32_t * dst);
 	void drawRows(const struct RowJob * job, int32_t y0, int32_t y1, uint32_t * blendRow);
 	static void helperMain(void * self, wait_result_t result);
+	IOReturn setDisplayPower(uint32_t state);
+	IOReturn sendDcsCommand(uint8_t command, uint8_t parameter, bool hasParameter);
 	/* the scaling shared out (fb_threads): fThreads drawers, the presenter and fThreads - 1 helpers */
 	unsigned        fThreads;
 	IOLock *        fHelperLock;
+	IOLock *        fDisplayLock;
+	volatile uint32_t * fDSIRegs;
+	volatile uint32_t * fDisplayGCC;
+	volatile uint32_t * fDisplayCC;
+	volatile uint32_t * fDisplayPower;
+	bool            fPanelOn;
 	const struct RowJob * fHelperJob;
 	uint64_t        fHelperGeneration;
 	unsigned        fHelpersBusy, fHelpersStarted;
@@ -313,7 +391,305 @@ public:
 	void record(MiniIOSurface * s);
 };
 
+static IOPMPowerState gFramebufferPowerStates[2] = {
+	{ 1, kIOPMPowerOn, kIOPMDeviceUsable | kIOPMMaxPerformance, kIOPMPowerOn, 0, 0, 0, 0, 0, 0 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
 OSDefineMetaClassAndStructors(IOMobileFramebuffer, IOService);
+
+static void
+munchSmmuProbe(void)
+{
+	vm_offset_t smmuAddress, smmuSecondAddress;
+	volatile uint32_t *smmu, *smmuSecond;
+	uint32_t scr0, idr0, idr1, matches, contexts;
+	uint32_t streamMask = 0x7fff;
+	uint32_t requestedSid = MUNCH_SDE_IOMMU_UNSECURE_SID;
+	uint32_t requestedMask = MUNCH_SDE_IOMMU_UNSECURE_MASK;
+	uint32_t pageSize, pages;
+	bool found = false;
+
+	lck_mtx_lock(&hakios_smmu_lock);
+	smmuAddress = ml_io_map(MUNCH_APPS_SMMU_PHYS, 0x2000);
+	if (smmuAddress == 0) {
+		IOLog("MUNCH SMMU: MMIO map unavailable; SDE probe skipped\n");
+		lck_mtx_unlock(&hakios_smmu_lock);
+		return;
+	}
+	smmu = (volatile uint32_t *)smmuAddress;
+	scr0 = smmu[MUNCH_SMMU_SCR0 / 4];
+	idr0 = smmu[MUNCH_SMMU_IDR0 / 4];
+	idr1 = smmu[MUNCH_SMMU_IDR1 / 4];
+	matches = idr0 & 0xff;
+	contexts = idr1 & 0xff;
+	pageSize = (idr1 & (1u << 31)) ? 0x10000 : 0x1000;
+	pages = 2u << ((idr1 >> 28) & 7);
+	smmuSecondAddress = ml_io_map(MUNCH_APPS_SMMU_PHYS + pageSize, pageSize);
+	if (smmuSecondAddress == 0) {
+		IOLog("MUNCH SMMU: second global register page unavailable\n");
+		lck_mtx_unlock(&hakios_smmu_lock);
+		return;
+	}
+	smmuSecond = (volatile uint32_t *)smmuSecondAddress;
+	if (scr0 & MUNCH_SMMU_SCR0_EXIDENABLE) {
+		if (!(idr0 & MUNCH_SMMU_IDR0_EXIDS)) {
+			IOLog("MUNCH SMMU: inconsistent extended SID mode (SCR0=%#x IDR0=%#x)\n", scr0, idr0);
+			lck_mtx_unlock(&hakios_smmu_lock);
+			return;
+		}
+		streamMask = 0xffff;
+	}
+	IOLog("MUNCH SMMU: read-only SID=%#x mask=%#x SCR0=%#x IDR0=%#x IDR1=%#x SMRs=%u CBs=%u\n",
+	    requestedSid, requestedMask, scr0, idr0, idr1, matches, contexts);
+	if (scr0 & 1) {
+		IOLog("MUNCH SMMU: global configuration reports disabled\n");
+		lck_mtx_unlock(&hakios_smmu_lock);
+		return;
+	}
+	struct munch_smmu_stream *streams = matches ?
+	    (struct munch_smmu_stream *)IOMallocZero(matches * sizeof(*streams)) : NULL;
+	if (!streams) {
+		IOLog("MUNCH SMMU: no stream snapshot storage; qualification skipped\n");
+		lck_mtx_unlock(&hakios_smmu_lock);
+		return;
+	}
+	for (uint32_t index = 0; index < matches; index++) {
+		uint32_t smr = smmu[MUNCH_SMMU_SMR(index) / 4];
+		uint32_t s2cr = smmu[MUNCH_SMMU_S2CR(index) / 4];
+		streams[index].smr = smr;
+		streams[index].s2cr = s2cr;
+		uint32_t sid = smr & streamMask;
+		uint32_t mask = (smr >> 16) & streamMask;
+		bool active = (scr0 & MUNCH_SMMU_SCR0_EXIDENABLE) ?
+		    (s2cr & MUNCH_SMMU_S2CR_EXIDVALID) != 0 : (smr & MUNCH_SMMU_SMR_VALID) != 0;
+
+		if (((sid ^ requestedSid) & ~(mask | requestedMask) & streamMask) != 0) continue;
+		found = true;
+		uint32_t type = (s2cr >> MUNCH_SMMU_S2CR_TYPE_SHIFT) & 3;
+		uint32_t context = s2cr & MUNCH_SMMU_CBNDX_MASK;
+		IOLog("MUNCH SMMU: match%u active=%u SMR=%#x S2CR=%#x type=%u CB=%u\n",
+		    index, active, smr, s2cr, type, context);
+		if (!active || type != 0 || context >= contexts) continue;
+		uint32_t cbar = smmuSecond[MUNCH_SMMU_CBAR(context) / 4];
+		uint32_t cba2r = smmuSecond[MUNCH_SMMU_CBA2R(context) / 4];
+		uint64_t contextOffset = (uint64_t)(pages + context) * pageSize;
+		if (contextOffset + 0x1000 > MUNCH_APPS_SMMU_WINDOW_SIZE) {
+			IOLog("MUNCH SMMU: CB%u register window %#llx exceeds mapped SMMU range\n", context,
+			    (unsigned long long)contextOffset);
+			continue;
+		}
+		vm_offset_t contextAddress = ml_io_map(MUNCH_APPS_SMMU_PHYS + contextOffset, 0x1000);
+		if (contextAddress == 0) {
+			IOLog("MUNCH SMMU: CB%u context register map unavailable\n", context);
+			continue;
+		}
+		volatile uint32_t *cb = (volatile uint32_t *)contextAddress;
+		uint32_t ttbr0Low = cb[MUNCH_SMMU_CB_TTBR0 / 4];
+		uint32_t ttbr0High = cb[(MUNCH_SMMU_CB_TTBR0 + 4) / 4];
+		uint32_t farLow = cb[MUNCH_SMMU_CB_FAR / 4];
+		uint32_t farHigh = cb[(MUNCH_SMMU_CB_FAR + 4) / 4];
+		IOLog("MUNCH SMMU: CB%u CBAR=%#x CBA2R=%#x SCTLR=%#x TTBR0=%#x%08x TCR=%#x FSR=%#x FAR=%#x%08x\n",
+		    context, cbar, cba2r, cb[MUNCH_SMMU_CB_SCTLR / 4], ttbr0High, ttbr0Low,
+		    cb[MUNCH_SMMU_CB_TCR / 4], cb[MUNCH_SMMU_CB_FSR / 4], farHigh, farLow);
+		IOLog("MUNCH SMMU: CB%u TCR2=%#x MAIR0=%#x MAIR1=%#x\n", context,
+		    cb[MUNCH_SMMU_CB_TCR2 / 4], cb[MUNCH_SMMU_CB_MAIR0 / 4], cb[MUNCH_SMMU_CB_MAIR1 / 4]);
+	}
+	if (!found) IOLog("MUNCH SMMU: no SMR covers Kona SDE SID %#x/mask %#x\n", requestedSid, requestedMask);
+	struct munch_smmu_domain domain = {};
+	enum munch_sde_result qualification = munch_smmu_find_stream(scr0, idr0, idr1, streams, &domain);
+	IOLog("MUNCH SMMU: stream qualification=%s index=%u CB=%u; page tables not walked or modified\n",
+	    munch_sde_result_name(qualification), domain.stream, domain.context);
+	IOFree(streams, matches * sizeof(*streams));
+	lck_mtx_unlock(&hakios_smmu_lock);
+}
+
+static void
+munchSdeReadSnapshot(volatile uint32_t *regs, volatile uint32_t *dsi,
+    struct munch_sde_snapshot *snapshot, bool log)
+{
+	bzero(snapshot, sizeof(*snapshot));
+	volatile uint32_t *intf = regs + MUNCH_SDE_INTF1_OFFSET / 4;
+	snapshot->revision = regs[MUNCH_MDP_VERSION / 4];
+	snapshot->mux = intf[MUNCH_SDE_INTF_MUX / 4];
+	snapshot->tear_enable = intf[MUNCH_SDE_INTF_TEAR_ENABLE / 4];
+	snapshot->tear_vsync = intf[MUNCH_SDE_INTF_TEAR_SYNC_VSYNC / 4];
+	snapshot->autorefresh = intf[MUNCH_SDE_INTF_TEAR_AUTOREFRESH / 4];
+	snapshot->dsi_ctrl = dsi[MUNCH_DSI_CTRL / 4];
+	snapshot->dsi_status = dsi[MUNCH_DSI_STATUS / 4];
+	for (unsigned index = 0; index < 8; index++) {
+		volatile uint32_t *regsPipe = regs + munch_sde_sspps[index].offset / 4;
+		struct munch_sde_pipe_state *pipe = &snapshot->pipes[index];
+		pipe->size = regsPipe[MUNCH_SDE_SSPP_SRC_SIZE / 4];
+		pipe->out_size = regsPipe[MUNCH_SDE_SSPP_OUT_SIZE / 4];
+		pipe->source = regsPipe[MUNCH_SDE_SSPP_SRC_ADDR / 4];
+		pipe->stride = regsPipe[MUNCH_SDE_SSPP_SRC_YSTRIDE / 4];
+		pipe->format = regsPipe[MUNCH_SDE_SSPP_SRC_FORMAT / 4];
+		pipe->unpack = regsPipe[MUNCH_SDE_SSPP_SRC_UNPACK / 4];
+		pipe->src_xy = regsPipe[MUNCH_SDE_SSPP_SRC_XY / 4];
+		pipe->out_xy = regsPipe[MUNCH_SDE_SSPP_OUT_XY / 4];
+		pipe->opmode = regsPipe[MUNCH_SDE_SSPP_SRC_OP_MODE / 4];
+		pipe->secure = regsPipe[MUNCH_SDE_SSPP_SECURE / 4];
+		pipe->multirect = regsPipe[MUNCH_SDE_SSPP_MULTIRECT / 4];
+		for (unsigned component = 0; component < MUNCH_SDE_SSPP_PE_COUNT; component++) {
+			unsigned offset = MUNCH_SDE_SSPP_PE_BASE + component * MUNCH_SDE_SSPP_PE_STRIDE;
+			pipe->pixel_ext[component].lr = regsPipe[offset / 4];
+			pipe->pixel_ext[component].tb = regsPipe[(offset + 4) / 4];
+			pipe->pixel_ext[component].required = regsPipe[(offset + 8) / 4];
+		}
+		if (index < 4) {
+			pipe->scaler = regsPipe[MUNCH_SDE_VIG_SCALER_OP_MODE / 4];
+			pipe->csc = regsPipe[MUNCH_SDE_VIG_CSC_OP_MODE / 4];
+			pipe->pre_downscale = regsPipe[MUNCH_SDE_SSPP_PRE_DOWNSCALE / 4];
+			pipe->decimation = regsPipe[MUNCH_SDE_SSPP_DECIMATION / 4];
+		}
+		if (log && pipe->size) IOLog("MUNCH SDE: %s unpack=%#x src-xy=%#x out-xy=%#x secure=%#x multirect=%#x\n",
+		    munch_sde_sspps[index].name, pipe->unpack, pipe->src_xy, pipe->out_xy, pipe->secure, pipe->multirect);
+	}
+	for (unsigned index = 0; index < 6; index++) {
+		volatile uint32_t *regsCtl = regs + munch_sde_ctl_offsets[index] / 4;
+		struct munch_sde_ctl_state *ctl = &snapshot->ctls[index];
+		ctl->top = regsCtl[MUNCH_SDE_CTL_TOP / 4];
+		ctl->active = regsCtl[MUNCH_SDE_CTL_INTF_ACTIVE / 4];
+		ctl->start = regsCtl[MUNCH_SDE_CTL_START / 4];
+		ctl->flush = regsCtl[MUNCH_SDE_CTL_FLUSH / 4];
+		ctl->merge = regsCtl[MUNCH_SDE_CTL_MERGE_ACTIVE / 4];
+		ctl->dsc = regsCtl[MUNCH_SDE_CTL_DSC_ACTIVE / 4];
+		ctl->wb = regsCtl[MUNCH_SDE_CTL_WB_ACTIVE / 4];
+		ctl->cwb = regsCtl[MUNCH_SDE_CTL_CWB_ACTIVE / 4];
+		ctl->cdm = regsCtl[MUNCH_SDE_CTL_CDM_ACTIVE / 4];
+		volatile uint32_t *regsMixer = regs + (MUNCH_SDE_LM_BASE + index * MUNCH_SDE_LM_STRIDE) / 4;
+		snapshot->mixer_size[index] = regsMixer[MUNCH_SDE_LM_OUT_SIZE / 4];
+		snapshot->mixers[index].opmode = regsMixer[MUNCH_SDE_LM_OP_MODE / 4];
+		for (unsigned stage = 0; stage < MUNCH_SDE_LM_BLEND_COUNT; stage++) {
+			unsigned offset = munch_sde_blend_offsets[stage];
+			snapshot->mixers[index].blend_op[stage] = regsMixer[offset / 4];
+			snapshot->mixers[index].blend_alpha[stage] = regsMixer[(offset + 4) / 4];
+		}
+		if (log && ctl->active) IOLog("MUNCH SDE: CTL%u flush=%#x merge=%#x dsc=%#x wb=%#x cwb=%#x cdm=%#x\n",
+		    index, ctl->flush, ctl->merge, ctl->dsc, ctl->wb, ctl->cwb, ctl->cdm);
+		for (unsigned extension = 0; extension < 4; extension++) {
+			for (unsigned mixer = 0; mixer < 6; mixer++)
+				ctl->layers[extension][mixer] = regsCtl[munch_sde_ctl_layer_offsets[extension][mixer] / 4];
+		}
+	}
+	if (log) IOLog("MUNCH SDE: LM sizes=%#x/%#x/%#x/%#x/%#x/%#x\n", snapshot->mixer_size[0], snapshot->mixer_size[1],
+	    snapshot->mixer_size[2], snapshot->mixer_size[3], snapshot->mixer_size[4], snapshot->mixer_size[5]);
+}
+
+static void
+munchSdeQualify(volatile uint32_t *regs)
+{
+	struct munch_sde_snapshot *snapshot = (struct munch_sde_snapshot *)IOMallocZero(sizeof(*snapshot));
+	if (!snapshot) return;
+	vm_offset_t dsiAddress = ml_io_map(MUNCH_DSI_CTRL_BASE, MUNCH_DSI_CTRL_SIZE);
+	if (!dsiAddress) {
+		IOFree(snapshot, sizeof(*snapshot));
+		return;
+	}
+	munchSdeReadSnapshot(regs, (volatile uint32_t *)dsiAddress, snapshot, true);
+	struct munch_sde_route route = {};
+	enum munch_sde_result result = munch_sde_find_route(snapshot, &route);
+	IOLog("MUNCH SDE: fixed-mode candidate=%s DSI0 ctrl=%#x status=%#x; takeover disabled\n",
+	    munch_sde_result_name(result), snapshot->dsi_ctrl, snapshot->dsi_status);
+	if (result == MUNCH_SDE_OK) IOLog("MUNCH SDE: candidate CTL%u LM%u %s PP%u IOVA=%#x stride=%u flush=%#x done=%#x\n",
+	    route.ctl, route.mixer, munch_sde_sspps[route.pipe].name, route.pingpong, route.source,
+	    route.stride, route.flush_mask, route.done_mask);
+	IOFree(snapshot, sizeof(*snapshot));
+}
+
+static void
+munchSdeProbe(void)
+{
+	vm_offset_t gcc, disp, power, mdp;
+	uint32_t configuredPipes = 0, activeCtls = 0;
+
+	if (!gMunchSDEProbe) return;
+	gcc = ml_io_map(0x0010b000, 0x1000);
+	disp = ml_io_map(0x0af02000, 0x1000);
+	power = ml_io_map(0x0af03000, 0x1000);
+	if (!gcc || !disp || !power) {
+		IOLog("MUNCH SDE: MMIO map unavailable; probe skipped\n");
+		return;
+	}
+	uint32_t gccStatus = *(volatile uint32_t *)(gcc + 0x00c);
+	uint32_t dispStatus = *(volatile uint32_t *)(disp + 0x080);
+	uint32_t powerStatus = *(volatile uint32_t *)power;
+	if (!(gccStatus & 1) || (gccStatus & (1u << 31)) ||
+	    !(dispStatus & 1) || (dispStatus & (1u << 31)) ||
+	    !(powerStatus & (1u << 31))) {
+		IOLog("MUNCH SDE: clocks/power not ready (gcc=%#x disp=%#x power=%#x); skipped\n",
+		    gccStatus, dispStatus, powerStatus);
+		return;
+	}
+	mdp = ml_io_map(MUNCH_MDP_PHYS, MUNCH_MDP_SIZE);
+	if (!mdp) {
+		IOLog("MUNCH SDE: MDP map unavailable; probe skipped\n");
+		return;
+	}
+	volatile uint32_t *regs = (volatile uint32_t *)mdp;
+	IOLog("MUNCH SDE: read-only Kona snapshot rev=%#x\n", regs[0]);
+	for (unsigned pipeIndex = 0; pipeIndex < sizeof(munch_sde_sspps) / sizeof(munch_sde_sspps[0]); pipeIndex++) {
+		volatile uint32_t *pipe = regs + munch_sde_sspps[pipeIndex].offset / sizeof(uint32_t);
+		uint32_t srcSize = pipe[MUNCH_SDE_SSPP_SRC_SIZE / 4];
+		uint32_t outSize = pipe[MUNCH_SDE_SSPP_OUT_SIZE / 4];
+		uint32_t source = pipe[MUNCH_SDE_SSPP_SRC_ADDR / 4];
+		uint32_t stride = pipe[MUNCH_SDE_SSPP_SRC_YSTRIDE / 4];
+		uint32_t format = pipe[MUNCH_SDE_SSPP_SRC_FORMAT / 4];
+		uint32_t opmode = pipe[MUNCH_SDE_SSPP_SRC_OP_MODE / 4];
+		if (srcSize || outSize || source || format || opmode) {
+			IOLog("MUNCH SDE: %s src=%#x out=%#x addr0=%#x stride=%#x format=%#x opmode=%#x\n",
+			    munch_sde_sspps[pipeIndex].name, srcSize, outSize, source, stride, format, opmode);
+			configuredPipes++;
+		}
+	}
+	for (unsigned ctlIndex = 0; ctlIndex < MUNCH_SDE_CTL_COUNT; ctlIndex++) {
+		volatile uint32_t *ctl = regs + munch_sde_ctl_offsets[ctlIndex] / sizeof(uint32_t);
+		uint32_t top = ctl[MUNCH_SDE_CTL_TOP / 4];
+		uint32_t start = ctl[MUNCH_SDE_CTL_START / 4];
+		uint32_t intfActive = ctl[MUNCH_SDE_CTL_INTF_ACTIVE / 4];
+		if (top || start || intfActive) {
+			IOLog("MUNCH SDE: CTL%u top=%#x start=%#x intf-active=%#x\n",
+			    ctlIndex, top, start, intfActive);
+			activeCtls++;
+			for (unsigned routeIndex = 0; routeIndex < sizeof(munch_sde_ctl_layer_offsets) / sizeof(munch_sde_ctl_layer_offsets[0]); routeIndex++) {
+				uint32_t route[6];
+				int configured = 0;
+
+				for (unsigned layer = 0; layer < 6; layer++) {
+					route[layer] = ctl[munch_sde_ctl_layer_offsets[routeIndex][layer] / 4];
+					configured |= route[layer] != 0;
+				}
+				if (configured) {
+					IOLog("MUNCH SDE: CTL%u layer-map%u=%#x/%#x/%#x/%#x/%#x/%#x\n",
+					    ctlIndex, routeIndex, route[0], route[1], route[2], route[3], route[4], route[5]);
+				}
+			}
+		}
+	}
+	volatile uint32_t *intf = regs + MUNCH_SDE_INTF1_OFFSET / sizeof(uint32_t);
+	IOLog("MUNCH SDE: INTF1 engine=%#x mux=%#x status=%#x count-en=%#x frame=%#x line=%#x "
+	    "tear-line=%#x write=%#x "
+	    "nonzero-pipes=%u active-ctls=%u\n",
+	    intf[MUNCH_SDE_INTF_ENABLE / 4], intf[MUNCH_SDE_INTF_MUX / 4], intf[MUNCH_SDE_INTF_STATUS / 4],
+	    intf[MUNCH_SDE_INTF_FRAME_LINE_COUNT_EN / 4], intf[MUNCH_SDE_INTF_FRAME_COUNT / 4],
+	    intf[MUNCH_SDE_INTF_LINE_COUNT / 4],
+	    intf[MUNCH_SDE_INTF_TEAR_OUT_LINE / 4], intf[MUNCH_SDE_INTF_TEAR_LINE / 4],
+	    configuredPipes, activeCtls);
+	IOLog("MUNCH SDE: INTF1 tear mux=%#x enable=%#x vsync=%#x height=%#x wrcount=%#x init=%#x int=%#x "
+	    "threshold=%#x start=%#x rd-irq=%#x wr-irq=%#x auto=%#x detect=%#x\n",
+	    intf[MUNCH_SDE_INTF_TEAR_MDP_VSYNC / 4], intf[MUNCH_SDE_INTF_TEAR_ENABLE / 4],
+	    intf[MUNCH_SDE_INTF_TEAR_SYNC_VSYNC / 4], intf[MUNCH_SDE_INTF_TEAR_HEIGHT / 4],
+	    intf[MUNCH_SDE_INTF_TEAR_SYNC_WRCOUNT / 4], intf[MUNCH_SDE_INTF_TEAR_VSYNC_INIT / 4],
+	    intf[MUNCH_SDE_INTF_TEAR_INT_COUNT / 4], intf[MUNCH_SDE_INTF_TEAR_SYNC_THRESH / 4],
+	    intf[MUNCH_SDE_INTF_TEAR_START_POS / 4], intf[MUNCH_SDE_INTF_TEAR_RD_PTR_IRQ / 4],
+	    intf[MUNCH_SDE_INTF_TEAR_WR_PTR_IRQ / 4], intf[MUNCH_SDE_INTF_TEAR_AUTOREFRESH / 4],
+	    intf[MUNCH_SDE_INTF_TEAR_DETECT / 4]);
+	if ((regs[MUNCH_MDP_VERSION / 4] >> 16) == 0x6000) munchSdeQualify(regs);
+	munchSmmuProbe();
+}
+
+#include "munch-sde-xnu.h"
 
 static void
 setNumber(OSDictionary * dict, const char * key, uint64_t value)
@@ -329,7 +705,7 @@ setNumber(OSDictionary * dict, const char * key, uint64_t value)
 /*
  * The modes of the display, the way CoreAnimation reads them (the properties TimingElements
  * and ColorElements; without a mode it draws nothing). One timing, the panel's size at
- * 60 Hz (boot-arg fb_hz=N: at N), with one colour mode, 8-bit RGB. The identifiers are what "the current mode"
+ * 60 Hz, with one colour mode, 8-bit RGB. fb_hz changes software pacing only. The identifiers are what "the current mode"
  * (block 0x40) answers with.
  */
 #define kFBTimingID     1
@@ -344,7 +720,7 @@ IOMobileFramebuffer::publishModes(void)
 	OSDictionary * color = OSDictionary::withCapacity(8);
 	OSArray * timings = OSArray::withCapacity(1);
 	OSArray * colors = OSArray::withCapacity(1);
-	const uint32_t rate = refreshHz() << 16;                /* 16.16 fixed point */
+	const uint32_t rate = refreshHz() << 16;                 /* 16.16 fixed point */
 
 	if (timing == NULL || horizontal == NULL || vertical == NULL || color == NULL || timings == NULL || colors == NULL) {
 		return;
@@ -394,6 +770,9 @@ IOMobileFramebuffer::start(IOService * provider)
 	if (!IOService::start(provider)) {
 		return false;
 	}
+	PMinit();
+	joinPMtree(provider);
+	registerPowerDriver(this, gFramebufferPowerStates, 2);
 	if (vinfo.v_baseaddr == 0 || vinfo.v_width == 0 || vinfo.v_height == 0 || vinfo.v_depth != 32) {
 		IOLog("MiniIOMobileFramebuffer: no usable boot framebuffer (%ux%u, depth %u)\n", vinfo.v_width, vinfo.v_height,
 		    vinfo.v_depth);
@@ -401,13 +780,18 @@ IOMobileFramebuffer::start(IOService * provider)
 	}
 	fLock = IOLockAlloc();
 	fSwapLock = IOLockAlloc();
-	if (kernel_thread_start(&IOMobileFramebuffer::presenterMain, this, &thread) != KERN_SUCCESS) {
-		IOLog("MiniIOMobileFramebuffer: no thread to put frames on the panel with\n");
-		return false;
+	fDisplayLock = IOLockAlloc();
+	if (!fLock || !fSwapLock) return false;
+	fPanelOn = true;
+	fDSIRegs = (volatile uint32_t *) ml_io_map(MUNCH_DSI_CTRL_BASE, MUNCH_DSI_CTRL_SIZE);
+	fDisplayGCC = (volatile uint32_t *) ml_io_map(MUNCH_DISPLAY_GCC_BASE, 0x1000);
+	fDisplayCC = (volatile uint32_t *) ml_io_map(MUNCH_DISPLAY_CC_BASE, 0x1000);
+	fDisplayPower = (volatile uint32_t *) ml_io_map(MUNCH_DISPLAY_POWER_BASE, 0x1000);
+	if (fDisplayLock == NULL) {
+		IOLog("MiniIOMobileFramebuffer: no lock for panel power control; requests disabled\n");
 	}
-	thread_set_thread_name(thread, "frames to the panel");
-	thread_deallocate(thread);
 	fThreads = gThreads >= 1 && gThreads <= 8 ? gThreads : 1;
+	fStatGPUBudgetMisses = 0;
 	fHelperLock = IOLockAlloc();
 	for (unsigned i = 0; i + 1 < fThreads; i++) {
 		if (kernel_thread_start(&IOMobileFramebuffer::helperMain, this, &thread) != KERN_SUCCESS) {
@@ -421,14 +805,59 @@ IOMobileFramebuffer::start(IOService * provider)
 	fPanelWidth = vinfo.v_width;
 	fPanelHeight = vinfo.v_height;
 	fRowBytes = vinfo.v_rowbytes;
-	fWidth = gFBWidth ? gFBWidth : fPanelWidth;
-	fHeight = gFBHeight ? gFBHeight : fPanelHeight;
-	if (gFBScale != 0 && gFBScale != kFBDefaultScale) {
+	fSDERequested = gMunchSDEPresent != 0;
+	fSDENativeRequested = fSDERequested && gMunchSDENative != 0;
+	/* CoreAnimation must see the iOS logical mode before any native presenter
+	 * properties are published.  The presenter owns only the physical panel. */
+	fWidth = gFBWidth ? gFBWidth : kFBDefaultWidth;
+	fHeight = gFBHeight ? gFBHeight : kFBDefaultHeight;
+	if (!fSDENativeRequested && gFBScale != 0 && gFBScale != kFBDefaultScale) {
+		fWidth = kFBPointsWide * gFBScale;
+		fHeight = kFBPointsHigh * gFBScale;
+	}
+	if (fSDERequested) {
+		IOLog("MUNCH SDE: boot console retained until first completed frame; GPU test blits disabled\n");
+		char liveLine[160];
+		snprintf(liveLine, sizeof(liveLine), "MUNCH SDE START: native=%u panel=%ux%u display=%ux%u\n",
+		    (unsigned)fSDENativeRequested, fPanelWidth, fPanelHeight, fWidth, fHeight);
+		loader_log_line(liveLine);
+		fSDEError = kIOReturnNotReady;
+		fSDEInitResult = MUNCH_SDE_DISABLED;
+		fSDEInitPhase = !fDisplayLock ? "no-display-lock" : "owner-unavailable";
+		if (fDisplayLock && !gMunchSDEOwner) {
+			fSDEInitPhase = "state-allocation";
+			fSDE = IONewZero(MunchSDE, 1);
+			if (fSDE) {
+				fSDE->nativeRequested = fSDENativeRequested;
+				fSDE->nativeTakeover = fSDENativeRequested && gMunchSDETakeover != 0;
+				gMunchSDEOwner = fSDE;
+				munchSdeBarrier(NULL);
+				lck_mtx_lock(&hakios_smmu_lock);
+				enum munch_sde_result result = munchSdeInitialize(fSDE, fBase, fRowBytes, fPanelWidth, fPanelHeight);
+				fSDEInitResult = result;
+				fSDEInitPhase = fSDE->initPhase;
+				if (result != MUNCH_SDE_OK) munchSdeReleaseUnused(fSDE);
+				lck_mtx_unlock(&hakios_smmu_lock);
+				fSDEError = result == MUNCH_SDE_OK ? kIOReturnSuccess : kIOReturnNotReady;
+				IOLog("MUNCH SDE: hardware presenter v1: %s: %s (%u); native=%u takeover=%u\n",
+				    result == MUNCH_SDE_OK ? "ready" : "rejected", munch_sde_result_name(result), (unsigned)result,
+				    (unsigned)fSDENativeRequested, (unsigned)fSDE->nativeTakeover);
+			}
+		}
+		if (!fSDE) IOLog("MUNCH SDE: presenter allocation/ownership unavailable; swaps disabled\n");
+		setProperty("MunchSDEBackend", fSDEError == kIOReturnSuccess);
+	}
+	/* Keep the iOS logical display contract stable. Native SDE owns the real
+	 * 1080x2400 scanout, while CoreAnimation continues to render the known
+	 * 1125x2436 iPhone layout and drawLayer scales it to the panel. */
+	if (fSDENativeRequested) {
+		setProperty("NativePanelWidth", fPanelWidth, 32);
+		setProperty("NativePanelHeight", fPanelHeight, 32);
+	}
+	if (!fSDENativeRequested && gFBScale != 0 && gFBScale != kFBDefaultScale) {
 		static const char * const places[][2] = { { "/chosen", "display-scale" }, { "/product", "artwork-scale-factor" } };
 		uint32_t scale = gFBScale;
 
-		fWidth = kFBPointsWide * scale;
-		fHeight = kFBPointsHigh * scale;
 		/* what the loader's device tree says about the scale is where MobileGestalt has it from */
 		for (unsigned i = 0; i < sizeof(places) / sizeof(places[0]); i++) {
 			IORegistryEntry * node = IORegistryEntry::fromPath(places[i][0], gIODTPlane);
@@ -445,6 +874,13 @@ IOMobileFramebuffer::start(IOService * provider)
 	fDiffLeft = fDiffTop = ~0u;
 	IOLog("MiniIOMobileFramebuffer: display %ux%u on a panel of %ux%u (%u bytes per row)\n", fWidth, fHeight,
 	    fPanelWidth, fPanelHeight, fRowBytes);
+	IOLog("MUNCH SDE PERF READY: native=%u panel=%ux%u display=%ux%u logical=%ux%u threads=%u queue=%u\n",
+	    (unsigned)fSDENativeRequested, fPanelWidth, fPanelHeight, fWidth, fHeight, fWidth, fHeight,
+	    fThreads, swapQueue());
+	munchSdeProbe();
+	if (fDSIRegs == NULL) {
+		IOLog("MiniIOMobileFramebuffer: DSI control mapping unavailable; panel power requests disabled\n");
+	}
 
 	if (gRecSeconds != 0) {
 		/* one piece of physical memory: the loader will send it over USB as it lies */
@@ -477,8 +913,232 @@ IOMobileFramebuffer::start(IOService * provider)
 	setProperty("HakiosWaitsForGPU", kOSBooleanTrue);
 	publishModes();
 	setName("disp0");
+	if (kernel_thread_start(&IOMobileFramebuffer::presenterMain, this, &thread) != KERN_SUCCESS) {
+		IOLog("MiniIOMobileFramebuffer: no thread to put frames on the panel with\n");
+		return false;
+	}
+	thread_set_thread_name(thread, "frames to the panel");
+	thread_deallocate(thread);
 	registerService();
 	return true;
+}
+
+IOReturn
+IOMobileFramebuffer::setPowerState(unsigned long powerStateOrdinal, IOService * whatDevice __unused)
+{
+	if (powerStateOrdinal > 1 || !fDisplayLock) return IOPMAckImplied;
+	IOReturn result = setDisplayPower(powerStateOrdinal);
+	if (result != kIOReturnSuccess)
+		IOLog("MiniIOMobileFramebuffer: PM display transition to %lu returned 0x%x\n", powerStateOrdinal, result);
+	return IOPMAckImplied;
+}
+
+IOReturn
+IOMobileFramebuffer::sendDcsCommand(uint8_t command, uint8_t parameter, bool hasParameter)
+{
+	volatile uint32_t * regs = fDSIRegs;
+	uint32_t controller, status = 0, interruptControl, dmaControl, dmaControlOriginal, fifoControl;
+	uint32_t tpgControl, dmaLength, packet;
+	bool completed = false;
+	bool failed = false;
+
+	if (regs == NULL || fDisplayLock == NULL || fDisplayGCC == NULL || fDisplayCC == NULL ||
+	    fDisplayPower == NULL) return kIOReturnNotReady;
+	uint32_t gccStatus = fDisplayGCC[0x00c / 4];
+	uint32_t displayStatus = fDisplayCC[0x080 / 4];
+	uint32_t powerStatus = fDisplayPower[0];
+	if (!(gccStatus & 1) || (gccStatus & (1u << 31)) || !(displayStatus & 1) ||
+	    (displayStatus & (1u << 31)) || !(powerStatus & (1u << 31))) {
+		return kIOReturnNotReady;
+	}
+	controller = regs[MUNCH_DSI_CTRL / 4];
+	if ((controller & (MUNCH_DSI_ENGINE_ENABLED | MUNCH_DSI_CMD_MODE_ENABLED)) !=
+	    (MUNCH_DSI_ENGINE_ENABLED | MUNCH_DSI_CMD_MODE_ENABLED)) {
+		return kIOReturnNotReady;
+	}
+	for (unsigned i = 0; i < 200; i++) {
+		status = regs[MUNCH_DSI_STATUS / 4];
+		if (!(status & MUNCH_DSI_CMD_MODE_MDP_BUSY)) break;
+		IOSleep(1);
+	}
+	if (status & MUNCH_DSI_CMD_MODE_MDP_BUSY) return kIOReturnBusy;
+
+	interruptControl = regs[MUNCH_DSI_INT_CTRL / 4] & 0xaaaaaaaau;
+	if (regs[MUNCH_DSI_INT_CTRL / 4] & MUNCH_DSI_ERROR_STATUS) return kIOReturnIOError;
+	dmaControlOriginal = regs[MUNCH_DSI_COMMAND_MODE_DMA_CTRL / 4];
+	dmaControl = dmaControlOriginal;
+	fifoControl = regs[MUNCH_DSI_DMA_FIFO_CTRL / 4];
+	tpgControl = regs[MUNCH_DSI_TPG_CTRL / 4];
+	dmaLength = regs[MUNCH_DSI_DMA_CMD_LENGTH / 4];
+	packet = (uint32_t) command | ((uint32_t) parameter << 8) |
+	    ((hasParameter ? 0x15u : 0x05u) << 16) | (0x80u << 24);
+
+	regs[MUNCH_DSI_INT_CTRL / 4] = interruptControl | MUNCH_DSI_CMD_DMA_DONE_MASK | MUNCH_DSI_CMD_DMA_DONE;
+	OSSynchronizeIO();
+	if (regs[MUNCH_DSI_INT_CTRL / 4] & MUNCH_DSI_CMD_DMA_DONE) {
+		regs[MUNCH_DSI_INT_CTRL / 4] = interruptControl;
+		return kIOReturnIOError;
+	}
+	regs[MUNCH_DSI_TPG_CTRL / 4] = (1u << 1) | (1u << 2) | (3u << 16);
+	regs[MUNCH_DSI_TPG_DMA_INIT / 4] = packet;
+	regs[MUNCH_DSI_TPG_DMA_INIT / 4] = 0;
+	regs[MUNCH_DSI_DMA_FIFO_CTRL / 4] = fifoControl | (1u << 16) | (1u << 20);
+	dmaControl &= ~((1u << 31) | (1u << 30));
+	dmaControl |= (1u << 28) | (1u << 26);
+	regs[MUNCH_DSI_COMMAND_MODE_DMA_CTRL / 4] = dmaControl;
+	regs[MUNCH_DSI_DMA_CMD_LENGTH / 4] = 4;
+	OSSynchronizeIO();
+	regs[MUNCH_DSI_CMD_DMA_SW_TRIGGER / 4] = 1;
+
+	for (unsigned i = 0; i < 200; i++) {
+		uint32_t interrupts = regs[MUNCH_DSI_INT_CTRL / 4];
+		if (interrupts & MUNCH_DSI_ERROR_STATUS) { failed = true; break; }
+		if (interrupts & MUNCH_DSI_CMD_DMA_DONE) {
+			completed = true;
+			break;
+		}
+		IOSleep(1);
+	}
+
+	regs[MUNCH_DSI_TPG_CTRL / 4] = 0;
+	regs[MUNCH_DSI_TPG_DMA_FIFO_RESET / 4] = 1;
+	delay(1);
+	regs[MUNCH_DSI_TPG_DMA_FIFO_RESET / 4] = 0;
+	regs[MUNCH_DSI_TPG_CTRL / 4] = tpgControl;
+	regs[MUNCH_DSI_DMA_CMD_LENGTH / 4] = dmaLength;
+	regs[MUNCH_DSI_COMMAND_MODE_DMA_CTRL / 4] = dmaControlOriginal;
+	regs[MUNCH_DSI_DMA_FIFO_CTRL / 4] = fifoControl;
+	regs[MUNCH_DSI_INT_CTRL / 4] = interruptControl | MUNCH_DSI_CMD_DMA_DONE;
+	OSSynchronizeIO();
+	return failed ? kIOReturnIOError : completed ? kIOReturnSuccess : kIOReturnTimeout;
+}
+
+IOReturn
+IOMobileFramebuffer::setDisplayPower(uint32_t state)
+{
+	IOReturn result = kIOReturnSuccess;
+	bool on;
+
+	if (state > 1) return kIOReturnBadArgument;
+	if (fDisplayLock == NULL) return kIOReturnNotReady;
+	on = state != 0;
+	IOLockLock(fDisplayLock);
+	if (fSDERequested && (!fSDE || fSDE->panelCommandFailed)) {
+		IOLockUnlock(fDisplayLock);
+		return kIOReturnNotReady;
+	}
+	if (on == fPanelOn) {
+		IOLockUnlock(fDisplayLock);
+		return kIOReturnSuccess;
+	}
+	if (fSDERequested) {
+		enum munch_sde_result prepared = munchSdePreparePanel(fSDE);
+		if (prepared != MUNCH_SDE_OK) {
+			IOLockUnlock(fDisplayLock);
+			return prepared == MUNCH_SDE_BUSY ? kIOReturnBusy : kIOReturnNotReady;
+		}
+	}
+	if (on) {
+		if (fSDERequested && fSDE->mode.configured) {
+			lck_mtx_lock(&hakios_smmu_lock);
+			if (!munch_mode_panel_on(&fSDE->mode) || !munch_mode_light(&fSDE->mode))
+				result = kIOReturnIOError;
+			lck_mtx_unlock(&hakios_smmu_lock);
+		} else {
+			result = sendDcsCommand(0x11, 0, false);
+			if (result == kIOReturnSuccess) {
+				IOSleep(120);
+				result = sendDcsCommand(0x53, 0x20, true);
+			}
+			if (result == kIOReturnSuccess) result = sendDcsCommand(0x29, 0, false);
+		}
+	} else {
+		result = sendDcsCommand(0x28, 0, false);
+		if (result == kIOReturnSuccess) {
+			IOSleep(20);
+			result = sendDcsCommand(0x53, 0x20, true);
+		}
+		if (result == kIOReturnSuccess) {
+			result = sendDcsCommand(0x10, 0, false);
+			if (result == kIOReturnSuccess) IOSleep(120);
+		}
+	}
+	if (fSDERequested) {
+		enum munch_sde_result finished = munchSdeFinishPanel(fSDE, on, result == kIOReturnSuccess);
+		if (finished != MUNCH_SDE_OK && result == kIOReturnSuccess) result = kIOReturnIOError;
+		IOLockLock(fSwapLock);
+		if (result == kIOReturnSuccess) fDisplayBlanked = !on;
+		else fSDEError = result;
+		IOLockWakeup(fSwapLock, &fSwapsWaiting, false);
+		IOLockUnlock(fSwapLock);
+	}
+	if (result == kIOReturnSuccess) fPanelOn = on;
+	if (result == kIOReturnSuccess) hakios_cpufreq_set_screen_on(on ? 1 : 0);
+	IOLockUnlock(fDisplayLock);
+	if (result != kIOReturnSuccess) {
+		IOLog("MiniIOMobileFramebuffer: panel power transition to %u failed: 0x%x\n", state, result);
+	}
+	return result;
+}
+
+static bool
+munchSdeComposeFullFrame(const uint8_t *source, uint32_t sourceWidth, uint32_t sourceHeight,
+    uint32_t sourceStride, uint8_t *destination, uint32_t destinationWidth, uint32_t destinationHeight,
+    uint32_t destinationStride)
+{
+	if (!source || !destination || !sourceWidth || !sourceHeight || !destinationWidth || !destinationHeight ||
+	    sourceWidth > sourceStride / 4 || destinationWidth > destinationStride / 4 ||
+	    sourceWidth != destinationWidth || sourceHeight != destinationHeight) return false;
+
+	for (uint32_t y = 0; y < destinationHeight; y++) {
+		memcpy(destination + (size_t)y * destinationStride, source + (size_t)y * sourceStride,
+		    (size_t)destinationWidth * 4);
+	}
+	return true;
+}
+
+static bool
+munchFramebufferDownscaleRows(const uint8_t *source, uint32_t sourceStride, uint8_t *destination,
+    uint32_t destinationStride, uint32_t firstRow, uint32_t lastRow)
+{
+	if (!source || !destination || sourceStride < 1125 * 4 || destinationStride < 1080 * 4 ||
+	    firstRow > lastRow || lastRow > 2400) return false;
+
+	for (uint32_t y = firstRow; y < lastRow; y++) {
+		const uint32_t *input = (const uint32_t *)(source + (size_t)((uint64_t)y * 2436 / 2400) * sourceStride);
+		uint32_t *output = (uint32_t *)(destination + (size_t)y * destinationStride);
+
+		for (unsigned group = 0; group < 45; group++) {
+			const uint32_t *in = input + group * 25;
+			uint32_t *out = output + group * 24;
+			memcpy(out, in, 24 * sizeof(*out));
+		}
+	}
+	return true;
+}
+
+static bool
+munchSdeReplacesFrame(const uint8_t *swap, const MiniIOSurface *surface, uint32_t width, uint32_t height)
+{
+	if (!surface || surface->info.bytesPerElement != 4 || surface->info.planeCount) return false;
+	int32_t source[4], destination[4];
+	memcpy(source, swap + SWAP_SOURCE(0), sizeof(source));
+	memcpy(destination, swap + SWAP_DEST(0), sizeof(destination));
+	if (source[2] <= 0 || source[3] <= 0) {
+		if (!surface->info.width || !surface->info.height ||
+		    surface->info.width > INT32_MAX || surface->info.height > INT32_MAX) return false;
+		source[0] = source[1] = 0;
+		source[2] = (int32_t) surface->info.width;
+		source[3] = (int32_t) surface->info.height;
+	} else if (source[0] < 0 || source[1] < 0 ||
+	    (uint64_t)source[0] + source[2] > surface->info.width ||
+	    (uint64_t)source[1] + source[3] > surface->info.height) return false;
+	bool fullSource = source[0] == 0 && source[1] == 0 &&
+	    (uint32_t) source[2] == surface->info.width &&
+	    (uint32_t) source[3] == surface->info.height;
+	return fullSource && (destination[2] <= 0 || destination[3] <= 0 ||
+	    (destination[0] == 0 && destination[1] == 0 &&
+	    (uint32_t)destination[2] == width && (uint32_t)destination[3] == height));
 }
 
 /* Keep a small copy of the frame that is about to be shown (the surface is the whole screen). */
@@ -593,12 +1253,17 @@ struct RowJob {
 	const uint8_t * pixels;
 	uint32_t        stride;
 	int32_t         sx, sy, sw, sh, px0, py0, px1, py1, cx0, cx1;
-	bool            filter, unscaled;
+	bool            filter, unscaled, fastDownscale;
 };
 
 void
 IOMobileFramebuffer::drawRows(const RowJob * job, int32_t y0, int32_t y1, uint32_t * blendRow)
 {
+	if (job->fastDownscale) {
+		munchFramebufferDownscaleRows(job->pixels, job->stride, fBase, fRowBytes,
+		    (uint32_t)y0, (uint32_t)y1);
+		return;
+	}
 	const uint8_t * pixels = job->pixels;
 	uint32_t stride = job->stride;
 	int32_t sx = job->sx, sy = job->sy, sw = job->sw, sh = job->sh;
@@ -643,8 +1308,8 @@ IOMobileFramebuffer::drawRows(const RowJob * job, int32_t y0, int32_t y1, uint32
 		}
 		if (fDiff) {
 			for (int32_t x = cx0; x < cx1; x++) {
-				uint32_t value = filter ? blend(from[fColumn[x]], from[fColumn[x] + (fColumnWeight[x] != 0)], fColumnWeight[x]) :
-				    from[fColumn[x]];
+				uint32_t value = filter ? blend(from[fColumn[x]], from[fColumn[x] + (fColumnWeight[x] != 0)],
+				    fColumnWeight[x]) : from[fColumn[x]];
 
 				if (to[x] != value) {
 					fDiffPixels++;
@@ -666,8 +1331,11 @@ IOMobileFramebuffer::drawRows(const RowJob * job, int32_t y0, int32_t y1, uint32
 				out[i] = w == 0 || a == from[c + 1] ? a : blend(a, from[c + 1], w);
 			}
 		} else {
-			for (int32_t x = cx0; x < cx1; x++) {
-				to[x] = from[fColumn[x]];
+			const uint32_t * __restrict column = fColumn + cx0;
+			uint32_t * __restrict out = to + cx0;
+
+			for (uint32_t i = 0, n = (uint32_t) (cx1 - cx0); i < n; i++) {
+				out[i] = from[column[i]];
 			}
 		}
 	}
@@ -722,7 +1390,7 @@ IOMobileFramebuffer::drawLayer(MiniIOSurface * s, const int32_t * src, const int
 	int32_t sx = src[0], sy = src[1], sw = src[2], sh = src[3];
 	int32_t dx = dst[0], dy = dst[1], dw = dst[2], dh = dst[3];
 	int32_t px0, py0, px1, py1, cx0, cx1;
-	bool filter = gFilter != 0;
+	bool filter = gFilter != 0 && !fSDENativeRequested;
 	RowJob job;
 
 	if (sw <= 0 || sh <= 0) {
@@ -738,6 +1406,14 @@ IOMobileFramebuffer::drawLayer(MiniIOSurface * s, const int32_t * src, const int
 	if (sx < 0 || sy < 0 || (uint32_t) (sx + sw) > s->info.width || (uint32_t) (sy + sh) > s->info.height) {
 		return;
 	}
+	bool fullDestination = dx == 0 && dy == 0 && (uint32_t) dw == fWidth && (uint32_t) dh == fHeight;
+	bool fullSource = sx == 0 && sy == 0 && sw == (int32_t) s->info.width && sh == (int32_t) s->info.height;
+	if (fSDENativeRequested && !fDiff && fullDestination && fullSource &&
+	    munchSdeComposeFullFrame(s->pixels(), (uint32_t)sw, (uint32_t)sh, s->info.bytesPerRow,
+	    fBase, fPanelWidth, fPanelHeight, fRowBytes)) {
+		fStatSDEFullCompose++;
+		return;
+	}
 	/* the rectangle on the panel */
 	px0 = (int32_t) ((int64_t) dx * fPanelWidth / fWidth);
 	py0 = (int32_t) ((int64_t) dy * fPanelHeight / fHeight);
@@ -746,6 +1422,11 @@ IOMobileFramebuffer::drawLayer(MiniIOSurface * s, const int32_t * src, const int
 	if (px1 <= px0 || py1 <= py0) {
 		return;
 	}
+	bool fastDownscale = !filter && !fDiff && fullDestination && fullSource &&
+	    (uint32_t)sw == 1125 && (uint32_t)sh == 2436 &&
+	    fPanelWidth == 1080 && fPanelHeight == 2400 &&
+	    px0 == 0 && py0 == 0 && px1 == 1080 && py1 == 2400 &&
+	    s->info.bytesPerRow >= 1125 * 4 && fRowBytes >= 1080 * 4;
 	/* (blending, a row of the picture mixed from two: room for it, for every one who draws rows) */
 	if (filter && fBlendRowSize < (uint32_t) sw) {
 		if (fBlendRow != NULL) {
@@ -773,7 +1454,7 @@ IOMobileFramebuffer::drawLayer(MiniIOSurface * s, const int32_t * src, const int
 	/* which pixel of a source row each pixel of a panel row takes: worked out once, not 2.6 million times */
 	cx0 = px0 < 0 ? 0 : px0;
 	cx1 = (uint32_t) px1 > fPanelWidth ? (int32_t) fPanelWidth : px1;
-	for (int32_t x = cx0; x < cx1; x++) {
+	for (int32_t x = cx0; !fastDownscale && x < cx1; x++) {
 		if (filter) {
 			int64_t at = sample_at(x - px0, sw, px1 - px0);
 
@@ -797,6 +1478,7 @@ IOMobileFramebuffer::drawLayer(MiniIOSurface * s, const int32_t * src, const int
 	job.cx1 = cx1;
 	job.filter = filter;
 	job.unscaled = px1 - px0 == sw && py1 - py0 == sh && px0 >= 0 && (uint32_t) px1 <= fPanelWidth;
+	job.fastDownscale = fastDownscale;
 	if (fThreads <= 1 || fDiff || fHelpersStarted + 1 < fThreads) {
 		drawRows(&job, py0, py1, fBlendRow);
 		return;
@@ -854,11 +1536,57 @@ IOMobileFramebuffer::reportFrameTimes(void)
 	fFramePauses = fFrameLongest = 0;
 }
 
-/* SwapEnd: the swap is handed to the thread that puts frames on the panel, as soon as that has no other waiting. */
 void
+IOMobileFramebuffer::reportSDEPerformance(uint64_t now)
+{
+	if (!fSDERequested || !fStatFrames || fStatSince == 0) return;
+	uint64_t nanos;
+	absolutetime_to_nanoseconds(now - fStatSince, &nanos);
+	if (nanos < 5 * NSEC_PER_SEC) return;
+	uint64_t drawing, waiting;
+	absolutetime_to_nanoseconds(fStatDrawing, &drawing);
+	absolutetime_to_nanoseconds(fStatWaiting, &waiting);
+	uint32_t irqEvents = __atomic_exchange_n(&fSDE->completionIRQEvents, 0u, __ATOMIC_ACQ_REL);
+	bool irqActive = fSDE->completionIRQAttached &&
+	    !__atomic_load_n(&fSDE->completionIRQMasked, __ATOMIC_ACQUIRE);
+	IOLockLock(fDisplayLock);
+	IOLog("MUNCH SDE PERF r22: frames=%u fps=%llu driver=%llu gpu_wait=%llu acquire=%llu compose=%llu commit=%llu completion=%llu overlap=%u retired=%u queued=%u full_compose=%u clean=%llu wait=%llu guards=%llu polls=%llu irq=%u irq_active=%u in_flight=%u vblank=%llu hw=%llu fallback=%llu source=%s\n",
+	    fStatFrames, fStatFrames * NSEC_PER_SEC / nanos, drawing / fStatFrames / NSEC_PER_USEC,
+	    waiting / fStatFrames / NSEC_PER_USEC, micros(fStatSDEAcquire) / fStatFrames,
+	    micros(fStatSDECompose - fStatSDEAcquire) / fStatFrames, micros(fStatSDECommit) / fStatFrames,
+	    micros(fStatSDECompletion) / fStatFrames, fStatSDEOverlapped, fStatSDERetired, fStatSDEQueued,
+	    fStatSDEFullCompose, micros(fSDE->cleanTime) / fStatFrames,
+	    micros(fSDE->waitTime) / fStatFrames,
+	    fSDE->guardCalls, fSDE->pollChecks, irqEvents, irqActive, (unsigned)fSDEInFlight, fSDE->vblankCount,
+	    fSDE->vblankHardwareEvents, fSDE->vblankFallbackEvents, fSDE->vblankFallback ? "timer" : "frame");
+	IOLockUnlock(fDisplayLock);
+	fStatSDEAcquire = fStatSDECompose = fStatSDECommit = 0;
+	fStatSDECompletion = 0;
+	fStatSDEOverlapped = 0;
+	fStatSDERetired = 0;
+	fStatSDEQueued = 0;
+	fStatSDEFullCompose = 0;
+	fSDE->cleanTime = fSDE->waitTime = fSDE->guardCalls = fSDE->pollChecks = 0;
+	fStatFrames = 0;
+	fStatDrawing = 0;
+	fStatWaiting = 0;
+	fStatSince = now;
+	IOLockLock(fLock);
+	reportFrameTimes();
+	IOLockUnlock(fLock);
+}
+
+/* SwapEnd: the swap is handed to the thread that puts frames on the panel, as soon as that has no other waiting. */
+IOReturn
 IOMobileFramebuffer::present(const uint8_t * swap)
 {
+	static uint64_t lastTimeoutLogAt;
 	AbsoluteTime deadline;
+	uint32_t swapID = swapWord(swap, SWAP_ID);
+	/* Native command-mode can keep one frame in hardware while the next one
+	 * is being composed.  Limiting it to one outstanding swap turns every TE
+	 * interval into a producer stall. */
+	unsigned limit = fSDENativeRequested ? SWAP_QUEUE : (fSDERequested ? 1 : swapQueue());
 
 	uint64_t now = mach_absolute_time(), period, pause;
 
@@ -870,16 +1598,59 @@ IOMobileFramebuffer::present(const uint8_t * swap)
 		hakios_tl("tl: s %u at %llu\n", swapWord(swap, SWAP_ID), micros(now));
 	}
 	IOLockLock(fSwapLock);
+	if (fSDERequested && fSDEError != kIOReturnSuccess) {
+		IOReturn result = fSDEError;
+		IOLockUnlock(fSwapLock);
+		return result;
+	}
+	if (fSDERequested && fDisplayBlanked) {
+		IOLockUnlock(fSwapLock);
+		return kIOReturnNotReady;
+	}
 	fStatSwapsLate += fSwapTime != 0 && now - fSwapTime > period && now - fSwapTime < pause;
 	fSwapTime = now;
-	fStatHeld += fSwapsWaiting >= swapQueue();
-	while (fSwapsWaiting >= swapQueue()) {
+	fStatHeld += fSwapsWaiting >= limit;
+	while (fSwapsWaiting >= limit) {
+		if (fSDERequested && (fDisplayBlanked || fSDEError != kIOReturnSuccess)) break;
 		if (IOLockSleepDeadline(fSwapLock, &fSwapsWaiting, deadline, THREAD_UNINT) == THREAD_TIMED_OUT &&
-		    fSwapsWaiting >= swapQueue()) {
+		    fSwapsWaiting >= limit) {
 			fStatLost++;                    /* (the GPU has stopped answering: the frame before is waiting for it) */
+			uint32_t oldest = swapWord(fSwap[fSwapFirst], SWAP_ID);
+			uint32_t waiting = fSwapsWaiting;
+			uint64_t logInterval, timeoutAt = mach_absolute_time();
+			nanoseconds_to_absolutetime(NSEC_PER_SEC, &logInterval);
+			bool logTimeout = lastTimeoutLogAt == 0 || timeoutAt - lastTimeoutLogAt >= logInterval;
+			if (logTimeout) lastTimeoutLogAt = timeoutAt;
+			uint32_t lost = fStatLost;
 			IOLockUnlock(fSwapLock);
-			return;
+			if (logTimeout) {
+				char liveLine[192];
+				snprintf(liveLine, sizeof(liveLine),
+				    "MUNCH FB QUEUE TIMEOUT: swap=%u queued=%u/%u oldest=%u lost=%u\n",
+				    swapID, waiting, limit, oldest, lost);
+				loader_log_line(liveLine);
+			}
+			return kIOReturnTimeout;
 		}
+	}
+	if (fSDERequested && fDisplayBlanked) {
+		IOLockUnlock(fSwapLock);
+		return kIOReturnNotReady;
+	}
+	if (fSDERequested && fSDEError != kIOReturnSuccess) {
+		IOReturn result = fSDEError;
+		IOLockUnlock(fSwapLock);
+		return result;
+	}
+	if (fSDERequested) {
+		auto &result = fSwapResults[swapID % 64];
+		if (!swapID || result.pending || (result.valid && result.id == swapID)) {
+			IOLockUnlock(fSwapLock);
+			return kIOReturnBadArgument;
+		}
+		result.id = swapID;
+		result.result = kIOReturnNotReady;
+		result.pending = result.valid = true;
 	}
 	unsigned slot = (fSwapFirst + fSwapsWaiting) % SWAP_QUEUE;
 
@@ -890,8 +1661,229 @@ IOMobileFramebuffer::present(const uint8_t * swap)
 		fSwapSurfaces[slot][layer] = sid != 0 ? MiniIOSurfaceCopy(sid) : NULL;
 	}
 	fSwapsWaiting++;
+	if (fSDENativeRequested) {
+		__atomic_add_fetch(&fSDE->completionIRQSequence, 1u, __ATOMIC_RELEASE);
+		munchSdeWakeup((void *)&fSDE->completionIRQSequence);
+	}
 	IOLockWakeup(fSwapLock, fSwap, true);
 	IOLockUnlock(fSwapLock);
+	return kIOReturnSuccess;
+}
+
+IOReturn
+IOMobileFramebuffer::submitSwap(const void *bytes, uint32_t size)
+{
+	bool valid = bytes && size >= SWAP_SIZE;
+	IOReturn result = valid ? present((const uint8_t *)bytes) : kIOReturnBadArgument;
+	if (!valid) IOLog("MiniIOMobileFramebuffer: swap request of %u bytes, expected %u\n", size, SWAP_SIZE);
+	if (fSDERequested) {
+		IOLockLock(fSwapLock);
+		fSDESwapRequests++;
+		fSDEAcceptedRequests += result == kIOReturnSuccess;
+		fSDELastSwapID = valid ? swapWord((const uint8_t *)bytes, SWAP_ID) : 0;
+		fSDELastSwapSize = size;
+		fSDELastSwapResult = result;
+		IOLockUnlock(fSwapLock);
+	}
+	return result;
+}
+
+IOReturn
+IOMobileFramebuffer::waitSwap(uint32_t swapID)
+{
+	if (!fSDERequested) return kIOReturnSuccess;
+	AbsoluteTime deadline;
+	clock_interval_to_deadline(SWAP_GPU_MS * SWAP_LAYERS + SWAP_HELD_MS, kMillisecondScale, &deadline);
+	IOLockLock(fSwapLock);
+	auto &entry = fSwapResults[swapID % 64];
+	while (entry.valid && entry.id == swapID && entry.pending) {
+		if (IOLockSleepDeadline(fSwapLock, &fSwapResults, deadline, THREAD_UNINT) == THREAD_TIMED_OUT &&
+		    entry.id == swapID && entry.pending) {
+			IOLockUnlock(fSwapLock);
+			return kIOReturnTimeout;
+		}
+	}
+	IOReturn result = entry.valid && entry.id == swapID ? entry.result : kIOReturnNotFound;
+	IOLockUnlock(fSwapLock);
+	return result;
+}
+
+void
+IOMobileFramebuffer::finishSwap(uint32_t swapID, IOReturn result)
+{
+	if (!fSDERequested) return;
+	IOLockLock(fSwapLock);
+	auto &entry = fSwapResults[swapID % 64];
+	entry.result = result;
+	entry.pending = false;
+	if (result == kIOReturnSuccess) {
+		if (!fGraphics) {
+			fGraphics = true;
+			PE_initialize_console(NULL, kPEGraphicsMode);
+		}
+		fHardwareFrames++;
+		fHardwareTime = fSDE->completedTime;
+	} else if (result != kIOReturnAborted) {
+		if (fSDENativeRequested) {
+			enum munch_sde_result nativeResult = result == kIOReturnTimeout ? MUNCH_SDE_TIMEOUT :
+			    (fSDE && fSDE->presenter.fault != MUNCH_SDE_OK ? fSDE->presenter.fault : MUNCH_SDE_FAULT);
+			reportNativeFailure(nativeResult, result, swapID);
+		}
+		fSDEError = result;
+		IOLog("MUNCH SDE: swap %u failed: 0x%x; presentation stopped\n", swapID, result);
+	}
+	if (fSwapsWaiting != 0) {
+		fSwapFirst = (fSwapFirst + 1) % SWAP_QUEUE;
+		fSwapsWaiting--;
+	}
+	IOLockWakeup(fSwapLock, &fSwapResults, false);
+	IOLockWakeup(fSwapLock, &fSwapsWaiting, false);
+	IOLockUnlock(fSwapLock);
+	if (result == kIOReturnSuccess) messageClients(kIOMessageServicePropertyChange);
+}
+
+bool
+IOMobileFramebuffer::presentationTime(uint64_t *count, uint64_t *time)
+{
+	if (fSDENativeRequested) {
+		if (!fSDE) return false;
+		/*
+		 * The producer holds fDisplayLock while it copies/composes a frame and
+		 * waits for the command-mode kickoff. VSync sampling must continue in
+		 * that interval; serialize only the MMIO/state access shared with the
+		 * native SDE transaction.
+		 */
+		lck_mtx_lock(&hakios_smmu_lock);
+		bool ready = munchSdeSampleVBlank(fSDE);
+		if (ready) {
+			*count = fSDE->vblankCount;
+			*time = fSDE->vblankTime;
+		}
+		lck_mtx_unlock(&hakios_smmu_lock);
+		return ready;
+	}
+	IOLockLock(fSwapLock);
+	*count = fHardwareFrames;
+	*time = fHardwareTime;
+	bool ready = fSDERequested && !fDisplayBlanked && fSDEError == kIOReturnSuccess && fHardwareFrames != 0;
+	IOLockUnlock(fSwapLock);
+	return ready;
+}
+
+void
+IOMobileFramebuffer::reportSDEStatus(uint64_t now)
+{
+	if (!fSDERequested || (fHardwareFrames && fSDEError == kIOReturnSuccess)) return;
+	if (fSDEStatusLogged && now - fSDEStatusTime < 5000000) return;
+	fSDEStatusLogged = true;
+	fSDEStatusTime = now;
+	IOLog("MUNCH SDE STATUS r15: init=%s phase=%s error=0x%08x\n",
+	    munch_sde_result_name(fSDEInitResult), fSDEInitPhase, (unsigned)fSDEError);
+	IOLog("MUNCH SDE STATUS: SwapEnd=%llu accepted=%llu id=%u bytes=%u rc=0x%08x\n",
+	    fSDESwapRequests, fSDEAcceptedRequests, fSDELastSwapID, fSDELastSwapSize, (unsigned)fSDELastSwapResult);
+	IOLog("MUNCH SDE STATUS: completed=%llu queued=%u\n", fHardwareFrames, fSwapsWaiting);
+	if (fSDE && fSDE->nativeRequested) {
+		IOLog("MUNCH SDE NATIVE r15: phase=%s configured=%u commands=%u failed=%u reg=%u:%x value=%x\n",
+		    fSDE->mode.phase ? fSDE->mode.phase : "not-prepared", (unsigned)fSDE->mode.configured,
+		    fSDE->mode.commands, (unsigned)fSDE->mode.failed, (unsigned)fSDE->mode.failed_space,
+		    fSDE->mode.failed_offset, fSDE->mode.failed_value);
+	}
+	if (fSDE && fSDE->snapshotValid) {
+		const struct munch_sde_snapshot *snapshot = &fSDE->baseline;
+		IOLog("MUNCH SDE SAVED: rev=%08x mux=%x tear=%x auto=%08x dsi=%x dsistat=%x\n",
+		    snapshot->revision, snapshot->mux, snapshot->tear_enable, snapshot->autorefresh,
+		    snapshot->dsi_ctrl, snapshot->dsi_status);
+		IOLog("MUNCH SDE AUTO: enabled=%u frames=%u vsync=%08x\n",
+		    (unsigned)((snapshot->autorefresh & MUNCH_SDE_AUTOREFRESH_ENABLE) != 0),
+		    snapshot->autorefresh & MUNCH_SDE_AUTOREFRESH_FRAMES, snapshot->tear_vsync);
+		IOLog("MUNCH SDE AUTO STATE: phase=%s owned=%u paused=%u status=%08x line=%u\n",
+		    fSDE->refresh.phase ? fSDE->refresh.phase : "inherited", (unsigned)fSDE->refresh.owned,
+		    (unsigned)fSDE->refresh.paused, fSDE->refresh.status, fSDE->refresh.line);
+		struct munch_sde_route route;
+		struct munch_sde_route_diagnostic diagnostic;
+		enum munch_sde_result result = munch_sde_find_route_checked(snapshot, &route, &diagnostic);
+		IOLog("MUNCH SDE ROUTE: check=%s ctl=%d lm=%d pipe=%d result=%s\n",
+		    diagnostic.check, diagnostic.ctl, diagnostic.mixer, diagnostic.pipe, munch_sde_result_name(result));
+		if (result == MUNCH_SDE_FORMAT && diagnostic.pipe >= 0 && diagnostic.mixer >= 0) {
+			struct munch_sde_layout_check layout;
+			uint32_t failures = munch_sde_pipe_layout_failures(&snapshot->pipes[diagnostic.pipe],
+			    snapshot->mixer_size[diagnostic.mixer], &layout);
+			IOLog("MUNCH SDE LAYOUT: bad=%04x first=%s got=%08x\n", failures, layout.name, layout.actual);
+			IOLog("MUNCH SDE EXPECT: rule=%s value=%08x alternative=%08x\n",
+			    munch_sde_layout_rule_name(layout.rule), layout.expected, layout.alternative);
+		}
+		if (result == MUNCH_SDE_OK) IOLog("MUNCH SDE ROUTE: stage=%u blend-offset=%03x\n",
+		    route.stage, route.stage ? munch_sde_blend_offsets[route.stage - 1] : 0);
+		if (fSDE->domainSnapshotValid) {
+			const struct munch_smmu_domain *domain = &fSDE->observedDomain;
+			const struct munch_smmu_walk *walk = &fSDE->bootWalk;
+			IOLog("MUNCH SMMU GLOBAL: scr0=%08x idr0=%08x idr1=%08x\n", fSDE->scr0, fSDE->idr0, fSDE->idr1);
+			IOLog("MUNCH SMMU STREAM: index=%u smr=%08x s2cr=%08x cb=%u cbpa=%llx\n",
+			    domain->stream, fSDE->streamSmr, domain->s2cr, domain->context, fSDE->contextPhysical);
+			IOLog("MUNCH SMMU CTX: cbar=%08x cba2r=%08x sctlr=%08x\n", domain->cbar, domain->cba2r, domain->sctlr);
+			IOLog("MUNCH SMMU TABLE: ttbr=%016llx tcr=%08x tcr2=%08x\n", domain->ttbr, domain->tcr, domain->tcr2);
+			IOLog("MUNCH SMMU ATTR: mair=%016llx iova=%08x pa=%016llx size=%x\n",
+			    domain->mair, fSDE->buffers[0].iova, fSDE->buffers[0].physical, fSDE->buffers[0].length);
+			IOLog("MUNCH SMMU FSR: raw=%08x faults=%08x format=%u\n", domain->fsr, munch_smmu_fault_bits(domain->fsr),
+			    (domain->fsr & MUNCH_SMMU_FSR_FORMAT) >> 9);
+			IOLog("MUNCH SMMU FAULT: far=%016llx syn0=%08x syn1=%08x\n",
+			    fSDE->faultAddress, fSDE->fsynr0, fSDE->fsynr1);
+			IOLog("MUNCH SMMU WALK: check=%s iova=%08x level=%u pages=%u\n",
+			    walk->check ? walk->check : "not-started", walk->iova, walk->level, fSDE->bootVerifiedPages);
+			IOLog("MUNCH SMMU PTE: addr=%016llx value=%016llx read=%u access=%s\n", walk->entry, walk->descriptor,
+			    (unsigned)walk->read, fSDE->tableAccess ? fSDE->tableAccess : "not-read");
+			IOLog("MUNCH SMMU RESULT: pa=%016llx expected=%016llx\n", walk->physical, fSDE->expectedPhysical);
+			IOLog("MUNCH SDE MEMORY: pool=%016llx size=%llx check=%s buffers=%s\n",
+			    fSDE->poolPhysical, fSDE->poolLength, fSDE->poolCheck ? fSDE->poolCheck : "not-started",
+			    fSDE->bufferCheck ? fSDE->bufferCheck : "not-started");
+			for (unsigned index = 1; index < 3; index++)
+				IOLog("MUNCH SDE BACK%u: pa=%016llx iova=%08x bytes=%x\n", index,
+				    fSDE->buffers[index].physical, fSDE->buffers[index].iova, fSDE->buffers[index].length);
+			if (result == MUNCH_SDE_OK) return;
+		}
+		for (unsigned index = 0; index < 6; index++) {
+			const struct munch_sde_ctl_state *ctl = &snapshot->ctls[index];
+			IOLog("MUNCH SDE CTL%u: top=%08x intf=%08x dsc=%x merge=%x wb=%x cwb=%x cdm=%x start=%x flush=%08x\n",
+			    index, ctl->top, ctl->active, ctl->dsc, ctl->merge, ctl->wb, ctl->cwb, ctl->cdm, ctl->start, ctl->flush);
+			if (!ctl->active && !ctl->top && (int)index != diagnostic.ctl) continue;
+			for (unsigned mixer = 0; mixer < 6; mixer++) {
+				if (!snapshot->mixer_size[mixer] && !ctl->layers[0][mixer] && !ctl->layers[1][mixer] &&
+				    !ctl->layers[2][mixer] && !ctl->layers[3][mixer]) continue;
+				IOLog("MUNCH SDE CTL%u LM%u: size=%08x map=%08x/%08x/%08x/%08x\n",
+				    index, mixer, snapshot->mixer_size[mixer], ctl->layers[0][mixer], ctl->layers[1][mixer],
+				    ctl->layers[2][mixer], ctl->layers[3][mixer]);
+			}
+		}
+		for (unsigned mixer = 0; mixer < 6; mixer++) {
+			if (!snapshot->mixer_size[mixer] && (int)mixer != diagnostic.mixer) continue;
+			IOLog("MUNCH SDE LM%u: op=%08x\n", mixer, snapshot->mixers[mixer].opmode);
+			for (unsigned stage = 0; stage < MUNCH_SDE_LM_BLEND_COUNT; stage++) {
+				IOLog("MUNCH SDE LM%u B%u @%03x: op=%08x alpha=%08x\n", mixer, stage,
+				    munch_sde_blend_offsets[stage], snapshot->mixers[mixer].blend_op[stage],
+				    snapshot->mixers[mixer].blend_alpha[stage]);
+			}
+		}
+		for (unsigned index = 0; index < 8; index++) {
+			const struct munch_sde_pipe_state *pipe = &snapshot->pipes[index];
+			if (!pipe->size && !pipe->out_size && !pipe->source) continue;
+			IOLog("MUNCH SDE %s: src=%08x stride=%x size=%08x out=%08x fmt=%x unpack=%08x\n",
+			    munch_sde_sspps[index].name, pipe->source, pipe->stride, pipe->size, pipe->out_size, pipe->format, pipe->unpack);
+			IOLog("MUNCH SDE %s: xy=%08x/%08x op=%x secure=%x multirect=%x\n",
+			    munch_sde_sspps[index].name, pipe->src_xy, pipe->out_xy, pipe->opmode, pipe->secure, pipe->multirect);
+			IOLog("MUNCH SDE %s MODE: pe-override=%u forbidden=%08x\n", munch_sde_sspps[index].name,
+			    (unsigned)((pipe->opmode & MUNCH_SDE_SSPP_PE_OVERRIDE) != 0), pipe->opmode & ~MUNCH_SDE_SSPP_PE_OVERRIDE);
+			if (pipe->opmode & MUNCH_SDE_SSPP_PE_OVERRIDE) {
+				for (unsigned component = 0; component < MUNCH_SDE_SSPP_PE_COUNT; component++) {
+					const struct munch_sde_pixel_ext_state *pixel = &pipe->pixel_ext[component];
+					IOLog("MUNCH SDE %s PE %s: lr=%08x tb=%08x required=%08x\n", munch_sde_sspps[index].name,
+					    munch_sde_pe_names[component], pixel->lr, pixel->tb, pixel->required);
+				}
+			}
+			if (index < 4) IOLog("MUNCH SDE %s: scaler=%08x csc=%08x pre=%08x decim=%08x\n",
+			    munch_sde_sspps[index].name, pipe->scaler, pipe->csc, pipe->pre_downscale, pipe->decimation);
+		}
+	}
+	IOLog("MUNCH SDE DIAG: native display path active; external iOS rdar diagnostics are userland messages\n");
 }
 
 void
@@ -907,20 +1899,65 @@ IOMobileFramebuffer::presenter(void)
 	MiniIOSurface * surfaces[SWAP_LAYERS];
 
 	for (;;) {
+		if (fSDENativeRequested) {
+			IOLockLock(fSwapLock);
+			bool inFlight = fSDEInFlight;
+			bool queued = !fSDE->nativeTakeover && fSwapsWaiting != 0;
+			IOLockUnlock(fSwapLock);
+			if (inFlight) {
+				if (queued) {
+					bool taken = false;
+					IOLockLock(fSwapLock);
+					if (fSDEInFlight && fSwapsWaiting != 0) {
+						unsigned slot = fSwapFirst;
+						memcpy(swap, fSwap[slot], SWAP_SIZE);
+						memcpy(surfaces, fSwapSurfaces[slot], sizeof(surfaces));
+						for (unsigned layer = 0; layer < SWAP_LAYERS; layer++)
+							fSwapSurfaces[slot][layer] = NULL;
+						taken = true;
+					}
+					IOLockUnlock(fSwapLock);
+					if (taken) {
+						fStatSDEQueued++;
+						bool gpuReady = true;
+						for (unsigned layer = 0; layer < SWAP_LAYERS; layer++) {
+							if (surfaces[layer] && !MiniIOSurfaceDrawn(surfaces[layer], 0)) gpuReady = false;
+						}
+						if (!gpuReady) waitNativeFrame();
+						show(swap, surfaces);
+						continue;
+					}
+				}
+				waitNativeFrame(true);
+				continue;
+			}
+		}
 		IOLockLock(fSwapLock);
+		reportSDEStatus(micros(mach_absolute_time()));
 		while (fSwapsWaiting == 0) {
-			IOLockSleep(fSwapLock, fSwap, THREAD_UNINT);
+			if (fSDERequested && (!fHardwareFrames || fSDEError != kIOReturnSuccess)) {
+				AbsoluteTime deadline;
+				clock_interval_to_deadline(5000, kMillisecondScale, &deadline);
+				IOLockSleepDeadline(fSwapLock, fSwap, deadline, THREAD_UNINT);
+				reportSDEStatus(micros(mach_absolute_time()));
+			} else {
+				IOLockSleep(fSwapLock, fSwap, THREAD_UNINT);
+			}
 		}
 		memcpy(swap, fSwap[fSwapFirst], SWAP_SIZE);
 		memcpy(surfaces, fSwapSurfaces[fSwapFirst], sizeof(surfaces));
+		if (fSDENativeRequested) {
+			for (unsigned layer = 0; layer < SWAP_LAYERS; layer++)
+				fSwapSurfaces[fSwapFirst][layer] = NULL;
+		}
 		IOLockUnlock(fSwapLock);
 		show(swap, surfaces);
-		for (unsigned layer = 0; layer < SWAP_LAYERS; layer++) {
-			if (surfaces[layer] != NULL) {
-				MiniIOSurfaceDrop(surfaces[layer]);
+		if (!fSDENativeRequested) {
+			for (unsigned layer = 0; layer < SWAP_LAYERS; layer++) {
+				if (surfaces[layer] != NULL) MiniIOSurfaceDrop(surfaces[layer]);
 			}
 		}
-		MiniIOSurfaceClearKept();               /* (the next frame is some milliseconds away) */
+		MiniIOSurfaceScheduleClear();
 	}
 }
 
@@ -930,19 +1967,62 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 {
 	uint32_t set = swapWord(swap, SWAP_LAYERS_SET);
 	uint64_t began = mach_absolute_time(), nanos, ready, shown, drawn;
+	uint64_t gpuDeadline = 0;
+	uint64_t acquisition = 0, composeTime = 0;
 	uint32_t layers = 0;
 	MiniIOSurface * recorded = NULL;
-	bool report;
+	bool report, deferNative = false, gpuBudgetMiss = false;
 
+	if (fSDERequested) {
+		IOLockLock(fSwapLock);
+		bool canceled = fDisplayBlanked || fSDEError != kIOReturnSuccess;
+		IOLockUnlock(fSwapLock);
+		if (canceled) {
+			dropNativeSurfaces(surfaces);
+			finishNativeSwapInOrder(swapWord(swap, SWAP_ID), kIOReturnAborted);
+			return;
+		}
+	}
 	for (unsigned layer = 0; layer < SWAP_LAYERS; layer++) {
-		if (surfaces[layer] != NULL && !MiniIOSurfaceDrawn(surfaces[layer], SWAP_GPU_MS)) {
-			IOLog("MiniIOMobileFramebuffer: swap %u: the GPU is not done with surface %u after %u ms; shown as it is\n",
-			    swapWord(swap, SWAP_ID), swapWord(swap, SWAP_SURFACE(layer)), SWAP_GPU_MS);
+		if (fSDERequested && swapWord(swap, SWAP_SURFACE(layer)) && !surfaces[layer]) {
+			dropNativeSurfaces(surfaces);
+			finishNativeSwapInOrder(swapWord(swap, SWAP_ID), kIOReturnBadArgument);
+			return;
+		}
+		if (fSDERequested && surfaces[layer] &&
+		    (surfaces[layer]->info.bytesPerElement != 4 || surfaces[layer]->info.planeCount != 0)) {
+			dropNativeSurfaces(surfaces);
+			finishNativeSwapInOrder(swapWord(swap, SWAP_ID), kIOReturnUnsupported);
+			return;
+		}
+		uint64_t gpuWait = SWAP_GPU_MS;
+		if (!fSDERequested) {
+			if (gpuDeadline == 0) {
+				uint64_t budget;
+				nanoseconds_to_absolutetime((uint64_t)SWAP_GPU_FRAME_MS * NSEC_PER_MSEC, &budget);
+				gpuDeadline = mach_absolute_time() + budget;
+			}
+			uint64_t now = mach_absolute_time();
+			gpuWait = 0;
+			if (now < gpuDeadline) {
+				uint64_t remaining;
+				absolutetime_to_nanoseconds(gpuDeadline - now, &remaining);
+				gpuWait = (remaining + NSEC_PER_MSEC - 1) / NSEC_PER_MSEC;
+			}
+		}
+		if (surfaces[layer] != NULL && !MiniIOSurfaceDrawn(surfaces[layer], gpuWait)) {
+			if (fSDERequested) {
+				dropNativeSurfaces(surfaces);
+				finishNativeSwapInOrder(swapWord(swap, SWAP_ID), kIOReturnAborted);
+				return;
+			}
+			gpuBudgetMiss = true;
 		}
 	}
 	fStatWaiting += mach_absolute_time() - began;
+	if (gpuBudgetMiss) fStatGPUBudgetMisses++;
 	began = ready = mach_absolute_time();
-	if (gOnTheBeat) {
+	if (gOnTheBeat && !fSDERequested) {
 		uint64_t period, aim, next;
 
 		nanoseconds_to_absolutetime(NSEC_PER_SEC / refreshHz(), &period);
@@ -968,12 +2048,44 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 	}
 	shown = began;
 	/* its turn has come: the swap after it may be handed over */
-	IOLockLock(fSwapLock);
-	fSwapFirst = (fSwapFirst + 1) % SWAP_QUEUE;
-	fSwapsWaiting--;
-	IOLockWakeup(fSwapLock, &fSwapsWaiting, true);
-	IOLockUnlock(fSwapLock);
+	if (!fSDERequested) {
+		IOLockLock(fSwapLock);
+		fSwapFirst = (fSwapFirst + 1) % SWAP_QUEUE;
+		fSwapsWaiting--;
+		IOLockWakeup(fSwapLock, &fSwapsWaiting, true);
+		IOLockUnlock(fSwapLock);
+	}
 	IOLockLock(fLock);
+	if (fSDERequested) {
+		IOLockLock(fDisplayLock);
+		if (!fPanelOn || fSDE->panelCommandFailed) {
+			IOLockUnlock(fDisplayLock);
+			IOLockUnlock(fLock);
+			dropNativeSurfaces(surfaces);
+			finishNativeSwapInOrder(swapWord(swap, SWAP_ID), kIOReturnAborted);
+			return;
+		}
+		uint8_t *back = NULL;
+		uint64_t acquireBegan = mach_absolute_time();
+		enum munch_sde_result result = munchSdeBeginFrame(fSDE, &back);
+		acquisition = mach_absolute_time() - acquireBegan;
+		if (result != MUNCH_SDE_OK) {
+			IOLog("MUNCH SDE: frame acquisition rejected: %s (%u)\n", munch_sde_result_name(result), (unsigned)result);
+			IOLockUnlock(fDisplayLock);
+			IOLockUnlock(fLock);
+			dropNativeSurfaces(surfaces);
+			finishNativeSwapInOrder(swapWord(swap, SWAP_ID), kIOReturnIOError);
+			return;
+		}
+		unsigned previous = munch_sde_latest_buffer(&fSDE->presenter);
+		if (!munchSdeReplacesFrame(swap, surfaces[0], fWidth, fHeight) &&
+		    back != fSDE->pixels[previous]) {
+			memcpy(back, fSDE->pixels[previous], (size_t)fRowBytes * fPanelHeight);
+			fStatSDEPreserved++;
+		}
+		fBase = back;
+		IOLockUnlock(fDisplayLock);
+	}
 	if (fLastFrame != 0) {
 		absolutetime_to_nanoseconds(began - fLastFrame, &nanos);
 		nanos /= NSEC_PER_MSEC;
@@ -1028,7 +2140,7 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 			continue;
 		}
 		if (s->info.bytesPerElement == 4 && s->info.planeCount == 0) {
-			if (!fGraphics) {
+			if (!fGraphics && !fSDERequested) {
 				/* the first picture: the kernel's text console must stop drawing over it */
 				fGraphics = true;
 				PE_initialize_console(NULL, kPEGraphicsMode);
@@ -1037,6 +2149,63 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 			if (layer == 0) {
 				recorded = s;   /* (recorded once the frame is in the panel's memory: see below) */
 			}
+		}
+	}
+	if (fSDERequested) {
+		if (!fGraphics) IOLog("MUNCH SDE: first compositor frame %u: submitting\n", swapWord(swap, SWAP_ID));
+		uint64_t commit = mach_absolute_time();
+		composeTime = commit - began;
+		deferNative = fSDENativeRequested && fSDE->presenter.pending != 3;
+		if (deferNative) fStatSDEOverlapped++;
+		if (deferNative) {
+			IOLockUnlock(fLock);
+			enum munch_sde_result previous = waitNativeFrame();
+			IOLockLock(fLock);
+			if (previous != MUNCH_SDE_OK) {
+				IOLockUnlock(fLock);
+				dropNativeSurfaces(surfaces);
+				finishNativeSwapInOrder(swapWord(swap, SWAP_ID), kIOReturnAborted);
+				return;
+			}
+			commit = mach_absolute_time();
+		}
+		IOLockLock(fDisplayLock);
+		if (!fPanelOn || fSDE->panelCommandFailed) {
+			IOLockUnlock(fDisplayLock);
+			IOLockUnlock(fLock);
+			dropNativeSurfaces(surfaces);
+			finishNativeSwapInOrder(swapWord(swap, SWAP_ID), kIOReturnAborted);
+			return;
+		}
+		if (!fSDENativeRequested) IOLockUnlock(fDisplayLock);
+		fStatSDEAcquire += acquisition;
+		fStatSDECompose += composeTime;
+		enum munch_sde_result result =
+		    fSDENativeRequested ? munchSdeSubmitFrame(fSDE) : munchSdeEndFrame(fSDE);
+		if (fSDENativeRequested) IOLockUnlock(fDisplayLock);
+		if (fSDENativeRequested && !fGraphics) {
+			IOLog("MUNCH SDE NATIVE r16: phase=%s result=%s inherited-refresh=%uHz panel=%ux%u\n",
+			    fSDE->mode.phase, munch_sde_result_name(result), refreshHz(), fPanelWidth, fPanelHeight);
+		}
+		fStatSDECommit += mach_absolute_time() - commit;
+		if (result != MUNCH_SDE_OK) {
+			IOLog("MUNCH SDE: commit rejected: %s (%u)\n", munch_sde_result_name(result), (unsigned)result);
+			IOLockUnlock(fLock);
+			dropNativeSurfaces(surfaces);
+			finishNativeSwapInOrder(swapWord(swap, SWAP_ID),
+			    result == MUNCH_SDE_TIMEOUT ? kIOReturnTimeout : kIOReturnIOError);
+			return;
+		}
+		if (fSDENativeRequested) {
+			memcpy(fSDEInFlightSwap, swap, SWAP_SIZE);
+			fSDEInFlightID = swapWord(swap, SWAP_ID);
+			fSDEInFlightBegan = began;
+			fSDEInFlightReady = ready;
+			fSDEInFlightShown = shown;
+			fSDEInFlightSubmitted = mach_absolute_time();
+			retireNativeSwap(fSDEInFlightID, surfaces);
+			IOLockUnlock(fLock);
+			return;
 		}
 	}
 	drawn = mach_absolute_time();
@@ -1075,6 +2244,30 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 		    fStatFrames * NSEC_PER_SEC / nanos, drawing / fStatFrames / NSEC_PER_USEC,
 		    waiting / fStatFrames / NSEC_PER_USEC, fStatOnBeat, fStatOnBeat ? beat / fStatOnBeat / NSEC_PER_USEC : 0,
 		    fStatHeld, fStatLost, fStatSwapsLate);
+		char liveLine[256];
+		snprintf(liveLine, sizeof(liveLine),
+		    "MUNCH FB PERF: frames=%u fps=%llu draw_us=%llu gpu_wait_us=%llu beat_wait_us=%llu beat_wait_frames=%u held=%u lost=%u late=%u gpu_budget_misses=%u\n",
+		    fStatFrames, (unsigned long long)(fStatFrames * NSEC_PER_SEC / nanos),
+		    (unsigned long long)(drawing / fStatFrames / NSEC_PER_USEC),
+		    (unsigned long long)(waiting / fStatFrames / NSEC_PER_USEC),
+		    (unsigned long long)(fStatOnBeat ? beat / fStatOnBeat / NSEC_PER_USEC : 0),
+		    fStatOnBeat, fStatHeld, fStatLost, fStatSwapsLate, fStatGPUBudgetMisses);
+		loader_log_line(liveLine);
+		if (fSDERequested) {
+			IOLockLock(fDisplayLock);
+			IOLog("MUNCH SDE PERF r15: frames=%u acquire=%llu compose=%llu commit=%llu clean=%llu wait=%llu us/frame guards=%llu polls=%llu preserved=%u vblank=%llu hw=%llu fallback=%llu source=%s raw=%08x frame=%08x line=%08x tear=%08x\n",
+			    fStatFrames, micros(fStatSDEAcquire) / fStatFrames,
+			    micros(fStatSDECompose - fStatSDEAcquire) / fStatFrames, micros(fStatSDECommit) / fStatFrames,
+			    micros(fSDE->cleanTime) / fStatFrames, micros(fSDE->waitTime) / fStatFrames,
+			    fSDE->guardCalls, fSDE->pollChecks, fStatSDEPreserved, fSDE->vblankCount,
+			    fSDE->vblankHardwareEvents, fSDE->vblankFallbackEvents,
+			    fSDE->vblankFallback ? "timer" : "frame", fSDE->vblankRaw, fSDE->vblankFrameCount,
+			    fSDE->vblankLineCount, fSDE->vblankTearLine);
+			fStatSDEAcquire = fStatSDECompose = fStatSDECommit = 0;
+			fSDE->cleanTime = fSDE->waitTime = fSDE->guardCalls = fSDE->pollChecks = 0;
+			fStatSDEPreserved = 0;
+			IOLockUnlock(fDisplayLock);
+		}
 		fStatSwapsLate = 0;
 		for (different = 0; different < 8 && fStatSurfaces[different] != 0; different++) {
 		}
@@ -1103,8 +2296,182 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 		fStatFrames = 0;
 		fStatDrawing = 0;
 		fStatSince = 0;
+		fStatGPUBudgetMisses = 0;
 	}
 	IOLockUnlock(fLock);
+	finishSwap(swapWord(swap, SWAP_ID), kIOReturnSuccess);
+}
+
+void
+IOMobileFramebuffer::retireNativeSwap(uint32_t swapID, MiniIOSurface ** surfaces)
+{
+	/* SwapWait releases the IOSurface source; PP_DONE remains the hardware-present fence. */
+	IOLockLock(fSwapLock);
+	auto &entry = fSwapResults[swapID % 64];
+	entry.result = kIOReturnSuccess;
+	entry.pending = false;
+	fStatSDERetired++;
+	fSDEInFlight = true;
+	fSDEInFlightID = swapID;
+	for (unsigned layer = 0; layer < SWAP_LAYERS; layer++) {
+		if (surfaces[layer] != NULL) {
+			fSDEInFlightSurfaces[layer] = surfaces[layer];
+			surfaces[layer] = NULL;
+		}
+	}
+	if (fSwapsWaiting != 0) {
+		fSwapFirst = (fSwapFirst + 1) % SWAP_QUEUE;
+		fSwapsWaiting--;
+	}
+	IOLockWakeup(fSwapLock, &fSwapResults, false);
+	IOLockWakeup(fSwapLock, &fSwapsWaiting, false);
+	IOLockUnlock(fSwapLock);
+	if (!fGraphics) {
+		fGraphics = true;
+		PE_initialize_console(NULL, kPEGraphicsMode);
+	}
+}
+
+enum munch_sde_result
+IOMobileFramebuffer::waitNativeFrame(bool allowQueued)
+{
+	for (;;) {
+		uint32_t sequence = __atomic_load_n(&fSDE->completionIRQSequence, __ATOMIC_ACQUIRE);
+		enum munch_sde_result result = munchSdeCompleteFrame(fSDE);
+		if (result != MUNCH_SDE_BUSY) {
+			completeNativeSwap(result);
+			return result;
+		}
+		if (allowQueued && !fSDE->nativeTakeover) {
+			IOLockLock(fSwapLock);
+			bool queued = fSwapsWaiting != 0;
+			IOLockUnlock(fSwapLock);
+			if (queued) return MUNCH_SDE_BUSY;
+		}
+		bool irqHint = __atomic_load_n(&fSDE->completionIRQPending, __ATOMIC_ACQUIRE) != 0;
+		bool irqActive = fSDE->completionIRQAttached &&
+		    !__atomic_load_n(&fSDE->completionIRQMasked, __ATOMIC_ACQUIRE);
+		if (!irqHint) {
+			AbsoluteTime deadline;
+			clock_interval_to_deadline(irqActive ? 1 : 250,
+			    irqActive ? kMillisecondScale : kMicrosecondScale, &deadline);
+			assert_wait_deadline((event_t)&fSDE->completionIRQSequence, THREAD_UNINT, deadline);
+			if (sequence == __atomic_load_n(&fSDE->completionIRQSequence, __ATOMIC_ACQUIRE))
+				thread_block(THREAD_CONTINUE_NULL);
+			else
+				clear_wait(current_thread(), THREAD_AWAKENED);
+		} else {
+			IODelay(10);
+		}
+	}
+}
+
+void
+IOMobileFramebuffer::finishNativeSwapInOrder(uint32_t swapID, IOReturn result)
+{
+	IOLockLock(fSwapLock);
+	bool olderInFlight = fSDEInFlight && fSDEInFlightID != swapID;
+	IOLockUnlock(fSwapLock);
+	if (olderInFlight) {
+		enum munch_sde_result previous = waitNativeFrame();
+		if (previous != MUNCH_SDE_OK) result = kIOReturnAborted;
+	}
+	finishSwap(swapID, result);
+}
+
+void
+IOMobileFramebuffer::reportNativeFailure(enum munch_sde_result result, IOReturn swapResult, uint32_t swapID)
+{
+	MunchSDE *state = fSDE;
+	uint32_t intr = 0, ctlStart = 0, ctlFlush = 0, smmuFSR = 0;
+	if (state && state->mdp != NULL) {
+		intr = state->mdp[MUNCH_SDE_INTR_STATUS / 4];
+		if (state->route.ctl < MUNCH_SDE_CTL_COUNT) {
+			uint32_t ctl = munch_sde_ctl_offsets[state->route.ctl];
+			ctlStart = state->mdp[(ctl + MUNCH_SDE_CTL_START) / 4];
+			ctlFlush = state->mdp[(ctl + MUNCH_SDE_CTL_FLUSH) / 4];
+		}
+	}
+	if (state && state->cb != NULL) smmuFSR = state->cb[MUNCH_SMMU_CB_FSR / 4];
+	char liveLine[768];
+	snprintf(liveLine, sizeof(liveLine),
+	    "MUNCH SDE NATIVE FAILURE: swap=%u munch_sde_result=%s(%u) fSDEError=0x%08x->0x%08x "
+	    "presenter=pending:%u/front:%u/drawing:%u submitted:%llu/completed:%llu "
+	    "irq=attached:%u/masked:%u/pending:%u intr=0x%08x ctl=start:0x%08x/flush:0x%08x smmu_fsr=0x%08x\n",
+	    swapID, munch_sde_result_name(result), (unsigned)result, (unsigned)fSDEError, (unsigned)swapResult,
+	    state ? state->presenter.pending : 3, state ? state->presenter.front : 3,
+	    state ? state->presenter.drawing : 3, state ? state->presenter.submitted : 0,
+	    state ? state->presenter.completed : 0, state ? (unsigned)state->completionIRQAttached : 0,
+	    state ? __atomic_load_n(&state->completionIRQMasked, __ATOMIC_ACQUIRE) : 0,
+	    state ? __atomic_load_n(&state->completionIRQPending, __ATOMIC_ACQUIRE) : 0,
+	    intr, ctlStart, ctlFlush, smmuFSR);
+	loader_log_line(liveLine);
+	IOLog("%s", liveLine);
+}
+
+void
+IOMobileFramebuffer::dropNativeSurfaces(MiniIOSurface ** surfaces)
+{
+	if (!fSDENativeRequested) return;
+	for (unsigned layer = 0; layer < SWAP_LAYERS; layer++) {
+		if (surfaces[layer] != NULL) {
+			MiniIOSurfaceDrop(surfaces[layer]);
+			surfaces[layer] = NULL;
+		}
+	}
+}
+
+void
+IOMobileFramebuffer::completeNativeSwap(enum munch_sde_result result)
+{
+	uint32_t swapID;
+	uint64_t began, ready, shown, submitted, drawn = mach_absolute_time();
+	IOReturn swapResult = result == MUNCH_SDE_OK ? kIOReturnSuccess :
+	    (result == MUNCH_SDE_TIMEOUT ? kIOReturnTimeout : kIOReturnIOError);
+	bool notify = false;
+
+	IOLockLock(fSwapLock);
+	if (!fSDEInFlight) {
+		IOLockUnlock(fSwapLock);
+		return;
+	}
+	swapID = fSDEInFlightID;
+	began = fSDEInFlightBegan;
+	ready = fSDEInFlightReady;
+	shown = fSDEInFlightShown;
+	submitted = fSDEInFlightSubmitted;
+	if (result == MUNCH_SDE_OK) {
+		fSwapsShown++;
+		fStatFrames++;
+		fStatDrawing += drawn - began;
+		fStatSDECompletion += drawn - submitted;
+		fHardwareFrames++;
+		fHardwareTime = fSDE->completedTime;
+		if (fStatSince == 0) fStatSince = began;
+		if (!fGraphics) {
+			fGraphics = true;
+			PE_initialize_console(NULL, kPEGraphicsMode);
+		}
+		notify = true;
+	} else if (swapResult != kIOReturnAborted) {
+		reportNativeFailure(result, swapResult, swapID);
+		fSDEError = swapResult;
+		IOLog("MUNCH SDE: transfer for retired swap %u failed: 0x%x; presentation stopped\n",
+		    swapID, swapResult);
+	}
+	for (unsigned layer = 0; layer < SWAP_LAYERS; layer++) {
+		if (fSDEInFlightSurfaces[layer] != NULL) {
+			MiniIOSurfaceDrop(fSDEInFlightSurfaces[layer]);
+			fSDEInFlightSurfaces[layer] = NULL;
+		}
+	}
+	fSDEInFlight = false;
+	fSDEInFlightID = 0;
+	IOLockUnlock(fSwapLock);
+	if (result == MUNCH_SDE_OK) reportSDEPerformance(drawn);
+	(void) ready;
+	(void) shown;
+	if (notify) messageClients(kIOMessageServicePropertyChange);
 }
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -1124,6 +2491,7 @@ class IOMobileFramebufferUserClient : public IOUserClient
 	uint64_t                fVSyncTime;             /* when the refresh being waited for is due */
 	bool                    fVSyncRunning;
 	bool                    fClosed;
+	uint32_t                fLastSwapID;
 
 	static void vsyncFired(thread_call_param_t self, thread_call_param_t unused);
 	void vsync(void);
@@ -1133,6 +2501,7 @@ public:
 	virtual bool initWithTask(task_t owningTask, void * securityID, UInt32 type, OSDictionary * properties) APPLE_KEXT_OVERRIDE;
 	virtual bool start(IOService * provider) APPLE_KEXT_OVERRIDE;
 	virtual IOReturn clientClose(void) APPLE_KEXT_OVERRIDE;
+	virtual IOReturn message(UInt32 type, IOService *provider, void *argument = NULL) APPLE_KEXT_OVERRIDE;
 	virtual void free(void) APPLE_KEXT_OVERRIDE;
 	virtual IOReturn registerNotificationPort(mach_port_t port, UInt32 type, io_user_reference_t refCon) APPLE_KEXT_OVERRIDE;
 	virtual IOReturn externalMethod(uint32_t selector, IOExternalMethodArguments * args,
@@ -1230,7 +2599,18 @@ IOMobileFramebufferUserClient::vsyncFired(thread_call_param_t self, thread_call_
 void
 IOMobileFramebufferUserClient::armVSync(void)
 {
+	if (fClosed) return;
+	if (fOwner->fSDERequested && !fOwner->fSDENativeRequested) return;
 	uint64_t period, now = mach_absolute_time();
+	if (fOwner->fSDENativeRequested) {
+		nanoseconds_to_absolutetime(NSEC_PER_SEC / refreshHz(), &period);
+		fVSyncTime += period;
+		if (fVSyncTime <= now || fVSyncTime > now + 2 * period) {
+			fVSyncTime = now + period;
+		}
+		thread_call_enter_delayed(fVSyncCall, fVSyncTime);
+		return;
+	}
 
 	/* one refresh after the last, not after whenever we got round to this: the rate does not drift */
 	nanoseconds_to_absolutetime(NSEC_PER_SEC / refreshHz(), &period);
@@ -1255,6 +2635,15 @@ IOMobileFramebufferUserClient::vsync(void)
 
 	IOLockLock(fLock);
 	now = fVSyncTime;
+	if (fOwner->fSDERequested) {
+		uint64_t count;
+		if (!fOwner->presentationTime(&count, &now) || count <= fVSyncCount) {
+			armVSync();
+			IOLockUnlock(fLock);
+			return;
+		}
+		fVSyncCount = count - 1;
+	}
 	if (fClosed || fCallbacks[kFBNotifyVSync] == 0 || fPorts[kFBNotifyVSync] == NULL) {
 		fVSyncRunning = false;
 	} else {
@@ -1273,6 +2662,16 @@ IOMobileFramebufferUserClient::vsync(void)
 	if (send) {
 		sendAsyncResult64WithOptions(ref, kIOReturnSuccess, args, 6, kIOUserNotifyOptionCanDrop);
 	}
+}
+
+IOReturn
+IOMobileFramebufferUserClient::message(UInt32 type, IOService *provider, void *argument)
+{
+	if (type == kIOMessageServicePropertyChange && provider == fOwner && fOwner->fSDERequested) {
+		vsync();
+		return kIOReturnSuccess;
+	}
+	return IOUserClient::message(type, provider, argument);
 }
 
 IOReturn
@@ -1342,23 +2741,37 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
 		return kIOReturnSuccess;
 
 	case kFBMethodSwapEnd:
-		if (args->structureInput == NULL || args->structureInputSize < SWAP_SIZE) {
-			IOLog("MiniIOMobileFramebuffer: swap request of %u bytes, expected %u\n", args->structureInputSize, SWAP_SIZE);
-			return kIOReturnBadArgument;
+		{
+			IOReturn result = fOwner->submitSwap(args->structureInput, args->structureInputSize);
+			if (result == kIOReturnSuccess) {
+				IOLockLock(fLock);
+				fLastSwapID = swapWord((const uint8_t *)args->structureInput, SWAP_ID);
+				IOLockUnlock(fLock);
+			}
+			return result;
 		}
-		fOwner->present((const uint8_t *) args->structureInput);
-		return kIOReturnSuccess;
 
-	case kFBMethodSwapWait:                         /* a swap is on the screen as soon as it is made */
+	case kFBMethodSwapWait:
+		if (fOwner->fSDERequested && args->scalarInputCount && in[0] > UINT32_MAX) return kIOReturnBadArgument;
 		if (gTouchLat) {
 			hakios_tl("tl: w %llu %#llx %#llx at %llu\n", args->scalarInputCount > 0 ? in[0] : 0,
 			    args->scalarInputCount > 1 ? in[1] : 0, args->scalarInputCount > 2 ? in[2] : 0, micros(mach_absolute_time()));
 		}
-		return kIOReturnSuccess;
+		{
+			IOLockLock(fLock);
+			uint32_t swapID = args->scalarInputCount ? (uint32_t)in[0] : fLastSwapID;
+			IOLockUnlock(fLock);
+			return fOwner->waitSwap(swapID);
+		}
 	case kFBMethodSwapSignal:
 	case kFBMethodSwapCancel:
 	case kFBMethodSwapCancelAll:
+		return kIOReturnSuccess;
 	case kFBMethodRequestPowerChange:
+		if (args->scalarInputCount < 1) {
+			return kIOReturnBadArgument;
+		}
+		return fOwner->setDisplayPower((uint32_t) in[0]);
 	case kFBMethodChangeFrameInfo:
 		return kIOReturnSuccess;
 
@@ -1497,19 +2910,20 @@ publishAccelerator(IOService * provider)
  * A picture from inside the kernel (the GPU driver's first ones): rows of 32-bit pixels, put at
  * the top left corner of the panel as they are and cut to its size.
  */
-extern "C" void
+extern "C" int
 MiniIOMobileFramebufferShow(const uint8_t * pixels, uint32_t width, uint32_t height, uint32_t rowBytes)
 {
 	uint32_t columns = width < vinfo.v_width ? width : (uint32_t) vinfo.v_width;
 	uint32_t rows = height < vinfo.v_height ? height : (uint32_t) vinfo.v_height;
 
-	if (vinfo.v_baseaddr == 0 || vinfo.v_depth != 32) {
-		return;
+	if (gMunchSDEPresent || vinfo.v_baseaddr == 0 || vinfo.v_depth != 32) {
+		return 0;
 	}
 	for (uint32_t y = 0; y < rows; y++) {
 		memcpy((void *) (vinfo.v_baseaddr + (size_t) y * vinfo.v_rowbytes), pixels + (size_t) y * rowBytes,
 		    (size_t) columns * 4);
 	}
+	return 1;
 }
 
 void

@@ -49,8 +49,10 @@ ios_gpu_fast_cmdline = ios_gpu_cmdline.replace('adreno_speed=1', 'adreno_speed=5
 allowed_gpu = {
     f'cpus=8 small_cores_after=0 munch_touch=1 gpu=1 adreno_speed={speed} '
     + ('fb_hz=120 ' if hz == 120 else '') + ('ca_vbl=1 glwait=1 ' if sync else '')
-    + ('munch_te=1 ' if te else '') + f'loader_return_after={seconds}'
-    for speed in (1, 5) for hz in (60, 120) for sync in (False, True) for seconds in (0, 600) for te in (False, True)
+    + ('munch_sde_probe=1 ' if sde_probe else '')
+    + f'loader_return_after={seconds}'
+    for speed in (1, 5) for hz in (60, 120) for sync in (False, True)
+    for seconds in (0, 600) for sde_probe in (False, True)
 }
 allowed_gpu |= {'-v ' + c for c in allowed_gpu}
 assert report['cmdline'] in allowed_gpu | {'-v cpus=1 loader_return_after=600', 'cpus=8 small_cores_after=0 loader_return_after=600', native_cmdline}
@@ -61,6 +63,8 @@ for name, key in [('loader.efi', 'loader_sha256'), ('kernel', 'kernel_sha256'), 
 assert entries['loader.efi'][:2] == b'MZ' and entries['ramdisk'][32:36] == b'NXSB'
 if report.get('native_gpu') is not None:
     native = report['native_gpu']
+    sde_probe = report.get('sde_probe', False)
+    assert type(sde_probe) is bool
     if native['profile'] == 'munch-a650-ios-gpu':
         assert native.get('gpu_speed_index', 1) in (1, 5)
         speed = native.get('gpu_speed_index', 1)
@@ -69,15 +73,18 @@ if report.get('native_gpu') is not None:
         sync = native.get('sync_frame_clock', False)
         assert hz in (60, 120) and seconds in (0, 600) and type(sync) is bool
         te = native.get('display_te', False)
-        assert type(te) is bool
+        assert type(te) is bool and not te
         expected = (f'cpus=8 small_cores_after=0 munch_touch=1 gpu=1 adreno_speed={speed} '
                     + ('fb_hz=120 ' if hz == 120 else '') + ('ca_vbl=1 glwait=1 ' if sync else '')
-                    + ('munch_te=1 ' if te else '') + f'loader_return_after={seconds}')
+                    + ('munch_sde_probe=1 ' if sde_probe else '')
+                    + f'loader_return_after={seconds}')
         verbose = native.get('verbose_console', False)
         assert type(verbose) is bool
         if verbose: expected = '-v ' + expected
         assert report['verbose_console'] == verbose
         assert report['cmdline'] == expected and native['revision'] >= 4
+        if sde_probe:
+            assert b'MUNCH SDE: read-only Kona snapshot' in entries['kernel']
         info = native['graphics_report']
         graphics_bytes = Path(info['path']).read_bytes()
         assert sha(graphics_bytes) == info['sha256']
@@ -87,6 +94,7 @@ if report.get('native_gpu') is not None:
         assert sha(entries['ramdisk']) == graphics['helper']['sha256']
         assert entries['ramdisk'] == Path(graphics['helper']['path']).read_bytes()
     else:
+        assert not sde_probe
         assert native['profile'] == 'munch-a650-diagnostic-22' and report['cmdline'] == native_cmdline
     assert entries['kernel'] == Path(native['kernel']['path']).read_bytes()
     assert sha(entries['kernel']) == native['kernel']['sha256']
@@ -106,12 +114,11 @@ if report.get('native_gpu') is not None:
     assert sha(source) == native['source_report']['sha256']
     provenance = json.loads(source)
     assert provenance['xnu_base'] == 'c54f35ca767986246321eb901baf8f5ff7923f6a'
-    if native.get('display_te'):
-        assert provenance['display_te_staging'] is True
-        assert b'MUNCH TE' in entries['kernel']
+    assert not native.get('display_te', False)
     assert provenance['native_touch_bootarg'] == 'munch_touch=1'
     print('PASS: native A650 boot header, size, FD, DTB, payload, helper APFS, full kernel hash and source manifest')
     raise SystemExit(0)
+assert not report.get('sde_probe', False)
 baseline = (root / 'prebuilt/mach.development.bcm2837').read_bytes()
 assert sha(baseline) == report['kernel_baseline_sha256']
 kernel = entries['kernel']; assert len(kernel) == len(baseline)

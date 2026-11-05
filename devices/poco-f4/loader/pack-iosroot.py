@@ -404,7 +404,7 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
     source = root / 'xnuloader/loader.c'
     identity = Path(config['identity']['path']).read_bytes()
     if cpus == 8:
-        cmdline = ('bootcpu=7 cpus=8 cpufreq=1 small_cores=2 small_cores_after=0 touchscreen=1 '
+        cmdline = ('bootcpu=7 cpus=8 cpufreq=2 lpm=1 small_cores=2 small_cores_after=0 touchscreen=1 '
                    'buttons=1')
     else:
         cmdline = '-v cpus=1 touchscreen=1 buttons=1'

@@ -2859,7 +2859,7 @@ step_core_commands(void)
 #define TARGET_HEIGHT           2400
 #define TARGET_ROW              4352            /* 1088 pixels: the next multiple of 64 bytes */
 
-extern void MiniIOMobileFramebufferShow(const uint8_t *pixels, uint32_t width, uint32_t height, uint32_t row_bytes);
+extern int MiniIOMobileFramebufferShow(const uint8_t *pixels, uint32_t width, uint32_t height, uint32_t row_bytes);
 
 static void
 ring_fill(uint32_t top, uint32_t bottom, uint32_t red, uint32_t green, uint32_t blue)

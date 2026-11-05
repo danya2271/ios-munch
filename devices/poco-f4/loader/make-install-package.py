@@ -50,7 +50,7 @@ def package(config_path, boot_path, source_report, output):
         shutil.copy2(image, output / 'system.apfs')
     shutil.copy2(boot_path, output / boot_path.name)
     shutil.copy2(source_report, output / 'source-integrity.json')
-    (output / 'README.txt').write_text('''POCO F4 (munch) iOS 16.5 20F66 experimental RAM boot
+    (output / 'README.txt').write_text(f'''POCO F4 (munch) iOS 16.5 20F66 experimental RAM boot
 
 This package replaces the previous contents of the dedicated iosroot partition.
 It does not target Android boot, system or userdata partitions.
@@ -66,7 +66,7 @@ In Termux:
   sh install.sh --apply
 Do not continue to boot if either step fails.
 
-On Windows, put the included munch-ios165-ramboot.img in Downloads, enter the
+On Windows, put the included {boot_path.name} in Downloads, enter the
 phone's ordinary fastboot mode, then use platform-tools fastboot boot with that
 small image. No fastboot flash command is used.
 The RAM loader reads only the pinned system APFS bytes from iosroot, checks CRC,

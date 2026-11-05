@@ -13,6 +13,22 @@ TOUCH-BRINGUP.md and GPU-BRINGUP.md for the current driver work.
 See [USB-ETHERNET.md](USB-ETHERNET.md) for USB Ethernet live logging, image
 build profiles, and boot commands.
 
+The Munch radio is a QCA6390 on PCIe/MHI, not the WCN6750 DSP/GLINK design.
+`devices/poco-f4/pull-wifi-firmware.sh` pulls the three files ath11k needs for
+this chip (`amss20.bin`, `m3.bin`, and `bd_l11rgl.elf`) into the ignored
+`fw-wifi/qca6390/` directory. The image builder stages them only as a complete
+set. The legacy WCN6750 diagnostic path is disabled by default; `wifi=1` reports
+that the QCA6390 PCIe/MHI backend is not wired up yet.
+
+`cpufreq=1` is an explicit maximum-frequency diagnostic mode. `cpufreq=2` is
+the normal load-based mode: it samples per-core idle time every 20 ms, maps
+utilization with schedutil-style 25% headroom, raises immediately, and waits
+three lower-load samples before lowering. Screen blanking applies per-domain
+caps of 1171/1382/1401 MHz while retaining the governor target, so unblank
+restores the policy without leaving the CPU at the top OPP.
+The kernel still uses ordinary WFI for idle; reset-based LPM states are not
+enabled. See `WIFI-BRINGUP.md` and `POWER-MANAGEMENT.md` for details.
+
 A first iOS 16.5 (20F66) attempt is prepared in loader/: a verified local APFS
 system image staged in iosroot, a 4-MiB helper RAM disk, and a small RAM boot
 image. Source IPSW member integrity and both APFS images passed host checks;

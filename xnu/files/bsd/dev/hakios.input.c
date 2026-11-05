@@ -215,11 +215,11 @@ hakios_input_init(void)
 		printf("hakios-touch: cannot create the device\n");
 	}
 	exit_call = thread_call_allocate(exit_hold_elapsed, NULL);
+	munch_usb_probe();
 	hakios_cpufreq_init();
+	hakios_lpm_init();
 	hakios_virtio_input_init();
 	hakios_net_init();
-	/* Bring up the diagnostic transport before storage or peripheral probes. */
-	munch_usb_probe();
 	hakios_goodix_init();
 	hakios_buttons_init();
 	hakios_battery_init();

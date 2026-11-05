@@ -35,7 +35,7 @@ MU_ROOT="$MUNCH_MU_ROOT" UEFI_PYTHON="$UEFI_PYTHON" BUILD_TARGET="$TARGET" \
 KERNEL="$MUNCH_XNU_DIR/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837"
 echo "munch-build: building Munch XNU ($MUNCH_JOBS jobs)"
 XNU_LOG="$MUNCH_BUILD_DIR/xnu-build.log"
-if ! MUNCH_STAGE=1 MUNCH_STAGE_REPORT="$MUNCH_BUILD_DIR/munch-stage.json" \
+if ! MUNCH_STAGE=1 MUNCH_STAGE_REPORT="${MUNCH_STAGE_REPORT:-$MUNCH_BUILD_DIR/munch-stage.json}" \
     bash "$ROOT/xnu-build.sh" -j"$MUNCH_JOBS" -k 2>&1 | tee "$XNU_LOG"; then
     # XNU 8796.121.2 links this bring-up kernel and then rejects the upstream
     # export lists in check_all_exports. The resulting Mach-O is still the
@@ -82,6 +82,12 @@ PACK_ARGS=(
 [ "${MUNCH_GPU_DIAGNOSTICS:-0}" = 1 ] && PACK_ARGS+=(--gpu-diagnostics)
 [ "${MUNCH_USB:-0}" = 1 ] && PACK_ARGS+=(--usb-debug)
 [ "${MUNCH_VERBOSE:-0}" = 1 ] && PACK_ARGS+=(--verbose)
+[ "${MUNCH_SDE_PROBE:-0}" = 1 ] && PACK_ARGS+=(--sde-probe)
+if [ "${MUNCH_SDE_NATIVE:-0}" = 1 ]; then
+    PACK_ARGS+=(--sde-backend --sde-native)
+elif [ "${MUNCH_SDE_BACKEND:-0}" = 1 ]; then
+    PACK_ARGS+=(--sde-backend)
+fi
 [ -n "${MUNCH_EXTRA_CMDLINE:-}" ] && PACK_ARGS+=(--extra-cmdline "$MUNCH_EXTRA_CMDLINE")
 
 echo 'munch-build: packaging Android boot image'

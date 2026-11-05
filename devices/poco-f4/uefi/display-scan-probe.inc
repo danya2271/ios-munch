@@ -59,11 +59,24 @@ static void display_scan_probe(void)
     field("TE initial: ", initial);
     field("TE start: ", scan_read(SCAN_INTF + 0x2a0));
     field("TE auto: ", scan_read(SCAN_INTF + 0x2b4));
+    uint64_t active_since = 0, completed_at = 0;
+    int in_transfer = 0, saw_zero = 0, completed_valid = 0;
+    uint32_t first_write = scan_read(SCAN_INTF + 0x2b0) & 0xffff;
+    if (first_write > 0 && first_write < initial) {
+        in_transfer = 1;
+        active_since = scan_ticks();
+        saw_zero = 1;
+    }
+    else if (first_write >= initial && initial) completed_at = scan_ticks();
+    else saw_zero = 1;
     for (unsigned window = 0; window < 3; window++) {
         uint32_t lo = 65535, hi = 0, wlo = 65535, whi = 0, busy_last = 0, wraps = 0;
         uint32_t previous = scan_read(SCAN_INTF + 0x298) & 0xffff;
         uint64_t start = scan_ticks(), first = 0, last = 0, now = start;
+        uint64_t active_min = UINT64_MAX, active_max = 0;
+        uint64_t idle_min = UINT64_MAX, idle_max = 0;
         unsigned samples = 0, busy = 0, idle = 0;
+        unsigned transfers = 0, idle_gaps = 0;
         while (now - start < freq / 5 && samples++ < 10000) {
             system_table->bs->stall(50);
             uint32_t raw = scan_read(SCAN_INTF + 0x298) & 0xffff;
@@ -77,8 +90,36 @@ static void display_scan_probe(void)
             if (written > whi) whi = written;
             if (written > 0 && written < initial) {
                 busy++;
+                if (!in_transfer) {
+                    if (completed_valid && completed_at) {
+                        uint64_t gap = now - completed_at;
+                        if (gap < idle_min) idle_min = gap;
+                        if (gap > idle_max) idle_max = gap;
+                        idle_gaps++;
+                    }
+                    active_since = now;
+                    in_transfer = 1;
+                    completed_valid = 0;
+                }
+                saw_zero = 0;
                 if (raw >= initial && raw - initial > busy_last) busy_last = raw - initial;
-            } else if (initial && written >= initial) idle++;
+            } else if (initial && written >= initial) {
+                idle++;
+                if (in_transfer) {
+                    if (!saw_zero) {
+                        uint64_t duration = now - active_since;
+                        if (duration < active_min) active_min = duration;
+                        if (duration > active_max) active_max = duration;
+                        transfers++;
+                    }
+                    in_transfer = 0;
+                    completed_at = now;
+                    completed_valid = 1;
+                }
+                saw_zero = 0;
+            } else if (written == 0) {
+                saw_zero = 1;
+            }
             previous = raw;
         }
         field("Window: ", window + 1);
@@ -86,6 +127,16 @@ static void display_scan_probe(void)
         text("write min/max "); hex(wlo); text(" / "); hex(whi); text("\r\n");
         text("wraps/busy/idle/last-phase "); hex(wraps); text(" / "); hex(busy);
         text(" / "); hex(idle); text(" / "); hex(busy_last); text("\r\n");
+        if (transfers) {
+            field("Write active min us: ", active_min * 1000000 / freq);
+            field("Write active max us: ", active_max * 1000000 / freq);
+            field("Write active cycles: ", transfers);
+        }
+        if (idle_gaps) {
+            field("Write idle min us: ", idle_min * 1000000 / freq);
+            field("Write idle max us: ", idle_max * 1000000 / freq);
+            field("Write idle gaps: ", idle_gaps);
+        }
         if (wraps >= 3 && last > first) field("Measured frame period us: ", (last-first) * 1000000 / freq / (wraps-1));
     }
 done:

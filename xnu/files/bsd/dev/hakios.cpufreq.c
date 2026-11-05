@@ -1,23 +1,26 @@
 /*
- * The clock speed of the processor cores the kernel runs on, on the POCO X5 Pro (redwood).
- * Only with boot-arg cpufreq=1: the addresses are this phone's.
+ * The clock speed of the processor cores on the POCO F4 (munch).
+ * Boot-arg cpufreq=1 requests the top supported frequency; cpufreq=2 enables a
+ * small load-based governor. The addresses and domain layout are this phone's.
  *
  * The boot loader leaves each group of cores at a modest frequency and expects the operating
  * system to ask for more. On this SoC that is one register write: the hardware ("EPSS") has
  * a table of frequencies per group and switches the clock source and the supply voltage by
- * itself when told which row is wanted. There is no reason for us ever to want less than the
- * top row, for every group that has a core of ours in it (one core, unless boot-arg cpus=N
- * says more).
+ * itself when told which row is wanted. The optional governor samples XNU's per-core idle
+ * counters and only requests rows present in the device's CPU-frequency tables.
  *
  * Register layout: Linux drivers/cpufreq/qcom-cpufreq-hw.c ("epss" variant).
  */
 #include <kern/clock.h>
+#include <kern/locks.h>
 #include <kern/thread.h>
 #include <os/atomic_private.h>
 #include <libkern/libkern.h>
 #include <mach/mach_types.h>
 #include <machine/machine_routines.h>
+#include <pexpert/device_tree.h>
 #include <pexpert/pexpert.h>
+#include <sys/hakios.qca6390.h>
 #include <sys/hakios.input.h>
 #include <sys/systm.h>
 #include <vm/vm_kern.h>
@@ -27,6 +30,7 @@ extern vm_offset_t ml_io_map_wcomb(vm_offset_t phys_addr, vm_size_t size);
 extern void loader_log_putc(char c);
 extern void hakios_tl(const char *format, ...) __printflike(1, 2);
 extern bool ml_cpu_idle_time(int cpu_id, uint64_t *idle);
+extern kern_return_t thread_terminate(thread_t thread);
 
 /*
  * The loader's log as well: this runs early, and the kernel's own log of a run keeps only its end. With
@@ -62,6 +66,100 @@ tell(const char *format, ...)
 #define EPSS_PERF_STATE         0x320           /* the row that is wanted */
 #define XO_KHZ                  19200
 #define ALTERNATE_KHZ           300000          /* source 0: a fixed 300 MHz */
+#define CPUFREQ_SAMPLE_MS       20
+#define CPUFREQ_DOWNSHIFT_SAMPLES 3
+#define CPUFREQ_UTIL_HEADROOM   125
+
+static const uint32_t munch_domain_max_khz[EPSS_DOMAINS] = {
+	1804800, 2419200, 2841600
+};
+static const uint32_t munch_domain_freqs[EPSS_DOMAINS][18] = {
+	{ 518400, 1171200, 1344000, 1420800, 1612800, 1708800, 1804800 },
+	{ 710400, 825600, 940800, 1056000, 1171200, 1382400, 1478400, 1574400, 1670400, 1766400, 1958400, 2054400,
+	    2150400, 2246400, 2342400, 2419200 },
+	{ 844800, 960000, 1075200, 1190400, 1401600, 1516800, 1632000, 1747200, 1862400, 1977600, 2073600, 2265600,
+	    2361600, 2457600, 2553600, 2649600, 2745600, 2841600 }
+};
+static const uint32_t munch_screen_off_max_khz[EPSS_DOMAINS] = {
+	1171200, 1382400, 1401600
+};
+
+static vm_offset_t epss_base[EPSS_DOMAINS];
+static uint32_t cpufreq_cores[EPSS_DOMAINS];
+static uint32_t cpufreq_requested[EPSS_DOMAINS];
+static uint32_t cpufreq_selected[EPSS_DOMAINS];
+static uint32_t cpufreq_mode;
+static uint32_t cpufreq_screen_on = 1;
+static bool cpufreq_initialized;
+static LCK_GRP_DECLARE(cpufreq_lock_group, "hakios-cpufreq");
+static LCK_MTX_DECLARE(cpufreq_lock, &cpufreq_lock_group);
+
+static uint32_t
+epSSFrequency(uint32_t entry)
+{
+	return (entry >> 30) ? XO_KHZ * (entry & 0xff) : ALTERNATE_KHZ;
+}
+
+static bool
+frequency_supported(uint32_t domain, uint32_t khz)
+{
+	for (unsigned i = 0; i < 18 && munch_domain_freqs[domain][i] != 0; i++) {
+		if (munch_domain_freqs[domain][i] == khz) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static uint32_t
+frequency_count(uint32_t domain)
+{
+	uint32_t count = 0;
+
+	while (count < 18 && munch_domain_freqs[domain][count] != 0) {
+		count++;
+	}
+	return count;
+}
+
+static uint32_t
+frequency_index_at_or_below(uint32_t domain, uint32_t khz)
+{
+	uint32_t selected = 0;
+
+	for (uint32_t i = 0; i < frequency_count(domain); i++) {
+		if (munch_domain_freqs[domain][i] > khz) {
+			break;
+		}
+		selected = i;
+	}
+	return selected;
+}
+
+static uint32_t
+frequency_index_for_util(uint32_t domain, uint32_t busy)
+{
+	uint32_t count = frequency_count(domain);
+	uint32_t maximum, target;
+
+	if (count == 0) {
+		return 0;
+	}
+	maximum = munch_domain_freqs[domain][count - 1];
+	target = (uint32_t)((uint64_t)maximum * MIN(busy, 100u) * CPUFREQ_UTIL_HEADROOM / 10000);
+	for (uint32_t i = 0; i < count; i++) {
+		if (munch_domain_freqs[domain][i] >= target) {
+			return i;
+		}
+	}
+	return count - 1;
+}
+
+static bool
+munch_platform(void)
+{
+	return hakios_qca6390_platform_matches();
+}
 
 /* How fast a simple loop runs, in thousands of iterations per millisecond. */
 static uint32_t
@@ -83,31 +181,251 @@ domain_of(uint32_t phys_id)
 {
 	uint32_t core = (phys_id >> 8) & 0xff;
 
-	return core < 4 ? 0 : core < 7 ? 1 : 2;
+	return core < 4 ? 0 : core < 7 ? 1 : core == 7 ? 2 : EPSS_DOMAINS;
+}
+
+static bool
+set_domain_index_unlocked(uint32_t domain, uint32_t index, uint32_t cores, bool report)
+{
+	uint32_t selected = EPSS_TABLE_ROWS, selected_khz = 0, was, requested_khz;
+	vm_offset_t base;
+
+	if (domain >= EPSS_DOMAINS) {
+		tell("cpufreq: refusing unknown CPU domain %u\n", domain);
+		return false;
+	}
+	if (index >= frequency_count(domain)) {
+		return false;
+	}
+	if (epss_base[domain] == 0) {
+		epss_base[domain] = ml_io_map(EPSS_PHYS + domain * EPSS_DOMAIN_SIZE, EPSS_DOMAIN_SIZE);
+	}
+	base = epss_base[domain];
+	if (base == 0) {
+		tell("cpufreq: cannot map EPSS domain %u\n", domain);
+		return false;
+	}
+	requested_khz = munch_domain_freqs[domain][index];
+	for (uint32_t row = 0; row < EPSS_TABLE_ROWS; row++) {
+		uint32_t entry = *(volatile uint32_t *)(base + EPSS_FREQ_TABLE + 4 * row);
+		uint32_t khz = epSSFrequency(entry);
+
+		if (entry == 0) {
+			break;
+		}
+		if (khz <= requested_khz && khz <= munch_domain_max_khz[domain] && frequency_supported(domain, khz) &&
+		    khz > selected_khz) {
+			selected = row;
+			selected_khz = khz;
+		}
+	}
+	if (selected >= EPSS_TABLE_ROWS) {
+		tell("cpufreq: domain %u LUT has no supported frequency at or below %u kHz; left unchanged\n", domain,
+		    requested_khz);
+		return false;
+	}
+	was = *(volatile uint32_t *)(base + EPSS_PERF_STATE);
+	if (was >= EPSS_TABLE_ROWS) {
+		tell("cpufreq: domain %u has invalid performance state %u; left unchanged\n", domain, was);
+		return false;
+	}
+	if (was != selected) {
+		*(volatile uint32_t *)(base + EPSS_PERF_STATE) = selected;
+		__asm__ volatile ("dsb sy" ::: "memory");
+		if (*(volatile uint32_t *)(base + EPSS_PERF_STATE) != selected) {
+			tell("cpufreq: domain %u rejected performance state %u\n", domain, selected);
+			return false;
+		}
+	}
+	if (report) {
+		if (was == selected) {
+			tell("cpufreq: group %u (%u of our cores): row %u, %u MHz (unchanged)\n", domain, cores, selected,
+			    selected_khz / 1000);
+		} else {
+			tell("cpufreq: group %u (%u of our cores): row %u -> %u, %u MHz\n", domain, cores, was, selected,
+			    selected_khz / 1000);
+		}
+	}
+	for (uint32_t i = 0; i < frequency_count(domain); i++) {
+		if (munch_domain_freqs[domain][i] == selected_khz) {
+			os_atomic_store(&cpufreq_selected[domain], i, relaxed);
+			break;
+		}
+	}
+	return true;
+}
+
+static uint32_t
+effective_index(uint32_t domain, uint32_t requested, bool screen_on)
+{
+	uint32_t count = frequency_count(domain);
+	uint32_t maximum;
+
+	if (count == 0) {
+		return 0;
+	}
+	maximum = count - 1;
+	if (!screen_on) {
+		maximum = MIN(maximum, frequency_index_at_or_below(domain, munch_screen_off_max_khz[domain]));
+	}
+	return MIN(requested, maximum);
+}
+
+static bool
+set_domain_target(uint32_t domain, uint32_t requested, uint32_t cores, bool report)
+{
+	bool screen_on, result;
+
+	lck_mtx_lock(&cpufreq_lock);
+	screen_on = os_atomic_load(&cpufreq_screen_on, acquire) != 0;
+	result = set_domain_index_unlocked(domain, effective_index(domain, requested, screen_on), cores, report);
+	if (result) {
+		os_atomic_store(&cpufreq_requested[domain], requested, relaxed);
+	}
+	lck_mtx_unlock(&cpufreq_lock);
+	return result;
 }
 
 static void
-raise_domain(uint32_t domain, uint32_t cores)
+cpufreq_status_thread(__unused void *argument, __unused wait_result_t result)
 {
-	uint32_t top = 0, top_khz = 0, was;
-	vm_offset_t base;
-
-	base = ml_io_map(EPSS_PHYS + domain * EPSS_DOMAIN_SIZE, EPSS_DOMAIN_SIZE);
-	for (uint32_t row = 0; row < EPSS_TABLE_ROWS; row++) {
-		uint32_t entry = *(volatile uint32_t *)(base + EPSS_FREQ_TABLE + 4 * row);
-		uint32_t khz = (entry >> 30) ? XO_KHZ * (entry & 0xff) : ALTERNATE_KHZ;
-
-		if (row > 0 && khz <= top_khz) {
-			break;                  /* the table ends by repeating its last row */
-		}
-		top = row;
-		top_khz = khz;
+	delay_for_interval(5000, NSEC_PER_MSEC);
+	for (uint32_t domain = 0; domain < EPSS_DOMAINS; domain++) {
+		if (cpufreq_cores[domain] == 0 || epss_base[domain] == 0) continue;
+		uint32_t row = *(volatile uint32_t *)(epss_base[domain] + EPSS_PERF_STATE);
+		uint32_t entry = row < EPSS_TABLE_ROWS ?
+		    *(volatile uint32_t *)(epss_base[domain] + EPSS_FREQ_TABLE + 4 * row) : 0;
+		tell("cpufreq: status group %u cores=%u row=%u freq=%u MHz selected=%u target=%u screen=%s\n", domain,
+		    cpufreq_cores[domain], row, epSSFrequency(entry) / 1000,
+		    os_atomic_load(&cpufreq_selected[domain], relaxed),
+		    os_atomic_load(&cpufreq_requested[domain], relaxed),
+		    os_atomic_load(&cpufreq_screen_on, acquire) ? "on" : "off");
 	}
-	was = *(volatile uint32_t *)(base + EPSS_PERF_STATE);
-	*(volatile uint32_t *)(base + EPSS_PERF_STATE) = top;
-	delay_for_interval(20, NSEC_PER_MSEC);
-	tell("cpufreq: group %u (%u of our cores): row %u -> %u of the frequency table, %u MHz\n", domain, cores, was, top,
-	    top_khz / 1000);
+	thread_terminate(current_thread());
+}
+
+static uint32_t
+frequency_index_for_screen(uint32_t domain, bool screen_on)
+{
+	uint32_t count = frequency_count(domain);
+
+	if (count == 0) {
+		return 0;
+	}
+	return screen_on ? count - 1 :
+	    frequency_index_at_or_below(domain, munch_screen_off_max_khz[domain]);
+}
+
+static void
+cpufreq_policy_thread(__unused void *argument, __unused wait_result_t result)
+{
+	const ml_topology_info_t *topology = ml_get_topology_info();
+	uint64_t idle_before[MAX_CPUS] = { 0 }, previous_time = mach_absolute_time();
+	bool idle_valid[MAX_CPUS] = { false };
+	uint8_t lower_samples[EPSS_DOMAINS] = { 0 };
+
+	for (;;) {
+		uint32_t domain_load[EPSS_DOMAINS] = { 0 };
+		bool domain_valid[EPSS_DOMAINS] = { false };
+		uint64_t now;
+		bool screen_on;
+
+		delay_for_interval(CPUFREQ_SAMPLE_MS, NSEC_PER_MSEC);
+		screen_on = os_atomic_load(&cpufreq_screen_on, acquire) != 0;
+		if (cpufreq_mode == 1) {
+			for (uint32_t domain = 0; domain < EPSS_DOMAINS; domain++) {
+				uint32_t wanted = frequency_count(domain) - 1;
+				uint32_t effective;
+
+				if (cpufreq_cores[domain] == 0) continue;
+				effective = effective_index(domain, wanted, screen_on);
+				if (effective != os_atomic_load(&cpufreq_selected[domain], relaxed) &&
+				    !set_domain_target(domain, wanted, cpufreq_cores[domain], false)) {
+					cpufreq_cores[domain] = 0;
+					tell("cpufreq: screen policy stopped controlling domain %u after a rejected request\n", domain);
+				}
+			}
+			continue;
+		}
+		now = mach_absolute_time();
+		for (unsigned int cpu = 0; cpu < topology->num_cpus && cpu < MAX_CPUS; cpu++) {
+			uint64_t idle = 0, elapsed, idle_delta, busy;
+			uint32_t domain = domain_of(topology->cpus[cpu].phys_id);
+
+			if (domain >= EPSS_DOMAINS || !ml_cpu_idle_time((int)cpu, &idle)) {
+				idle_valid[cpu] = false;
+				continue;
+			}
+			if (idle_valid[cpu] && idle >= idle_before[cpu] && now > previous_time) {
+				elapsed = now - previous_time;
+				idle_delta = idle - idle_before[cpu];
+				busy = idle_delta >= elapsed ? 0 : 100 * (elapsed - idle_delta) / elapsed;
+				domain_load[domain] = MAX(domain_load[domain], (uint32_t)busy);
+				domain_valid[domain] = true;
+			}
+			idle_before[cpu] = idle;
+			idle_valid[cpu] = true;
+		}
+		previous_time = now;
+		for (uint32_t domain = 0; domain < EPSS_DOMAINS; domain++) {
+			uint32_t wanted;
+
+			if (cpufreq_cores[domain] == 0 || !domain_valid[domain]) {
+				continue;
+			}
+			wanted = frequency_index_for_util(domain, domain_load[domain]);
+			uint32_t requested = os_atomic_load(&cpufreq_requested[domain], relaxed);
+			uint32_t selected = os_atomic_load(&cpufreq_selected[domain], relaxed);
+			uint32_t effective = effective_index(domain, requested, screen_on);
+			if (effective != selected) {
+				if (!set_domain_target(domain, requested, cpufreq_cores[domain], false)) {
+					cpufreq_cores[domain] = 0;
+					tell("cpufreq: cap policy stopped controlling domain %u after a rejected request\n", domain);
+				}
+				selected = effective;
+			}
+			if (wanted > requested) {
+				lower_samples[domain] = 0;
+				if (!set_domain_target(domain, wanted, cpufreq_cores[domain], false)) {
+					cpufreq_cores[domain] = 0;
+					tell("cpufreq: governor stopped controlling domain %u after a rejected request\n", domain);
+				}
+			} else if (wanted < requested) {
+				if ((!screen_on && selected > frequency_index_for_screen(domain, false)) ||
+				    ++lower_samples[domain] >= CPUFREQ_DOWNSHIFT_SAMPLES) {
+					lower_samples[domain] = 0;
+					if (!set_domain_target(domain, wanted, cpufreq_cores[domain], false)) {
+						cpufreq_cores[domain] = 0;
+						tell("cpufreq: governor stopped controlling domain %u after a rejected request\n", domain);
+					}
+				}
+			} else {
+				lower_samples[domain] = 0;
+			}
+		}
+	}
+}
+
+void
+hakios_cpufreq_set_screen_on(uint32_t on)
+{
+	os_atomic_store(&cpufreq_screen_on, on != 0, release);
+	if (!os_atomic_load(&cpufreq_initialized, acquire)) {
+		return;
+	}
+	bool screen_on = on != 0;
+
+	for (uint32_t domain = 0; domain < EPSS_DOMAINS; domain++) {
+		if (cpufreq_cores[domain] == 0) continue;
+		uint32_t requested = os_atomic_load(&cpufreq_requested[domain], relaxed);
+		uint32_t effective = effective_index(domain, requested, screen_on);
+
+		if (effective != os_atomic_load(&cpufreq_selected[domain], relaxed) &&
+		    !set_domain_target(domain, requested, cpufreq_cores[domain], false)) {
+			cpufreq_cores[domain] = 0;
+			tell("cpufreq: screen transition stopped controlling domain %u after a rejected request\n", domain);
+		}
+	}
 }
 
 /*
@@ -434,6 +752,7 @@ ddr_slots(void)
 static vm_offset_t ddr_rsc;
 static uint32_t ddr_mc0, ddr_sh0, ddr_acv;
 static bool ddr_voted;
+static bool ddr_lpm_ready;
 
 static uint32_t
 cmd_db_address(const char *name)
@@ -507,6 +826,84 @@ ddr_rpmh_write(const uint32_t *address, const uint32_t *data, unsigned count)
 }
 
 static bool
+ddr_rpmh_find_slots(uint32_t first_tcs, uint32_t *selected_tcs, uint32_t *first_command)
+{
+	for (uint32_t tcs = first_tcs; tcs < first_tcs + 3; tcs++) {
+		vm_offset_t slot = ddr_rsc + RSC_TCS(tcs, 0);
+		uint32_t enabled, idle;
+
+		for (uint32_t retry = 0; retry < 200; retry++) {
+			idle = *(volatile uint32_t *)(slot + 0x18);
+			if (idle & 1u) break;
+			delay_for_interval(100, NSEC_PER_USEC);
+		}
+		if (!(idle & 1u)) continue;
+		enabled = *(volatile uint32_t *)(slot + 0x1c);
+		for (uint32_t command = 0; command <= RSC_CMDS - 3; command++) {
+			uint32_t mask = 7u << command;
+
+			if ((enabled & mask) == 0) {
+				*selected_tcs = tcs;
+				*first_command = command;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static bool
+ddr_rpmh_write_lpm_set(uint32_t tcs, uint32_t command, const uint32_t address[3],
+    const uint32_t data[3], bool wake)
+{
+	vm_offset_t slot = ddr_rsc + RSC_TCS(tcs, 0);
+	uint32_t enabled = *(volatile uint32_t *)(slot + 0x1c);
+	uint32_t command_mask = 7u << command;
+	uint32_t msgid = 8u | (1u << 16) | (wake ? 1u << 8 : 0);
+
+	if ((enabled & command_mask) != 0 || !(*(volatile uint32_t *)(slot + 0x18) & 1u)) {
+		return false;
+	}
+	for (uint32_t i = 0; i < 3; i++) {
+		vm_offset_t cmd = slot + 0x30 + 20 * (command + i);
+
+		*(volatile uint32_t *)(cmd + 0x00) = msgid;
+		*(volatile uint32_t *)(cmd + 0x04) = address[i];
+		*(volatile uint32_t *)(cmd + 0x08) = data[i];
+	}
+	*(volatile uint32_t *)(slot + 0x1c) = enabled | command_mask;
+	__asm__ volatile ("dsb sy" ::: "memory");
+	return true;
+}
+
+static bool
+ddr_rpmh_prepare_lpm(uint32_t vote)
+{
+	uint32_t sleep_tcs, sleep_command, wake_tcs, wake_command;
+	uint32_t address[3] = { ddr_mc0, ddr_sh0, ddr_acv };
+	uint32_t sleep_data[3] = { BCM_VOTE(DDR_REST, DDR_REST), BCM_VOTE(DDR_REST, DDR_REST), BCM_COMMIT };
+	uint32_t wake_data[3] = { BCM_VOTE(vote, vote), BCM_VOTE(vote, vote), BCM_VOTE(0, BCM_ACV_APPS) };
+
+	if (!ddr_voted || ddr_rsc == 0 || ddr_mc0 == 0 || ddr_sh0 == 0 || ddr_acv == 0 ||
+	    !ddr_rpmh_find_slots(2, &sleep_tcs, &sleep_command) ||
+	    !ddr_rpmh_find_slots(5, &wake_tcs, &wake_command)) {
+		return false;
+	}
+	if (!ddr_rpmh_write_lpm_set(wake_tcs, wake_command, address, wake_data, true) ||
+	    !ddr_rpmh_write_lpm_set(sleep_tcs, sleep_command, address, sleep_data, false)) {
+		return false;
+	}
+	tell("ddr: RPMh idle votes installed on sleep TCS %u and wake TCS %u\n", sleep_tcs, wake_tcs);
+	return true;
+}
+
+bool
+hakios_ddr_lpm_ready(void)
+{
+	return ddr_lpm_ready;
+}
+
+static bool
 ddr_vote(uint32_t vote)
 {
 	uint32_t address[3] = { ddr_mc0, ddr_sh0, ddr_acv };
@@ -530,6 +927,12 @@ ddr_raise(void)
 	}
 	ddr_rsc = ml_io_map(RSC_PHYS, RSC_SIZE);
 	ddr_voted = ddr_vote(vote);
+	if (ddr_voted) {
+		ddr_lpm_ready = ddr_rpmh_prepare_lpm(vote);
+		if (!ddr_lpm_ready) {
+			tell("ddr: RPMh sleep/wake slots unavailable; LLCC-off idle state stays disabled\n");
+		}
+	}
 	tell("ddr: memory bandwidth vote %u on MC0 (%#x) and SH0 (%#x)%s\n", vote, ddr_mc0, ddr_sh0, ddr_voted ? "" : ": FAILED");
 }
 
@@ -558,36 +961,71 @@ void
 hakios_cpufreq_init(void)
 {
 	const ml_topology_info_t *topology = ml_get_topology_info();
-	uint32_t enabled = 0, cores[EPSS_DOMAINS] = { 0 }, before, here;
+	uint32_t enabled = 0, membench = 0, before, here;
+	bool munch = munch_platform();
+	thread_t policy_thread;
 
 	load_start();
 	enabled = 2;
 	PE_parse_boot_argn("ddr", &enabled, sizeof(enabled));
-	if (enabled == 1) {
+	if (munch && enabled == 1) {
 		ddr_look();
 		ddr_slots();
-	} else if (enabled == 2 && cpufreq_wanted()) {
+	} else if (munch && enabled == 2 && cpufreq_wanted()) {
 		ddr_raise();
 	}
 	enabled = 0;
 	if (!PE_parse_boot_argn("cpufreq", &enabled, sizeof(enabled)) || !enabled) {
 		return;
 	}
+	if (!munch) {
+		tell("cpufreq: cpufreq=%u requested, but this kernel only has the Munch EPSS profile; no CPU registers changed\n",
+		    enabled);
+		return;
+	}
+	if (enabled != 1 && enabled != 2) {
+		tell("cpufreq: unsupported mode %u (use 1 for max or 2 for load-based scaling)\n", enabled);
+		return;
+	}
+	cpufreq_mode = enabled;
 	for (unsigned int i = 0; i < topology->num_cpus; i++) {
-		cores[domain_of(topology->cpus[i].phys_id)]++;
+		uint32_t domain = domain_of(topology->cpus[i].phys_id);
+
+		if (domain < EPSS_DOMAINS) {
+			cpufreq_cores[domain]++;
+		} else {
+			tell("cpufreq: ignoring unknown MPIDR %#x\n", topology->cpus[i].phys_id);
+		}
 	}
 	/* (whichever core this thread happens to be on, and stays on or not: it only goes to the log) */
 	here = (uint32_t)(__builtin_arm_rsr64("MPIDR_EL1") >> 8) & 0xff;
 	before = loop_speed();
 	for (uint32_t domain = 0; domain < EPSS_DOMAINS; domain++) {
-		if (cores[domain] != 0) {
-			raise_domain(domain, cores[domain]);
+		if (cpufreq_cores[domain] == 0) {
+			continue;
+		}
+		uint32_t initial = enabled == 1 ? frequency_count(domain) - 1 :
+		    frequency_count(domain) / 2;
+		if (!set_domain_target(domain, initial, cpufreq_cores[domain], true)) {
+			cpufreq_cores[domain] = 0;
 		}
 	}
+	os_atomic_store(&cpufreq_initialized, true, release);
+	if (kernel_thread_start(cpufreq_policy_thread, NULL, &policy_thread) == KERN_SUCCESS) {
+		thread_deallocate(policy_thread);
+		tell("cpufreq: %s policy started (%u ms samples, screen-off caps enabled)\n",
+		    enabled == 1 ? "maximum" : "schedutil-inspired", CPUFREQ_SAMPLE_MS);
+	} else {
+		tell("cpufreq: policy thread unavailable; retaining conservative initial rows\n");
+	}
+	thread_t status_thread;
+	if (kernel_thread_start(cpufreq_status_thread, NULL, &status_thread) == KERN_SUCCESS) {
+		thread_deallocate(status_thread);
+	}
 	printf("cpufreq: on core %u a loop ran at %u, now at %u\n", here, before, loop_speed());
-	if (PE_parse_boot_argn("membench", &enabled, sizeof(enabled)) && enabled == 1) {
+	if (PE_parse_boot_argn("membench", &membench, sizeof(membench)) && membench == 1) {
 		memory_bench();
-	} else if (enabled == 2) {
+	} else if (membench == 2) {
 		thread_t thread;
 
 		if (kernel_thread_start(bench_all, NULL, &thread) == KERN_SUCCESS) {

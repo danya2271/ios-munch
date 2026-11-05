@@ -36,4 +36,4 @@ echo 'Reading the written image back for SHA-256 verification.'
 actual=$(dd if="$target" bs=4096 count=@SYSTEM_BLOCKS@ | sha256sum)
 actual=${actual%% *}
 [ "$actual" = "$expected_sha" ] || { echo 'READBACK FAILED. Do not boot the new image.' >&2; exit 1; }
-echo 'INSTALL AND READBACK PASSED. Use the matching munch-ios165-ramboot.img.'
+echo 'INSTALL AND READBACK PASSED. Boot the matching loader image from the package.'

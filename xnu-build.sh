@@ -6,9 +6,6 @@ if [ "${MUNCH_STAGE:-0}" = 1 ]; then
   if [ -n "${MUNCH_TOUCH_POLL_MS:-}" ]; then
     STAGE_ARGS+=(--touch-poll-ms "$MUNCH_TOUCH_POLL_MS")
   fi
-  if [ "${MUNCH_TE_STAGING:-0}" = 1 ]; then
-    STAGE_ARGS+=(--te-staging)
-  fi
   if ! python3 "$DARWIN_REDWOOD/devices/poco-f4/gpu/stage-kernel.py" "$XNU_SRC" "${STAGE_ARGS[@]}"; then
     echo "xnu-build: failed to stage Munch kernel sources" >&2
     exit 1

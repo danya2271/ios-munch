@@ -7,6 +7,18 @@
 #include <arm/caches_internal.h>
 #include <arm/pmap.h>
 
+int
+pmap_cs_configuration(void)
+{
+	return 0;
+}
+
+bool
+pmap_has_iofilter_protected_write(void)
+{
+	return false;
+}
+
 /* No PPL / secure monitor to switch on. */
 void
 ml_enable_monitor(void)

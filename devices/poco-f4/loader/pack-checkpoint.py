@@ -131,9 +131,11 @@ def startup_checkpoint_kernel(original, checkpoint):
     return bytes(patched)
 
 
-def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_config=None, touch=False, cpus=1, native_gpu_config=None):
+def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_config=None, touch=False, cpus=1, native_gpu_config=None, sde_probe=False):
     if cpus not in (1, 8) or (cpus != 1 and checkpoint != 58):
         raise ValueError('Eight-core mode is supported only for the iOS profile')
+    if type(sde_probe) is not bool:
+        raise ValueError('SDE probe option must be boolean')
     if touch and (checkpoint != 58 or not no_early_bootargs):
         raise ValueError('Touch prototype requires iOS mode and the tested return overlay')
     if checkpoint not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 21, 31, 32, 34, 35, 40, 41, 50, 51, 52, 53, 54, 55, 56, 57, 58):
@@ -153,6 +155,8 @@ def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_c
         source_report = Path(native['source_report']['path']).read_bytes()
         if hashlib.sha256(source_report).hexdigest() != native['source_report']['sha256']:
             raise ValueError('Native source report hash mismatch')
+    if sde_probe and (native is None or native.get('profile') != 'munch-a650-ios-gpu'):
+        raise ValueError('SDE probe requires the native iOS GPU profile')
     else:
         kernel = (root / 'prebuilt/mach.development.bcm2837').read_bytes()
     sha = lambda data: hashlib.sha256(data).hexdigest()
@@ -227,14 +231,15 @@ def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_c
                 sync = native.get('sync_frame_clock', False)
                 if hz not in (60, 120) or seconds not in (0, 600) or type(sync) is not bool:
                     raise ValueError('Unsupported compositor/session profile')
-                extra = ('fb_hz=120 ' if hz == 120 else '') + ('ca_vbl=1 glwait=1 ' if sync else '')
+                extra = (('fb_hz=120 ' if hz == 120 else '') +
+                         ('ca_vbl=1 glwait=1 ' if sync else '') +
+                         ('munch_sde_probe=1 ' if sde_probe else ''))
                 verbose = native.get('verbose_console', False)
                 if type(verbose) is not bool:
                     raise ValueError('verbose_console must be boolean')
                 te = native.get('display_te', False)
-                if type(te) is not bool or (te and not json.loads(source_report).get('display_te_staging')):
-                    raise ValueError('TE requires the reviewed staging kernel')
-                extra += 'munch_te=1 ' if te else ''
+                if type(te) is not bool or te:
+                    raise ValueError('TE framebuffer staging was removed after device testing')
                 cmdline = (f'cpus=8 small_cores_after=0 munch_touch=1 gpu=1 adreno_speed={speed} '
                            + extra + f'loader_return_after={seconds}')
                 if verbose:
@@ -386,7 +391,8 @@ def pack(fd_path, dtb_path, output, checkpoint=1, no_early_bootargs=False, ios_c
                   'bootshim_revision': 2, 'shim_source_sha256': sha((uefi / 'bootshim.S').read_bytes()), 'dtb_sha256': sha(dtb_path.read_bytes()),
                   'ramroot_sha256': sha(hello) if hello is not None else None,
                   'contains_xnu': True, 'contains_ios': ios is not None, 'identity': 'local-ipsw' if ios is not None else 'placeholder',
-                  'device_tested': False, 'touch_prototype': touch_report, 'native_gpu': native}
+                  'device_tested': False, 'touch_prototype': touch_report,
+                  'sde_probe': sde_probe, 'native_gpu': native}
         output.with_suffix(output.suffix + '.json').write_text(json.dumps(report, indent=2) + '\n')
         print(f'Built XNU checkpoint-{checkpoint} probe: {output}')
 
@@ -403,5 +409,8 @@ if __name__ == '__main__':
     parser.add_argument('--cpus', type=int, choices=[1, 8], default=1, help='iOS only: request all eight CPUs through the existing PSCI path; disable verbose framebuffer console')
     parser.add_argument('--touch', action='store_true', help='Experimental ABI-pinned FT3658U driver with verified UEFI power handoff')
     parser.add_argument('--native-gpu-config', type=Path, help='Source-built A650 diagnostic or iOS GPU kernel manifest')
+    parser.add_argument('--sde-probe', action='store_true', help='Log a read-only Kona SDE snapshot in the native iOS GPU profile')
     args = parser.parse_args()
-    pack(args.fd.resolve(), args.dtb.resolve(), args.output.resolve(), args.checkpoint, args.no_early_bootargs, args.ios_config, args.touch, args.cpus, args.native_gpu_config)
+    pack(args.fd.resolve(), args.dtb.resolve(), args.output.resolve(), args.checkpoint,
+         args.no_early_bootargs, args.ios_config, args.touch, args.cpus,
+         args.native_gpu_config, args.sde_probe)

@@ -23,118 +23,269 @@ OSDefineMetaClassAndStructors(IODataQueueDispatchSource, IODispatchSource);
 OSDefineMetaClassAndStructors(IOInterruptDispatchSource, IODispatchSource);
 OSDefineMetaClassAndStructors(IOServiceNotificationDispatchSource, IODispatchSource);
 OSDefineMetaClassAndStructors(IOServiceStateNotificationDispatchSource, IODispatchSource);
+OSDefineMetaClassAndStructors(OSAction_IOUserClient_KernelCompletion, OSAction);
 
-/* wrappers forwarded straight to their kernel implementation */
 __asm__(".text\n.globl __ZN11IOEventLink16SetEventlinkPortEP8ipc_portPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN11IOEventLink16SetEventlinkPortEP8ipc_portPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN11IOEventLink21SetEventlinkPort_ImplEP8ipc_port\n");
+__asm__(".text\n.globl __ZN11IOMemoryMap10_CopyStateEP24_IOMemoryMapPrivateStatePFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN11IOMemoryMap10_CopyStateEP24_IOMemoryMapPrivateStatePFiP15OSMetaClassBase5IORPCE:\n\tb __ZN11IOMemoryMap15_CopyState_ImplEP24_IOMemoryMapPrivateState\n");
 __asm__(".text\n.globl __ZN11IOWorkGroup16SetWorkGroupPortEP8ipc_portPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN11IOWorkGroup16SetWorkGroupPortEP8ipc_portPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN11IOWorkGroup21SetWorkGroupPort_ImplEP8ipc_port\n");
 __asm__(".text\n.globl __ZN12IODMACommand11CompleteDMAEyPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN12IODMACommand11CompleteDMAEyPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN12IODMACommand16CompleteDMA_ImplEy\n");
+__asm__(".text\n.globl __ZN12IODMACommand13PrepareForDMAEyP18IOMemoryDescriptoryyPyPjP16IOAddressSegmentPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN12IODMACommand13PrepareForDMAEyP18IOMemoryDescriptoryyPyPjP16IOAddressSegmentPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN12IODMACommand18PrepareForDMA_ImplEyP18IOMemoryDescriptoryyPyPjP16IOAddressSegment\n");
+__asm__(".text\n.globl __ZN12IODMACommand14GetPreparationEPyS0_PP18IOMemoryDescriptorPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN12IODMACommand14GetPreparationEPyS0_PP18IOMemoryDescriptorPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN12IODMACommand19GetPreparation_ImplEPyS0_PP18IOMemoryDescriptor\n");
+__asm__(".text\n.globl __ZN12IODMACommand16PerformOperationEyyyyP18IOMemoryDescriptorPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN12IODMACommand16PerformOperationEyyyyP18IOMemoryDescriptorPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN12IODMACommand21PerformOperation_ImplEyyyyP18IOMemoryDescriptor\n");
 __asm__(".text\n.globl __ZN12IOUserClient15_ExternalMethodEyPKyjP6OSDataP18IOMemoryDescriptorPyPjyPS3_S5_P8OSActionPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN12IOUserClient15_ExternalMethodEyPKyjP6OSDataP18IOMemoryDescriptorPyPjyPS3_S5_P8OSActionPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN12IOUserClient20_ExternalMethod_ImplEyPKyjP6OSDataP18IOMemoryDescriptorPyPjyPS3_S5_P8OSAction\n");
+__asm__(".text\n.globl __ZN12IOUserClient32CreateMemoryDescriptorFromClientEyjPK16IOAddressSegmentPP18IOMemoryDescriptorPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN12IOUserClient32CreateMemoryDescriptorFromClientEyjPK16IOAddressSegmentPP18IOMemoryDescriptorPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN12IOUserClient37CreateMemoryDescriptorFromClient_ImplEyjPK16IOAddressSegmentPP18IOMemoryDescriptor\n");
 __asm__(".text\n.globl __ZN12IOUserServer10LoadModuleEPKcPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN12IOUserServer10LoadModuleEPKcPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN12IOUserServer15LoadModule_ImplEPKc\n");
 __asm__(".text\n.globl __ZN12IOUserServer4ExitEPKcPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN12IOUserServer4ExitEPKcPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN12IOUserServer9Exit_ImplEPKc\n");
+__asm__(".text\n.globl __ZN15IODispatchQueue7SetPortEP8ipc_portPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN15IODispatchQueue7SetPortEP8ipc_portPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN15IODispatchQueue12SetPort_ImplEP8ipc_port\n");
+__asm__(".text\n.globl __ZN16IODispatchSource9SetEnableEbPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN16IODispatchSource9SetEnableEbPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN16IODispatchSource14SetEnable_ImplEb\n");
+__asm__(".text\n.globl __ZN18IOMemoryDescriptor10_CopyStateEP17_IOMDPrivateStatePFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN18IOMemoryDescriptor10_CopyStateEP17_IOMDPrivateStatePFiP15OSMetaClassBase5IORPCE:\n\tb __ZN18IOMemoryDescriptor15_CopyState_ImplEP17_IOMDPrivateState\n");
+__asm__(".text\n.globl __ZN18IOMemoryDescriptor13CreateMappingEyyyyyPP11IOMemoryMapPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN18IOMemoryDescriptor13CreateMappingEyyyyyPP11IOMemoryMapPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN18IOMemoryDescriptor18CreateMapping_ImplEyyyyyPP11IOMemoryMap\n");
+__asm__(".text\n.globl __ZN24IOBufferMemoryDescriptor9SetLengthEyPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN24IOBufferMemoryDescriptor9SetLengthEyPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN24IOBufferMemoryDescriptor14SetLength_ImplEy\n");
+__asm__(".text\n.globl __ZN25IODataQueueDispatchSource10CopyMemoryEPP18IOMemoryDescriptorPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN25IODataQueueDispatchSource10CopyMemoryEPP18IOMemoryDescriptorPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN25IODataQueueDispatchSource15CopyMemory_ImplEPP18IOMemoryDescriptor\n");
+__asm__(".text\n.globl __ZN25IODataQueueDispatchSource22SetDataServicedHandlerEP8OSActionPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN25IODataQueueDispatchSource22SetDataServicedHandlerEP8OSActionPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN25IODataQueueDispatchSource27SetDataServicedHandler_ImplEP8OSAction\n");
 __asm__(".text\n.globl __ZN25IODataQueueDispatchSource23CopyDataServicedHandlerEPP8OSActionPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN25IODataQueueDispatchSource23CopyDataServicedHandlerEPP8OSActionPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN25IODataQueueDispatchSource28CopyDataServicedHandler_ImplEPP8OSAction\n");
+__asm__(".text\n.globl __ZN25IODataQueueDispatchSource23SetDataAvailableHandlerEP8OSActionPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN25IODataQueueDispatchSource23SetDataAvailableHandlerEP8OSActionPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN25IODataQueueDispatchSource28SetDataAvailableHandler_ImplEP8OSAction\n");
 __asm__(".text\n.globl __ZN25IODataQueueDispatchSource24CopyDataAvailableHandlerEPP8OSActionPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN25IODataQueueDispatchSource24CopyDataAvailableHandlerEPP8OSActionPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN25IODataQueueDispatchSource29CopyDataAvailableHandler_ImplEPP8OSAction\n");
+__asm__(".text\n.globl __ZN35IOServiceNotificationDispatchSource10SetHandlerEP8OSActionPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN35IOServiceNotificationDispatchSource10SetHandlerEP8OSActionPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN35IOServiceNotificationDispatchSource15SetHandler_ImplEP8OSAction\n");
+__asm__(".text\n.globl __ZN35IOServiceNotificationDispatchSource20CopyNextNotificationEPyPP9IOServiceS0_PFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN35IOServiceNotificationDispatchSource20CopyNextNotificationEPyPP9IOServiceS0_PFiP15OSMetaClassBase5IORPCE:\n\tb __ZN35IOServiceNotificationDispatchSource25CopyNextNotification_ImplEPyPP9IOServiceS0_\n");
 __asm__(".text\n.globl __ZN8OSAction7AbortedEPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN8OSAction7AbortedEPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN8OSAction12Aborted_ImplEv\n");
+__asm__(".text\n.globl __ZN9IOService10AdjustBusyEiPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService10AdjustBusyEiPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService15AdjustBusy_ImplEi\n");
 __asm__(".text\n.globl __ZN9IOService10Stop_asyncEPS_PFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService10Stop_asyncEPS_PFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService15Stop_async_ImplEPS_\n");
+__asm__(".text\n.globl __ZN9IOService12GetBusyStateEPjPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService12GetBusyStateEPjPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService17GetBusyState_ImplEPj\n");
 __asm__(".text\n.globl __ZN9IOService12UpdateReportEP6OSDatajPjyyP18IOMemoryDescriptorPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService12UpdateReportEP6OSDatajPjyyP18IOMemoryDescriptorPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService17UpdateReport_ImplEP6OSDatajPjyyP18IOMemoryDescriptor\n");
 __asm__(".text\n.globl __ZN9IOService13ClientCrashedEPS_yPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService13ClientCrashedEPS_yPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService18ClientCrashed_ImplEPS_y\n");
+__asm__(".text\n.globl __ZN9IOService13NewUserClientEjPP12IOUserClientPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService13NewUserClientEjPP12IOUserClientPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService18NewUserClient_ImplEjPP12IOUserClient\n");
 __asm__(".text\n.globl __ZN9IOService13SetPowerStateEjPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService13SetPowerStateEjPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService18SetPowerState_ImplEj\n");
+__asm__(".text\n.globl __ZN9IOService13SetPropertiesEP12OSDictionaryPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService13SetPropertiesEP12OSDictionaryPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService18SetProperties_ImplEP12OSDictionary\n");
+__asm__(".text\n.globl __ZN9IOService14CopyPropertiesEPP12OSDictionaryPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService14CopyPropertiesEPP12OSDictionaryPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService19CopyProperties_ImplEPP12OSDictionary\n");
+__asm__(".text\n.globl __ZN9IOService14RemovePropertyEP8OSStringPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService14RemovePropertyEP8OSStringPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService19RemoveProperty_ImplEP8OSString\n");
+__asm__(".text\n.globl __ZN9IOService14SearchPropertyEPKcS1_yPP8OSObjectPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService14SearchPropertyEPKcS1_yPP8OSObjectPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService19SearchProperty_ImplEPKcS1_yPP8OSObject\n");
 __asm__(".text\n.globl __ZN9IOService14_NewUserClientEjP12OSDictionaryPP12IOUserClientPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService14_NewUserClientEjP12OSDictionaryPP12IOUserClientPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService19_NewUserClient_ImplEjP12OSDictionaryPP12IOUserClient\n");
 __asm__(".text\n.globl __ZN9IOService15ConfigureReportEP6OSDatajPjPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService15ConfigureReportEP6OSDatajPjPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService20ConfigureReport_ImplEP6OSDatajPj\n");
+__asm__(".text\n.globl __ZN9IOService15RegisterServiceEPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService15RegisterServiceEPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService20RegisterService_ImplEv\n");
+__asm__(".text\n.globl __ZN9IOService16ChangePowerStateEjPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService16ChangePowerStateEjPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService21ChangePowerState_ImplEj\n");
+__asm__(".text\n.globl __ZN9IOService16StringFromReturnEiPP8OSStringPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService16StringFromReturnEiPP8OSStringPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService21StringFromReturn_ImplEiPP8OSString\n");
 __asm__(".text\n.globl __ZN9IOService17UserSetPropertiesEP8OSObjectPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService17UserSetPropertiesEP8OSObjectPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService22UserSetProperties_ImplEP8OSObject\n");
+__asm__(".text\n.globl __ZN9IOService18GetRegistryEntryIDEPyPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService18GetRegistryEntryIDEPyPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService23GetRegistryEntryID_ImplEPy\n");
+__asm__(".text\n.globl __ZN9IOService18RequireMaxBusStallEyPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService18RequireMaxBusStallEyPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService23RequireMaxBusStall_ImplEy\n");
+__asm__(".text\n.globl __ZN9IOService22CopyProviderPropertiesEP7OSArrayPS1_PFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService22CopyProviderPropertiesEP7OSArrayPS1_PFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService27CopyProviderProperties_ImplEP7OSArrayPS1_\n");
+__asm__(".text\n.globl __ZN9IOService22CoreAnalyticsSendEventEyP8OSStringP12OSDictionaryPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService22CoreAnalyticsSendEventEyP8OSStringP12OSDictionaryPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService27CoreAnalyticsSendEvent_ImplEyP8OSStringP12OSDictionary\n");
 __asm__(".text\n.globl __ZN9IOService24StateNotificationItemSetEP8OSStringP12OSDictionaryPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService24StateNotificationItemSetEP8OSStringP12OSDictionaryPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService29StateNotificationItemSet_ImplEP8OSStringP12OSDictionary\n");
 __asm__(".text\n.globl __ZN9IOService25StateNotificationItemCopyEP8OSStringPP12OSDictionaryPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService25StateNotificationItemCopyEP8OSStringPP12OSDictionaryPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService30StateNotificationItemCopy_ImplEP8OSStringPP12OSDictionary\n");
 __asm__(".text\n.globl __ZN9IOService27StateNotificationItemCreateEP8OSStringP12OSDictionaryPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService27StateNotificationItemCreateEP8OSStringP12OSDictionaryPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService32StateNotificationItemCreate_ImplEP8OSStringP12OSDictionary\n");
+__asm__(".text\n.globl __ZN9IOService34CopySystemStateNotificationServiceEPPS_PFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService34CopySystemStateNotificationServiceEPPS_PFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService39CopySystemStateNotificationService_ImplEPPS_\n");
 __asm__(".text\n.globl __ZN9IOService4StopEPS_PFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService4StopEPS_PFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService9Stop_ImplEPS_\n");
 __asm__(".text\n.globl __ZN9IOService5StartEPS_PFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService5StartEPS_PFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService10Start_ImplEPS_\n");
+__asm__(".text\n.globl __ZN9IOService6CreateEPS_PKcPS0_PFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService6CreateEPS_PKcPS0_PFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService11Create_ImplEPS_PKcPS0_\n");
+__asm__(".text\n.globl __ZN9IOService7SetNameEPKcPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService7SetNameEPKcPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService12SetName_ImplEPKc\n");
+__asm__(".text\n.globl __ZN9IOService8CopyNameEPP8OSStringPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService8CopyNameEPP8OSStringPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService13CopyName_ImplEPP8OSString\n");
+__asm__(".text\n.globl __ZN9IOService9TerminateEyPFiP15OSMetaClassBase5IORPCE\n.p2align 2\n__ZN9IOService9TerminateEyPFiP15OSMetaClassBase5IORPCE:\n\tb __ZN9IOService14Terminate_ImplEy\n");
 
-/* everything else (RPC dispatch, user-space-only methods) is not available */
 extern "C" {
 kern_return_t __iig_stub_0(void) __asm__("__ZN11IOEventLink8DispatchE5IORPC");
 kern_return_t __iig_stub_0(void) { return kIOReturnUnsupported; }
 kern_return_t __iig_stub_1(void) __asm__("__ZN11IOEventLink9MetaClass8DispatchE5IORPC");
 kern_return_t __iig_stub_1(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_2(void) __asm__("__ZN11IOMemoryMap8DispatchE5IORPC");
+kern_return_t __iig_stub_2(void) __asm__("__ZN11IOMemoryMap17_CopyState_InvokeE5IORPCP15OSMetaClassBasePFiS2_P24_IOMemoryMapPrivateStateE");
 kern_return_t __iig_stub_2(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_3(void) __asm__("__ZN11IOMemoryMap9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_3(void) __asm__("__ZN11IOMemoryMap8DispatchE5IORPC");
 kern_return_t __iig_stub_3(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_4(void) __asm__("__ZN11IOWorkGroup8DispatchE5IORPC");
+kern_return_t __iig_stub_4(void) __asm__("__ZN11IOMemoryMap9MetaClass8DispatchE5IORPC");
 kern_return_t __iig_stub_4(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_5(void) __asm__("__ZN11IOWorkGroup9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_5(void) __asm__("__ZN11IOWorkGroup8DispatchE5IORPC");
 kern_return_t __iig_stub_5(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_6(void) __asm__("__ZN12IODMACommand8DispatchE5IORPC");
+kern_return_t __iig_stub_6(void) __asm__("__ZN11IOWorkGroup9MetaClass8DispatchE5IORPC");
 kern_return_t __iig_stub_6(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_7(void) __asm__("__ZN12IODMACommand9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_7(void) __asm__("__ZN12IODMACommand8DispatchE5IORPC");
 kern_return_t __iig_stub_7(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_8(void) __asm__("__ZN12IOUserClient23CopyClientMemoryForTypeEyPyPP18IOMemoryDescriptorPFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_8(void) __asm__("__ZN12IODMACommand9MetaClass8DispatchE5IORPC");
 kern_return_t __iig_stub_8(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_9(void) __asm__("__ZN12IOUserClient28CreateActionKernelCompletionEmPP8OSAction");
+kern_return_t __iig_stub_9(void) __asm__("__ZN12IOUserClient15AsyncCompletionEP8OSActioniPKyjPFiP15OSMetaClassBase5IORPCE");
 kern_return_t __iig_stub_9(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_10(void) __asm__("__ZN12IOUserClient8DispatchE5IORPC");
+kern_return_t __iig_stub_10(void) __asm__("__ZN12IOUserClient22AsyncCompletion_InvokeE5IORPCP15OSMetaClassBasePFvS2_P8OSActioniPKyjE");
 kern_return_t __iig_stub_10(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_11(void) __asm__("__ZN12IOUserClient9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_11(void) __asm__("__ZN12IOUserClient22AsyncCompletion_InvokeE5IORPCP15OSMetaClassBasePFvS2_P8OSActioniPKyjEPK11OSMetaClass");
 kern_return_t __iig_stub_11(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_12(void) __asm__("__ZN12IOUserServer8DispatchE5IORPC");
+kern_return_t __iig_stub_12(void) __asm__("__ZN12IOUserClient22_ExternalMethod_InvokeE5IORPCP15OSMetaClassBasePFiS2_yPKyjP6OSDataP18IOMemoryDescriptorPyPjyPS6_S8_P8OSActionE");
 kern_return_t __iig_stub_12(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_13(void) __asm__("__ZN12IOUserServer9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_13(void) __asm__("__ZN12IOUserClient23CopyClientMemoryForTypeEyPyPP18IOMemoryDescriptorPFiP15OSMetaClassBase5IORPCE");
 kern_return_t __iig_stub_13(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_14(void) __asm__("__ZN15IODispatchQueue8DispatchE5IORPC");
+kern_return_t __iig_stub_14(void) __asm__("__ZN12IOUserClient28CreateActionKernelCompletionEmPP8OSAction");
 kern_return_t __iig_stub_14(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_15(void) __asm__("__ZN15IODispatchQueue9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_15(void) __asm__("__ZN12IOUserClient30CopyClientMemoryForType_InvokeE5IORPCP15OSMetaClassBasePFiS2_yPyPP18IOMemoryDescriptorE");
 kern_return_t __iig_stub_15(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_16(void) __asm__("__ZN16IODispatchSource23SetEnableWithCompletionEbU13block_pointerFvvEPFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_16(void) __asm__("__ZN12IOUserClient8DispatchE5IORPC");
 kern_return_t __iig_stub_16(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_17(void) __asm__("__ZN16IODispatchSource8DispatchE5IORPC");
+kern_return_t __iig_stub_17(void) __asm__("__ZN12IOUserClient9MetaClass8DispatchE5IORPC");
 kern_return_t __iig_stub_17(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_18(void) __asm__("__ZN16IODispatchSource9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_18(void) __asm__("__ZN12IOUserServer11Exit_InvokeE5IORPCP15OSMetaClassBasePFiS2_PKcE");
 kern_return_t __iig_stub_18(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_19(void) __asm__("__ZN18IOMemoryDescriptor8DispatchE5IORPC");
+kern_return_t __iig_stub_19(void) __asm__("__ZN12IOUserServer13Create_InvokeE5IORPCPFiPKcyyP8OSStringPPS_E");
 kern_return_t __iig_stub_19(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_20(void) __asm__("__ZN18IOMemoryDescriptor9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_20(void) __asm__("__ZN12IOUserServer17LoadModule_InvokeE5IORPCP15OSMetaClassBasePFiS2_PKcE");
 kern_return_t __iig_stub_20(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_21(void) __asm__("__ZN24IOBufferMemoryDescriptor8DispatchE5IORPC");
+kern_return_t __iig_stub_21(void) __asm__("__ZN12IOUserServer8DispatchE5IORPC");
 kern_return_t __iig_stub_21(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_22(void) __asm__("__ZN24IOBufferMemoryDescriptor9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_22(void) __asm__("__ZN12IOUserServer9MetaClass8DispatchE5IORPC");
 kern_return_t __iig_stub_22(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_23(void) __asm__("__ZN25IODataQueueDispatchSource12DataServicedEP8OSActionPFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_23(void) __asm__("__ZN15IODispatchQueue13Create_InvokeE5IORPCPFiPKcyyPPS_E");
 kern_return_t __iig_stub_23(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_24(void) __asm__("__ZN25IODataQueueDispatchSource13DataAvailableEP8OSActionPFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_24(void) __asm__("__ZN15IODispatchQueue14SetPort_InvokeE5IORPCP15OSMetaClassBasePFiS2_P8ipc_portE");
 kern_return_t __iig_stub_24(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_25(void) __asm__("__ZN25IODataQueueDispatchSource6CreateEyP15IODispatchQueuePPS_");
+kern_return_t __iig_stub_25(void) __asm__("__ZN15IODispatchQueue8DispatchE5IORPC");
 kern_return_t __iig_stub_25(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_26(void) __asm__("__ZN25IODataQueueDispatchSource8DispatchE5IORPC");
+kern_return_t __iig_stub_26(void) __asm__("__ZN15IODispatchQueue9MetaClass8DispatchE5IORPC");
 kern_return_t __iig_stub_26(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_27(void) __asm__("__ZN25IODataQueueDispatchSource9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_27(void) __asm__("__ZN16IODispatchSource12CheckForWorkEbPFiP15OSMetaClassBase5IORPCE");
 kern_return_t __iig_stub_27(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_28(void) __asm__("__ZN25IOInterruptDispatchSource17InterruptOccurredE5IORPCP8OSActionyyPFiP15OSMetaClassBaseS0_E");
+kern_return_t __iig_stub_28(void) __asm__("__ZN16IODispatchSource13Cancel_InvokeE5IORPCP15OSMetaClassBasePFiS2_U13block_pointerFvvEE");
 kern_return_t __iig_stub_28(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_29(void) __asm__("__ZN25IOInterruptDispatchSource8DispatchE5IORPC");
+kern_return_t __iig_stub_29(void) __asm__("__ZN16IODispatchSource16SetEnable_InvokeE5IORPCP15OSMetaClassBasePFiS2_bE");
 kern_return_t __iig_stub_29(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_30(void) __asm__("__ZN25IOInterruptDispatchSource9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_30(void) __asm__("__ZN16IODispatchSource19CheckForWork_InvokeE5IORPCP15OSMetaClassBasePFiS2_S0_bE");
 kern_return_t __iig_stub_30(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_31(void) __asm__("__ZN35IOServiceNotificationDispatchSource24ServiceNotificationReadyEP8OSActionPFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_31(void) __asm__("__ZN16IODispatchSource23SetEnableWithCompletionEbU13block_pointerFvvEPFiP15OSMetaClassBase5IORPCE");
 kern_return_t __iig_stub_31(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_32(void) __asm__("__ZN35IOServiceNotificationDispatchSource8DispatchE5IORPC");
+kern_return_t __iig_stub_32(void) __asm__("__ZN16IODispatchSource30SetEnableWithCompletion_InvokeE5IORPCP15OSMetaClassBasePFiS2_bU13block_pointerFvvEE");
 kern_return_t __iig_stub_32(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_33(void) __asm__("__ZN35IOServiceNotificationDispatchSource9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_33(void) __asm__("__ZN16IODispatchSource6CancelEU13block_pointerFvvEPFiP15OSMetaClassBase5IORPCE");
 kern_return_t __iig_stub_33(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_34(void) __asm__("__ZN40IOServiceStateNotificationDispatchSource22StateNotificationReadyEP8OSActionPFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_34(void) __asm__("__ZN16IODispatchSource8DispatchE5IORPC");
 kern_return_t __iig_stub_34(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_35(void) __asm__("__ZN40IOServiceStateNotificationDispatchSource8DispatchE5IORPC");
+kern_return_t __iig_stub_35(void) __asm__("__ZN16IODispatchSource9MetaClass8DispatchE5IORPC");
 kern_return_t __iig_stub_35(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_36(void) __asm__("__ZN40IOServiceStateNotificationDispatchSource9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_36(void) __asm__("__ZN18IOMemoryDescriptor17_CopyState_InvokeE5IORPCP15OSMetaClassBasePFiS2_P17_IOMDPrivateStateE");
 kern_return_t __iig_stub_36(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_37(void) __asm__("__ZN8OSAction8DispatchE5IORPC");
+kern_return_t __iig_stub_37(void) __asm__("__ZN18IOMemoryDescriptor20CreateMapping_InvokeE5IORPCP15OSMetaClassBasePFiS2_yyyyyPP11IOMemoryMapE");
 kern_return_t __iig_stub_37(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_38(void) __asm__("__ZN8OSAction9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_38(void) __asm__("__ZN18IOMemoryDescriptor8DispatchE5IORPC");
 kern_return_t __iig_stub_38(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_39(void) __asm__("__ZN8OSObject17CopyDispatchQueueEPKcPP15IODispatchQueuePFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_39(void) __asm__("__ZN18IOMemoryDescriptor9MetaClass8DispatchE5IORPC");
 kern_return_t __iig_stub_39(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_40(void) __asm__("__ZN8OSObject8DispatchE5IORPC");
+kern_return_t __iig_stub_40(void) __asm__("__ZN24IOBufferMemoryDescriptor13Create_InvokeE5IORPCPFiyyyPPS_E");
 kern_return_t __iig_stub_40(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_41(void) __asm__("__ZN8OSObject9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_41(void) __asm__("__ZN24IOBufferMemoryDescriptor16SetLength_InvokeE5IORPCP15OSMetaClassBasePFiS2_yE");
 kern_return_t __iig_stub_41(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_42(void) __asm__("__ZN9IOService8DispatchE5IORPC");
+kern_return_t __iig_stub_42(void) __asm__("__ZN24IOBufferMemoryDescriptor8DispatchE5IORPC");
 kern_return_t __iig_stub_42(void) { return kIOReturnUnsupported; }
-kern_return_t __iig_stub_43(void) __asm__("__ZN9IOService9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_43(void) __asm__("__ZN24IOBufferMemoryDescriptor9MetaClass8DispatchE5IORPC");
 kern_return_t __iig_stub_43(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_44(void) __asm__("__ZN25IODataQueueDispatchSource12DataServicedEP8OSActionPFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_44(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_45(void) __asm__("__ZN25IODataQueueDispatchSource13Create_InvokeE5IORPCPFiyP15IODispatchQueuePPS_E");
+kern_return_t __iig_stub_45(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_46(void) __asm__("__ZN25IODataQueueDispatchSource13DataAvailableEP8OSActionPFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_46(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_47(void) __asm__("__ZN25IODataQueueDispatchSource17CopyMemory_InvokeE5IORPCP15OSMetaClassBasePFiS2_PP18IOMemoryDescriptorE");
+kern_return_t __iig_stub_47(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_48(void) __asm__("__ZN25IODataQueueDispatchSource19DataServiced_InvokeE5IORPCP15OSMetaClassBasePFvS2_P8OSActionE");
+kern_return_t __iig_stub_48(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_49(void) __asm__("__ZN25IODataQueueDispatchSource19DataServiced_InvokeE5IORPCP15OSMetaClassBasePFvS2_P8OSActionEPK11OSMetaClass");
+kern_return_t __iig_stub_49(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_50(void) __asm__("__ZN25IODataQueueDispatchSource20DataAvailable_InvokeE5IORPCP15OSMetaClassBasePFvS2_P8OSActionE");
+kern_return_t __iig_stub_50(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_51(void) __asm__("__ZN25IODataQueueDispatchSource20DataAvailable_InvokeE5IORPCP15OSMetaClassBasePFvS2_P8OSActionEPK11OSMetaClass");
+kern_return_t __iig_stub_51(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_52(void) __asm__("__ZN25IODataQueueDispatchSource29SetDataServicedHandler_InvokeE5IORPCP15OSMetaClassBasePFiS2_P8OSActionE");
+kern_return_t __iig_stub_52(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_53(void) __asm__("__ZN25IODataQueueDispatchSource30CopyDataServicedHandler_InvokeE5IORPCP15OSMetaClassBasePFiS2_PP8OSActionE");
+kern_return_t __iig_stub_53(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_54(void) __asm__("__ZN25IODataQueueDispatchSource30SetDataAvailableHandler_InvokeE5IORPCP15OSMetaClassBasePFiS2_P8OSActionE");
+kern_return_t __iig_stub_54(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_55(void) __asm__("__ZN25IODataQueueDispatchSource31CopyDataAvailableHandler_InvokeE5IORPCP15OSMetaClassBasePFiS2_PP8OSActionE");
+kern_return_t __iig_stub_55(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_56(void) __asm__("__ZN25IODataQueueDispatchSource6CreateEyP15IODispatchQueuePPS_");
+kern_return_t __iig_stub_56(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_57(void) __asm__("__ZN25IODataQueueDispatchSource8DispatchE5IORPC");
+kern_return_t __iig_stub_57(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_58(void) __asm__("__ZN25IODataQueueDispatchSource9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_58(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_59(void) __asm__("__ZN25IODataQueueDispatchSource9_DispatchEPS_5IORPC");
+kern_return_t __iig_stub_59(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_60(void) __asm__("__ZN25IOInterruptDispatchSource13Create_InvokeE5IORPCPFiP9IOServicejP15IODispatchQueuePPS_E");
+kern_return_t __iig_stub_60(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_61(void) __asm__("__ZN25IOInterruptDispatchSource17InterruptOccurredE5IORPCP8OSActionyyPFiP15OSMetaClassBaseS0_E");
+kern_return_t __iig_stub_61(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_62(void) __asm__("__ZN25IOInterruptDispatchSource17SetHandler_InvokeE5IORPCP15OSMetaClassBasePFiS2_P8OSActionE");
+kern_return_t __iig_stub_62(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_63(void) __asm__("__ZN25IOInterruptDispatchSource24InterruptOccurred_InvokeE5IORPCP15OSMetaClassBasePFvS2_P8OSActionyyE");
+kern_return_t __iig_stub_63(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_64(void) __asm__("__ZN25IOInterruptDispatchSource24InterruptOccurred_InvokeE5IORPCP15OSMetaClassBasePFvS2_P8OSActionyyEPK11OSMetaClass");
+kern_return_t __iig_stub_64(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_65(void) __asm__("__ZN25IOInterruptDispatchSource8DispatchE5IORPC");
+kern_return_t __iig_stub_65(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_66(void) __asm__("__ZN25IOInterruptDispatchSource9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_66(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_67(void) __asm__("__ZN35IOServiceNotificationDispatchSource24ServiceNotificationReadyEP8OSActionPFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_67(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_68(void) __asm__("__ZN35IOServiceNotificationDispatchSource8DispatchE5IORPC");
+kern_return_t __iig_stub_68(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_69(void) __asm__("__ZN35IOServiceNotificationDispatchSource9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_69(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_70(void) __asm__("__ZN38OSAction_IOUserClient_KernelCompletion8DispatchE5IORPC");
+kern_return_t __iig_stub_70(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_71(void) __asm__("__ZN38OSAction_IOUserClient_KernelCompletion9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_71(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_72(void) __asm__("__ZN40IOServiceStateNotificationDispatchSource22StateNotificationReadyEP8OSActionPFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_72(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_73(void) __asm__("__ZN40IOServiceStateNotificationDispatchSource8DispatchE5IORPC");
+kern_return_t __iig_stub_73(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_74(void) __asm__("__ZN40IOServiceStateNotificationDispatchSource9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_74(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_75(void) __asm__("__ZN8OSAction13Create_InvokeE5IORPCPFiP8OSObjectyymPPS_E");
+kern_return_t __iig_stub_75(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_76(void) __asm__("__ZN8OSAction8DispatchE5IORPC");
+kern_return_t __iig_stub_76(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_77(void) __asm__("__ZN8OSAction9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_77(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_78(void) __asm__("__ZN8OSAction9_DispatchEPS_5IORPC");
+kern_return_t __iig_stub_78(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_79(void) __asm__("__ZN8OSObject16SetDispatchQueueEPKcP15IODispatchQueuePFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_79(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_80(void) __asm__("__ZN8OSObject17CopyDispatchQueueEPKcPP15IODispatchQueuePFiP15OSMetaClassBase5IORPCE");
+kern_return_t __iig_stub_80(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_81(void) __asm__("__ZN8OSObject23SetDispatchQueue_InvokeE5IORPCP15OSMetaClassBasePFiS2_PKcP15IODispatchQueueE");
+kern_return_t __iig_stub_81(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_82(void) __asm__("__ZN8OSObject24CopyDispatchQueue_InvokeE5IORPCP15OSMetaClassBasePFiS2_PKcPP15IODispatchQueueE");
+kern_return_t __iig_stub_82(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_83(void) __asm__("__ZN8OSObject8DispatchE5IORPC");
+kern_return_t __iig_stub_83(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_84(void) __asm__("__ZN8OSObject9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_84(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_85(void) __asm__("__ZN8OSObject9_DispatchEPS_5IORPC");
+kern_return_t __iig_stub_85(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_86(void) __asm__("__ZN9IOService11Stop_InvokeE5IORPCP15OSMetaClassBasePFiS2_PS_E");
+kern_return_t __iig_stub_86(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_87(void) __asm__("__ZN9IOService12Start_InvokeE5IORPCP15OSMetaClassBasePFiS2_PS_E");
+kern_return_t __iig_stub_87(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_88(void) __asm__("__ZN9IOService13Create_InvokeE5IORPCP15OSMetaClassBasePFiS2_PS_PKcPS3_E");
+kern_return_t __iig_stub_88(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_89(void) __asm__("__ZN9IOService14SetName_InvokeE5IORPCP15OSMetaClassBasePFiS2_PKcE");
+kern_return_t __iig_stub_89(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_90(void) __asm__("__ZN9IOService20ClientCrashed_InvokeE5IORPCP15OSMetaClassBasePFiS2_PS_yE");
+kern_return_t __iig_stub_90(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_91(void) __asm__("__ZN9IOService20NewUserClient_InvokeE5IORPCP15OSMetaClassBasePFiS2_jPP12IOUserClientE");
+kern_return_t __iig_stub_91(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_92(void) __asm__("__ZN9IOService20SetPowerState_InvokeE5IORPCP15OSMetaClassBasePFiS2_jE");
+kern_return_t __iig_stub_92(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_93(void) __asm__("__ZN9IOService20SetProperties_InvokeE5IORPCP15OSMetaClassBasePFiS2_P12OSDictionaryE");
+kern_return_t __iig_stub_93(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_94(void) __asm__("__ZN9IOService21CopyProperties_InvokeE5IORPCP15OSMetaClassBasePFiS2_PP12OSDictionaryE");
+kern_return_t __iig_stub_94(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_95(void) __asm__("__ZN9IOService21RemoveProperty_InvokeE5IORPCP15OSMetaClassBasePFiS2_P8OSStringE");
+kern_return_t __iig_stub_95(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_96(void) __asm__("__ZN9IOService21SearchProperty_InvokeE5IORPCP15OSMetaClassBasePFiS2_PKcS4_yPP8OSObjectE");
+kern_return_t __iig_stub_96(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_97(void) __asm__("__ZN9IOService22RegisterService_InvokeE5IORPCP15OSMetaClassBasePFiS2_E");
+kern_return_t __iig_stub_97(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_98(void) __asm__("__ZN9IOService23ChangePowerState_InvokeE5IORPCP15OSMetaClassBasePFiS2_jE");
+kern_return_t __iig_stub_98(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_99(void) __asm__("__ZN9IOService25GetRegistryEntryID_InvokeE5IORPCP15OSMetaClassBasePFiS2_PyE");
+kern_return_t __iig_stub_99(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_100(void) __asm__("__ZN9IOService8DispatchE5IORPC");
+kern_return_t __iig_stub_100(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_101(void) __asm__("__ZN9IOService9MetaClass8DispatchE5IORPC");
+kern_return_t __iig_stub_101(void) { return kIOReturnUnsupported; }
+kern_return_t __iig_stub_102(void) __asm__("__ZN9IOService9_DispatchEPS_5IORPC");
+kern_return_t __iig_stub_102(void) { return kIOReturnUnsupported; }
 }

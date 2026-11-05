@@ -17,6 +17,8 @@ __BEGIN_DECLS
 
 extern void             psci_smp_init(void);
 extern kern_return_t    psci_smp_start_cpu(int cpu);
+extern kern_return_t    psci_smp_cpu_suspend(uint32_t state);
+extern uint64_t         psci_smp_next_idle_deadline(uint64_t local_timeout);
 extern void             psci_smp_cpu_reached(uint32_t stage);
 extern void             psci_smp_cpu_running(void);
 extern void             psci_smp_cpu_off(void) __dead2;

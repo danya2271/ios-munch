@@ -163,6 +163,7 @@ MiniIOSurface * MiniIOSurfaceCopy(uint32_t sid);
 void            MiniIOSurfaceCost(uint32_t * made, uint64_t * making, uint32_t * freed, uint64_t * freeing, uint32_t * again);
 /* Clear the memory that is kept of surfaces that are gone, for the next ones: when the caller has a moment. */
 void            MiniIOSurfaceClearKept(void);
+void            MiniIOSurfaceScheduleClear(void);
 /* Wait, for so many milliseconds at most, until the GPU is done with a surface's pixels (hakios.gpu.cpp). */
 bool            MiniIOSurfaceDrawn(MiniIOSurface * surface, uint64_t milliseconds);
 MiniIOSurface * MiniIOSurfaceCreateSimple(uint32_t width, uint32_t height, uint32_t pixelFormat);

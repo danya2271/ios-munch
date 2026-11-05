@@ -1,5 +1,29 @@
 # Fixed XNU entry-checkpoint probe
 
+## Native display image
+
+`pack-iosroot.py --sde-backend --sde-native` selects the deferred, fixed L11r
+1080x2400@120 SDE handoff. The default native path keeps the inherited panel
+link and clocks while XNU owns guarded SDE commits. `--sde-backend` alone retains
+the prior qualified inherited path. The native option requires the captured live
+60-Hz panel profile and kernel signatures for the SDE and return guard. It sets
+`munch_sde_native=1`, keeps the guarded timed loader return, and rejects conflicting
+`fb_hz` or `loader_return_after` overrides. It does not flash the device.
+
+The diagnostic full panel takeover is separate: add
+`munch_sde_takeover=1` through the extra kernel command line only when testing
+the unverified PHY/PLL/panel sequence.
+
+The separately named image is
+`artifacts/munch-build/munch-iosroot-l11r-sde-native-r15.img`; r13/r14 are preserved.
+The captured DTB, recovered byte-for-byte from the verified r14 image after its
+temporary copy disappeared, is `artifacts/munch-build/live-l11r-20261028.dtb`.
+See `../display/README.md` and `../display/SDE-PORTING-HANDOFF.md` for the exact
+native-mode scope, first-frame transaction, failure behavior and validation.
+Full native power management and device FPS validation are still outstanding.
+
+## Earlier checkpoints
+
 XNU has reached early BSD initialization, and the static hello RAM-root program
 has produced user-space output on the phone, followed by its intentional panic
 and return. The original checkpoint-10 failure was bypassed by skipping its
@@ -517,6 +541,32 @@ checked. The default command line requests eight CPUs, `cpufreq=1`,
 keeps the GPU available to Mesa when that path starts successfully; pass
 `--no-gpu` when testing software rendering. GPU firmware stays outside git in
 `fw-gpu/`.
+For a diagnostic snapshot of the inherited Kona SDE route, add `--sde-probe`;
+this only reads registers and does not change scanout.
+For the opt-in L11r hardware presentation path, add `--sde-backend` instead
+(or together with the probe). It requires the new presenter and safe-return
+kernel hooks plus a matching live DT. Runtime qualification may reject the
+inherited route; rejection never falls back to drawing into live scanout.
+See `../display/README.md` for supported cases, tests and failure behavior.
+The user confirmed visible UI without tearing with r13; low perceived FPS
+and screen-off problems remain the follow-up scope. The backend stays disabled
+by default. r14 adds guarded DCS blank/unblank and frame-path overhead fixes,
+not a native modeset or full panel/PHY suspend. Safe loader return is refused
+while blanked or after an uncertain panel command; successful unblank restores
+the normal return path. r14 speed/power behavior is not yet device-validated.
+
+With `--sde-backend`, the loader also reserves `0x1444000` bytes below 4 GiB
+after the kernel/SCM region and before the helper/resident RAM disks. The
+`munch-sde-memory.h` contract defines two 10-MiB back-buffer slots and a 272-KiB
+optional SMMU-table workspace, published as base/size in
+`/chosen/munch-sde-buffers`. The kernel imports the permanently wired static
+mapping and checks every physical page before use. This avoids asking XNU's
+VM allocator for low pages after the large resident APFS image has placed
+`topOfKernelData` above 4 GiB. The loader rejects a layout that cannot fit the
+reservation and helper without overlap; it does not steal firmware memory or
+move the resident root. Backend-off images keep the previous layout.
+`../display/check-sde-memory.py` tests the generated allocation block and
+GPU/SDE combinations; the image report records `loader_sde_reservation_bytes`.
 
 Build the Kona/A650 kernel and then pack it with:
 

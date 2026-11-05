@@ -35,7 +35,7 @@
  			gpu_timed_count++;
  		}
  	}
-@@ -3938,6 +3952,89 @@
+@@ -3938,6 +3952,88 @@
  	gpu_timed_count = 0;
  }
  
@@ -97,7 +97,6 @@
 +	}
 +	if (target > gpu_opp_index) {
 +		gpu_dvfs_idle_samples = 0;
-+		target = gpu_opp_index + 1;
 +	} else if (target < gpu_opp_index) {
 +		if (++gpu_dvfs_idle_samples < 4) {
 +			return;

@@ -1161,6 +1161,7 @@ ud_thread(void *arg __unused, wait_result_t wr __unused)
  */
 extern uint32_t loader_log_copy(uint64_t *pos, char *out, uint32_t max);
 extern uint64_t loader_log_position(void);
+extern void loader_log_append_msgbuf_delta(void);
 
 static void
 ud_log_thread(void *arg __unused, wait_result_t wr __unused)
@@ -1171,6 +1172,7 @@ ud_log_thread(void *arg __unused, wait_result_t wr __unused)
 	uint64_t pos = loader_log_position();
 
 	pos = pos > 65536 ? pos - 65536 : 0;
+	loader_log_append_msgbuf_delta();
 	bzero(&to, sizeof(to));
 	to.sin_len = sizeof(to);
 	to.sin_family = AF_INET;
@@ -1178,6 +1180,7 @@ ud_log_thread(void *arg __unused, wait_result_t wr __unused)
 	to.sin_addr.s_addr = htonl(0xc0a80701);         /* 192.168.7.1 */
 	for (;;) {
 		ud_sleep_ms(100);
+		loader_log_append_msgbuf_delta();
 		if (!ud.configured || ud.data_alt != 1) {
 			continue;
 		}

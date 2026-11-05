@@ -65,7 +65,7 @@ diff --git a/bsd/conf/files b/bsd/conf/files
 index 44274016a4cf..be702e28890d 100644
 --- a/bsd/conf/files
 +++ b/bsd/conf/files
-@@ -109,6 +109,41 @@ bsd/dev/munge.c 			optional config_requires_u32_munging
+@@ -109,6 +109,63 @@ bsd/dev/munge.c 			optional config_requires_u32_munging
  bsd/dev/unix_startup.c			standard
  
  bsd/dev/monotonic.c optional monotonic
@@ -83,6 +83,7 @@ index 44274016a4cf..be702e28890d 100644
 +bsd/dev/hakios.virtio_net.c	standard
 +bsd/dev/hakios.apple80211.c	standard
 +bsd/dev/hakios.cpufreq.c	standard
++bsd/dev/hakios.lpm.c		standard
 +bsd/dev/hakios.adreno.c	standard
 +bsd/dev/hakios.audio.c		standard
 +bsd/dev/hakios.virtio_sound.c	standard
@@ -93,6 +94,26 @@ index 44274016a4cf..be702e28890d 100644
 +bsd/dev/hakios.camera.c	standard
 +bsd/dev/hakios.mic.c		standard
 +bsd/dev/hakios.wifi.c		standard
++bsd/dev/hakios.pcie.c		standard
++bsd/dev/hakios.pcie.kona.c	standard
++bsd/dev/hakios.pcie.kona.platform.c	standard
++bsd/dev/hakios.dma.pagetable.c	standard
++bsd/dev/hakios.dma.space.c	standard
++bsd/dev/hakios.dma.endpoint.c	standard
++bsd/dev/hakios.dma.cache.c	standard
++bsd/dev/hakios.dma.memory.c	standard
++bsd/dev/hakios.dma.arena.c	standard
++bsd/dev/hakios.msi.pool.c	standard
++bsd/dev/hakios.msi.c		standard
++bsd/dev/hakios.mhi.c		standard
++bsd/dev/hakios.mhi.control.c	standard
++bsd/dev/hakios.mhi.boot.c	standard
++bsd/dev/hakios.mhi.runtime.c	standard
++bsd/dev/hakios.mhi.worker.c	standard
++bsd/dev/hakios.ipcr.c		standard
++bsd/dev/hakios.qrtr.wire.c	standard
++bsd/dev/hakios.qrtr.mhi.c	standard
++bsd/dev/hakios.qca6390.c	standard
 +bsd/dev/hakios.adsp.c		standard
 +bsd/dev/hakios.mpss.c		standard
 +bsd/dev/hakios.image.c		standard
@@ -108,7 +129,7 @@ index 44274016a4cf..be702e28890d 100644
  bsd/dev/dev_perfmon.c optional config_perfmon
  
  bsd/libkern/crc32.c			standard
-@@ -155,6 +190,14 @@ bsd/miscfs/devfs/devfs_vfsops.c		optional devfs
+@@ -155,6 +212,14 @@ bsd/miscfs/devfs/devfs_vfsops.c		optional devfs
  bsd/miscfs/mockfs/mockfs_fsnode.c	optional mockfs
  bsd/miscfs/mockfs/mockfs_vfsops.c	optional mockfs
  bsd/miscfs/mockfs/mockfs_vnops.c	optional mockfs
@@ -2042,6 +2063,15 @@ index e26a1d70f470..f91095c98d26 100644
  
  #if APPLE_ARM64_ARCH_FAMILY
  	configure_late_apple_regs();
+@@ -824,4 +854,8 @@ arm_init_idle_cpu(
+ 	fiq_context_init(FALSE);
+ 
++#if defined(GENERIC_GIC_V3_IRQ)
++	extern void gic_v3_irq_cpu_resume(void);
++	gic_v3_irq_cpu_resume();
++#endif
+ 	cpu_idle_exit(TRUE);
+ }
 diff --git a/osfmk/arm/model_dep.c b/osfmk/arm/model_dep.c
 index 39daaf8db949..64ceb1a5f201 100644
 --- a/osfmk/arm/model_dep.c
@@ -2169,10 +2199,14 @@ diff --git a/osfmk/arm64/cpu.c b/osfmk/arm64/cpu.c
 index 94e91306b143..0ec1323086b7 100644
 --- a/osfmk/arm64/cpu.c
 +++ b/osfmk/arm64/cpu.c
-@@ -568,7 +568,12 @@ cpu_idle(void)
+@@ -568,7 +568,15 @@ cpu_idle(void)
  #endif /* MONOTONIC */
  
- 	if (wfi) {
++	extern bool hakios_lpm_idle(uint64_t);
++	bool lpm_slept = wfi && hakios_lpm_idle(new_idle_timeout_ticks);
++
+-	if (wfi) {
++	if (wfi && !lpm_slept) {
 -#if !defined(APPLE_ARM64_ARCH_FAMILY)
 +#if !defined(APPLE_ARM64_ARCH_FAMILY) && !defined(GENERIC_PSCI_SMP)
 +		/*
@@ -2183,6 +2217,13 @@ index 94e91306b143..0ec1323086b7 100644
  		platform_cache_idle_enter();
  #endif
  
+@@ -636,4 +644,6 @@ cpu_idle_exit(boolean_t from_reset)
+ 	uint64_t        new_idle_timeout_ticks = 0x0ULL;
+ 	cpu_data_t     *cpu_data_ptr = getCpuDatap();
++	extern void hakios_lpm_cpu_wake(void);
++	hakios_lpm_cpu_wake();
+ 
+ 	assert(exception_stack_pointer() != 0);
 diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
 index e76e7e70ab9c..828a51171c7e 100644
 --- a/osfmk/arm64/machine_routines.c
@@ -3238,3 +3279,129 @@ index 3ebc295117a3..de101eafc83b 100755
  def find_non_ascii(s):
      for c in s:
          if ord(c) >= 0x80: return True
+
+diff --git a/config/Makefile b/config/Makefile
+index b4c0ed5..636ea08 100644
+--- a/config/Makefile
++++ b/config/Makefile
+@@ -43,20 +43,24 @@ ifeq ($(CURRENT_ARCH_CONFIG_LC),x86_64h)
+ EXPORT_SOURCE_ARCH_CONFIG_LC := x86_64
+ else
+ EXPORT_SOURCE_ARCH_CONFIG_LC := $(CURRENT_ARCH_CONFIG_LC)
+ endif
+-
++
+ EXPORTS_FILES := $(foreach symbolset,$(SYMBOL_COMPONENT_LIST),$(symbolset).exports \
+-	$(symbolset).$(EXPORT_SOURCE_ARCH_CONFIG_LC).exports \
++	$(symbolset).$(EXPORT_SOURCE_ARCH_CONFIG_LC).exports \
+-	$(notdir $(wildcard $(SOURCE)/$(symbolset).$(EXPORT_SOURCE_ARCH_CONFIG_LC).$(PLATFORM).exports))) \
++	$(notdir $(wildcard $(SOURCE)/$(symbolset).$(EXPORT_SOURCE_ARCH_CONFIG_LC).$(PLATFORM).exports))) \
+-	Unused.exports
++	Unused.exports
+-
++
++ifeq ($(CURRENT_ARCH_CONFIG)_$(CURRENT_MACHINE_CONFIG),ARM64_BCM2837)
++EXPORTS_FILES := $(subst Private.arm64.exports,Private.arm64.bcm2837.exports,$(EXPORTS_FILES))
++endif
++
+ Kasan_EXPORTS := $(SRCROOT)/config/Kasan_disabled.exports
+ Kcov_EXPORTS := $(SRCROOT)/config/Kcov_disabled.exports
+-
++
+ ifneq ($(filter $(CURRENT_KERNEL_CONFIG),$(KCOV_RUNTIME)),)
+ Kcov_EXPORTS := $(SRCROOT)/config/Kcov_enabled.exports
+ endif
+-
++
+ ifeq ($(KASAN),1)
+ ifeq ($(CURRENT_ARCH_CONFIG_LC),x86_64h)
+ KASAN_ARCH_SUFFIX := x86_64
+@@ -115,30 +119,28 @@ $(OBJPATH)/symbolsets.plist: $(SYMBOL_SET_PLIST_BUILD)
+ build_symbol_set_plists: $(KEXT_PLIST_BUILD) $(OBJPATH)/symbolsets.plist
+-
++
+ $(TARGET)/allsymbols: $(OBJPATH)/$(KERNEL_FILE_NAME)
+-	$(_v)$(NM) -gj $< | sort -u > $@
++	$(_v)$(NM) -gj $< | sort -u > $@
+-
++
+ check_all_exports: $(TARGET)/allsymbols $(KEXT_CREATE_SYMBOL_SET)
+-	$(_v)$(KEXT_CREATE_SYMBOL_SET)					\
++	$(_v)$(KEXT_CREATE_SYMBOL_SET)					\
+-		$(ARCH_FLAGS_$(CURRENT_ARCH_CONFIG))			\
++		$(ARCH_FLAGS_$(CURRENT_ARCH_CONFIG))			\
+-		-import $(TARGET)/allsymbols				\
++		-import $(TARGET)/allsymbols				\
+-		$(foreach symbolset,$(filter-out Private,$(SYMBOL_COMPONENT_LIST)),	\
++		$(foreach symbolset,$(filter-out Private,$(SYMBOL_COMPONENT_LIST)),	\
+-			-export $(SOURCE)/$(symbolset).exports		\
+-			-export $(SOURCE)/$(symbolset).$(EXPORT_SOURCE_ARCH_CONFIG_LC).exports)	\
+-		-output /dev/null $(_vstdout)
++			$(foreach file,$($(symbolset)_EXPORTS),-export $(file)))	\
++		-output $(TARGET)/checked-public.symbolset $(_vstdout)
+-	$(_v)$(KEXT_CREATE_SYMBOL_SET)					\
++	$(_v)$(KEXT_CREATE_SYMBOL_SET)					\
+-		$(ARCH_FLAGS_$(CURRENT_ARCH_CONFIG))			\
++		$(ARCH_FLAGS_$(CURRENT_ARCH_CONFIG))			\
+-		-import $(TARGET)/allsymbols				\
++		-import $(TARGET)/allsymbols				\
+-		$(foreach symbolset,$(filter-out Unsupported,$(SYMBOL_COMPONENT_LIST)),	\
++		$(foreach symbolset,$(filter-out Unsupported,$(SYMBOL_COMPONENT_LIST)),	\
+-			-export $(SOURCE)/$(symbolset).exports		\
+-			-export $(SOURCE)/$(symbolset).$(EXPORT_SOURCE_ARCH_CONFIG_LC).exports)	\
+-		-output /dev/null $(_vstdout)
++			$(foreach file,$($(symbolset)_EXPORTS),-export $(file)))	\
++		-output $(TARGET)/checked-private.symbolset $(_vstdout)
+-
++
+ $(OBJPATH)/$(MD_SUPPORTED_KPI_FILENAME): $(EXPORTS_FILES)
+-	@$(LOG_SUPPORTED_KPI) "$(CURRENT_ARCH_CONFIG_LC)"
++	@$(LOG_SUPPORTED_KPI) "$(CURRENT_ARCH_CONFIG_LC)"
+-	$(_v)$(SRCROOT)/config/list_supported.sh $(SOURCE) $(EXPORT_SOURCE_ARCH_CONFIG_LC) $@
++	$(_v)$(SRCROOT)/config/list_supported.sh $(SOURCE) $(EXPORT_SOURCE_ARCH_CONFIG_LC) $@
+-
++
+ $(OBJPATH)/$(MI_SUPPORTED_KPI_FILENAME): $(EXPORTS_FILES)
+-	@$(LOG_SUPPORTED_KPI) "all"
++	@$(LOG_SUPPORTED_KPI) "all"
+-	$(_v)$(SRCROOT)/config/list_supported.sh $(SOURCE) all $@
++	$(_v)$(SRCROOT)/config/list_supported.sh $(SOURCE) all $@
+-
++
+ build_symbol_sets: check_all_exports $(SYMBOL_SET_BUILD) $(TARGET)/allsymbols \
+diff --git a/iokit/DriverKit/Makefile b/iokit/DriverKit/Makefile
+index 4d27bef..f44d896 100644
+--- a/iokit/DriverKit/Makefile
++++ b/iokit/DriverKit/Makefile
+@@ -49,19 +49,23 @@ OTHER_HEADERS = IOTypes.h IOReturn.h IORPC.h IOKitKeys.h \
+ EXPORT_MI_GEN_LIST = $(GENERATED_HEADERS)  $(OTHER_HEADERS)
+ INSTALL_MI_GEN_LIST = $(GENERATED_HEADERS)  $(OTHER_HEADERS)
+ INSTALL_MI_LCL_GEN_LIST = $(GENERATED_HEADERS)  $(OTHER_HEADERS)
+ INSTALL_DRIVERKIT_MI_GEN_LIST = $(PUBLIC_GENERATED_HEADERS) $(OTHER_HEADERS)
+ INSTALL_DRIVERKIT_MI_LCL_GEN_LIST = $(PRIVATE_GENERATED_HEADERS)
+ INSTALL_KF_MI_GEN_LIST = $(GENERATED_HEADERS)  $(OTHER_HEADERS)
+-
++
+ COMP_FILES = ${GENERATED_HEADERS} $(GENERATED_IMPL)
+-
++
++ifneq ($(wildcard $(XNUDEPS)/iig-impl/OSObject.iig.cpp),)
++$(GENERATED_HEADERS): $(wildcard $(XNUDEPS)/iig-impl/*.iig.cpp) $(XNUDEPS)/host/bin/iig
++endif
++
+ $(GENERATED_HEADERS) : \
+-	%.h : %.iig
++	%.h : %.iig
+-	@$(LOG_IIG) "$@"
++	@$(LOG_IIG) "$@"
+-	$(_v)$(IIG) --def $< --header $@ --impl $(patsubst %.h,%.iig.cpp,$@) --framework-name DriverKit ${OTHER_IIG_FLAGS} -- ${OTHER_IIG_CFLAGS} $(_vstdout)
++	$(_v)$(IIG) --def $< --header $@ --impl $(patsubst %.h,%.iig.cpp,$@) --framework-name DriverKit ${OTHER_IIG_FLAGS} -- ${OTHER_IIG_CFLAGS} $(_vstdout)
+-
++
+ $(GENERATED_IMPL) : $(GENERATED_HEADERS)
+-
++
+ do_build_all:: $(COMP_FILES)
+-
++
+ include $(MakeInc_rule)
