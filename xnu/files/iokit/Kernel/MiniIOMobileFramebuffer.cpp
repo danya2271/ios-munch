@@ -972,8 +972,8 @@ IOMobileFramebuffer::sendDcsCommand(uint8_t command, uint8_t parameter, bool has
 	fifoControl = regs[MUNCH_DSI_DMA_FIFO_CTRL / 4];
 	tpgControl = regs[MUNCH_DSI_TPG_CTRL / 4];
 	dmaLength = regs[MUNCH_DSI_DMA_CMD_LENGTH / 4];
-	packet = (uint32_t) command | ((uint32_t) parameter << 8) |
-	    ((hasParameter ? 0x15u : 0x05u) << 16) | (0x80u << 24);
+	packet = (uint32_t) parameter | ((hasParameter ? 0x15u : 0x05u) << 8) |
+	    ((uint32_t) command << 16) | (0x80u << 24);
 
 	regs[MUNCH_DSI_INT_CTRL / 4] = interruptControl | MUNCH_DSI_CMD_DMA_DONE_MASK | MUNCH_DSI_CMD_DMA_DONE;
 	OSSynchronizeIO();

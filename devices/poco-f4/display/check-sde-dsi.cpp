@@ -102,7 +102,7 @@ int main()
 		for (unsigned offset : {MUNCH_DSI_CTRL, MUNCH_DSI_COMMAND_MODE_DMA_CTRL, MUNCH_DSI_DMA_FIFO_CTRL,
 		    MUNCH_DSI_TPG_CTRL, MUNCH_DSI_DMA_CMD_LENGTH}) assert(registers[offset / 4] == original[offset / 4]);
 		assert(registers[MUNCH_DSI_INT_CTRL / 4] == (original[MUNCH_DSI_INT_CTRL / 4] & ~1u));
-		uint32_t packet = command | (0x05u << 16) | (0x80u << 24);
+		uint32_t packet = (uint32_t)command << 16 | (0x05u << 8) | (0x80u << 24);
 		dsi_ctrl_hw controller = {original};
 		dsi_ctrl_cmd_dma_fifo_info message = {&packet, 4, false, false, true};
 		dsi_ctrl_hw_cmn_kickoff_fifo_command(&controller, &message, 0);
