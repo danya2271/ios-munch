@@ -140,6 +140,10 @@ munch_mode_command_batch(struct munch_mode *mode, const struct munch_mode_comman
 		uint32_t status = munch_mode_read(mode, MUNCH_MODE_DSI, 0x110);
 		if (mode->failed || (status & (1u << 24))) break;
 		if (status & 1) {
+			munch_mode_write(mode, MUNCH_MODE_DSI, 0x15c, 0);
+			munch_mode_write(mode, MUNCH_MODE_DSI, 0x1ec, 1);
+			mode->io.delay(mode->io.cookie, 1);
+			munch_mode_write(mode, MUNCH_MODE_DSI, 0x1ec, 0);
 			munch_mode_write(mode, MUNCH_MODE_DSI, 0x110, mask | 1);
 			mode->commands += count;
 			return munch_mode_healthy(mode);

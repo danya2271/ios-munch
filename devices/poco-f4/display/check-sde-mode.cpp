@@ -191,7 +191,7 @@ int main()
 		assert(machine.payloads.back() == std::vector<uint8_t>({0x51, 2, 0}));
 		assert(machine.mode.commands == panelCommandCount() + 4 &&
 		    machine.packets == panelBatchCount(munch_l11r_on, sizeof(munch_l11r_on)) + 4 &&
-		    machine.elapsed == 240002);
+		    machine.elapsed == 240002 + machine.packets);
 		totalWrites = machine.writes;
 		for (unsigned event = 0; event < 10; event++) {
 			assert(!munch_mode_vblank(&machine.mode));
