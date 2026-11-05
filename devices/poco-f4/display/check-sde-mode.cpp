@@ -120,7 +120,8 @@ struct Machine {
 					    buffer + offset_in_buffer + 4 + length);
 				} else {
 					assert(!(buffer[offset_in_buffer + 3] & 0x40));
-					machine.payloads.push_back({buffer[offset_in_buffer]});
+					machine.payloads.push_back({buffer[offset_in_buffer],
+					    (uint8_t)(length > 1 ? buffer[offset_in_buffer + 1] : 0)});
 				}
 				last = buffer[offset_in_buffer + 3] & 0x80;
 				offset_in_buffer += packet_bytes;

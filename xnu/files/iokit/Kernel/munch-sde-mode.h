@@ -108,9 +108,13 @@ munch_mode_command_batch(struct munch_mode *mode, const struct munch_mode_comman
 	}
 	for (unsigned command_index = 0; command_index < count; command_index++) {
 		const struct munch_mode_command *command = &commands[command_index];
-		bool long_packet = command->type == 0x39;
+		const uint8_t *payload = command->payload;
+		uint8_t type = command->type;
+		if (type == 0x39 && command->length == 2 && payload[0] == 0x35 && payload[1] == 0)
+			type = 0x15;
+		bool long_packet = type == 0x39;
 		uint32_t packet_bytes = long_packet ? (4 + command->length + 3) & ~3u : 4;
-		if (!command->length || (!long_packet && (command->type != 0x05 && command->type != 0x15)) ||
+		if (!command->length || (!long_packet && (type != 0x05 && type != 0x15)) ||
 		    (!long_packet && command->length > 2) || bytes + packet_bytes > mode->scratch_size ||
 		    (command_index + 1 == count && !command->last)) {
 			mode->failed = true;
@@ -120,7 +124,7 @@ munch_mode_command_batch(struct munch_mode *mode, const struct munch_mode_comman
 		mode->scratch[bytes] = long_packet ? (uint8_t)command->length : command->payload[0];
 		mode->scratch[bytes + 1] = long_packet ? (uint8_t)(command->length >> 8) :
 		    (command->length > 1 ? command->payload[1] : 0);
-		mode->scratch[bytes + 2] = command->type;
+		mode->scratch[bytes + 2] = type;
 		mode->scratch[bytes + 3] = (long_packet ? 0x40 : 0) | (command->last ? 0x80 : 0);
 		if (long_packet) {
 			for (unsigned index = 0; index < command->length; index++)
