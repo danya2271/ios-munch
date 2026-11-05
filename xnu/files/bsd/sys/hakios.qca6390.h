@@ -59,6 +59,5 @@ int hakios_qca6390_irq_attach(uint32_t vector, hakios_qca6390_irq_handler_t hand
 int hakios_qca6390_irq_enable(uint32_t vector, bool enable);
 int hakios_qca6390_irq_detach_all(void);
 uint64_t hakios_qca6390_irq_count(uint32_t vector);
-void hakios_qca6390_dma_stop(void);
 
 #endif

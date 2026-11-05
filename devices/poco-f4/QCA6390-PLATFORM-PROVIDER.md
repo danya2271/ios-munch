@@ -25,9 +25,9 @@ bundle into success.
 - `stop(endpoint)`: quiesces device DMA, invalidates outstanding translations,
   and restores or retires the provider's state. Failure retains RC0 ownership.
 
-The old direct SMMU code in `hakios.qca6390.c` is not used by this interface.
-It remains historical groundwork only; registering a provider is the only path
-that can satisfy `HAKIOS_QCA6390_DMA_DOMAIN`.
+The former direct SMMU programming path has been removed from
+`hakios.qca6390.c`. Registering a provider is the only path that can satisfy
+`HAKIOS_QCA6390_DMA_DOMAIN`.
 
 ## MSI provider
 

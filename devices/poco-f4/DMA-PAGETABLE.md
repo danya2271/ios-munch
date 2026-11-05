@@ -12,9 +12,10 @@ This is one component of a future endpoint DMA implementation, **not** a
 complete DMA API or an SMMU hardware owner. It does not select context banks,
 claim stream matches, allocate IOVAs, allocate/pin data buffers, synchronize
 data-buffer caches, configure registers, or enable PCI Bus Master. No QCA
-runtime calls it yet. The old QCA SMMU groundwork remains disabled and is not
-validated or made usable by adding this component. RC0, DMA and MSI gates are
-unchanged; the eventual domain must still belong to endpoint SID `0x1c01`.
+runtime calls it yet. The former direct QCA SMMU path has been removed; this
+component does not configure a replacement hardware owner. RC0, DMA and MSI
+gates are unchanged; the eventual domain must still belong to endpoint SID
+`0x1c01`.
 
 `hakios.dma.space.c` now builds software IOVA allocation and mapping-lease
 accounting around a private instance of this engine; see `DMA-SPACE.md`.

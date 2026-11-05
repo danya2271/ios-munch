@@ -89,8 +89,9 @@ offline coverage; these helpers do not clear any QCA readiness gate.
 A separate native stage-1 DMA page-table core now provides scatter-page
 map/unmap, explicit AP/MAIR/XN encoding, child-before-parent synchronization,
 and retained storage on failed TLB completion/quiescence. Its offline tests
-include a stale-TLB case and a 64 MiB arena. This is not wired into the legacy
-QCA SMMU path and does not satisfy DMA preflight. An independent address-space
+include a stale-TLB case and a 64 MiB arena. The former direct QCA SMMU path
+has been removed; this engine is not registered as a hardware owner and does
+not satisfy DMA preflight. An independent address-space
 manager now allocates aligned/boundary-limited IOVAs, tracks non-reused mapping
 leases, and prevents address reuse after uncertain map/unmap or teardown.
 Actual SID/context ownership, a granted IOVA aperture and hardware callbacks

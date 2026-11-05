@@ -12,7 +12,8 @@ This is not an endpoint DMA owner, buffer allocator or LinuxKPI DMA API. It
 does not allocate/pin physical data or table pages, manage data-cache ownership,
 program SMMU registers, stop endpoint requests, route SID `0x1c01`, enable Bus
 Master or provide a firmware handoff. Those remain independent requirements.
-The old QCA SMMU groundwork remains gated off and is not used by this manager.
+The former direct QCA SMMU programming path has been removed; this manager is
+not registered as the replacement hardware owner.
 
 ## Aperture and allocation
 
