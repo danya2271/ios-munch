@@ -140,8 +140,16 @@ hakios_qca6390_rc0_report(void)
 		printf("qca6390: RC0 diagnostic skipped: not Munch\n");
 		return;
 	}
+	printf("qca6390: RC0 diagnostic begin; read-only\n");
 	lck_mtx_lock(&qca_diag_lock);
+	printf("qca6390: RC0 diagnostic lock acquired\n");
 	qca_diag_rc0_map_all();
+	printf("qca6390: RC0 MMIO mappings host=%u PARF=%u PHY=%u TLMM=%u GCC=%u; CFG0 deferred\n",
+	    qca_diag_regions[QCA_DIAG_HOST].mapping != 0,
+	    qca_diag_regions[QCA_DIAG_PARF].mapping != 0,
+	    qca_diag_regions[QCA_DIAG_PHY].mapping != 0,
+	    qca_diag_regions[QCA_DIAG_TLMM].mapping != 0,
+	    qca_diag_regions[QCA_DIAG_GCC].mapping != 0);
 	dbi_read = qca_diag_read(&qca_diag_regions[QCA_DIAG_HOST], "DBI", 0x80, &dbi_link);
 	elbi_read = qca_diag_read(&qca_diag_regions[QCA_DIAG_HOST], "ELBI", 0xf28, &elbi_status);
 	qca_diag_read(&qca_diag_regions[QCA_DIAG_PARF], "PARF", 0x1b0, &ltssm);
