@@ -299,8 +299,8 @@ gic_find_redistributor(void)
 }
 
 /* Per-CPU bring-up: every processor calls this for itself, the boot processor first. */
-void
-gic_v3_irq_cpu_init(void)
+static void
+gic_v3_irq_cpu_init_internal(bool report)
 {
 	int cpu = cpu_number();
 	vm_offset_t gicr;
@@ -388,8 +388,16 @@ gic_v3_irq_cpu_init(void)
 	__builtin_arm_isb(ISB_SY);
 
 	ml_install_interrupt_handler(NULL, 0, NULL, gic_irq_handler, NULL);
-	kprintf("gic: v3, distributor %p, cpu %d's redistributor %p, virtual timer on PPI %d\n",
-	    (void *)gicd_base, cpu, (void *)gicr, GIC_INTID_VTIMER);
+	if (report) {
+		kprintf("gic: v3, distributor %p, cpu %d's redistributor %p, virtual timer on PPI %d\n",
+		    (void *)gicd_base, cpu, (void *)gicr, GIC_INTID_VTIMER);
+	}
+}
+
+void
+gic_v3_irq_cpu_init(void)
+{
+	gic_v3_irq_cpu_init_internal(true);
 }
 
 void
@@ -402,7 +410,7 @@ gic_v3_irq_cpu_resume(void)
 	}
 	gicr_cpu_base[cpu] = 0;
 	gic_active_iar[cpu] = 0;
-	gic_v3_irq_cpu_init();
+	gic_v3_irq_cpu_init_internal(false);
 }
 
 #endif /* GENERIC_GIC_V3_IRQ */
