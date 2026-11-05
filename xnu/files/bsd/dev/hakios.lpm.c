@@ -210,7 +210,7 @@ hakios_lpm_cpu_wake(void)
 void
 hakios_lpm_init(void)
 {
-	DTEntry cpu_group, cluster, lpm, system_pm;
+	DTEntry cpu_group, cluster, lpm;
 	uint32_t enabled = 0;
 	uint32_t cluster_enabled = 1;
 	const ml_topology_info_t *topology;
@@ -225,10 +225,12 @@ hakios_lpm_init(void)
 	} else {
 		lpm_cluster_enabled = lpm_enabled;
 	}
-	if (SecureDTFindEntry("compatible", "qcom,lpm-levels", &lpm) != kSuccess ||
-	    SecureDTLookupEntry(lpm, "qcom,pm-cluster@0", &cluster) != kSuccess ||
-	    SecureDTFindEntry("compatible", "qcom,system-pm", &system_pm) != kSuccess) {
+	if (SecureDTFindEntry("compatible", "qcom,lpm-levels", &lpm) != kSuccess) {
 		lpm_tell("lpm: qcom,lpm-levels is unavailable\n");
+		return;
+	}
+	if (SecureDTLookupEntry(lpm, "qcom,pm-cluster@0", &cluster) != kSuccess) {
+		lpm_tell("lpm: qcom,pm-cluster node is unavailable\n");
 		return;
 	}
 	lpm_level(cluster, "llcc-off", &cluster_level);

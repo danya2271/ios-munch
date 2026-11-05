@@ -33,15 +33,16 @@ implementation. It has no thermal cooling input or user-space policy interface.
 
 ## Idle states
 
-The DT parser now imports the Munch `qcom,lpm-levels` timing values. With
-`lpm=1`, a CPU whose predicted idle interval exceeds its DT entry/exit latency
-plus minimum residency requests PSCI `CPU_SUSPEND` for `rail-pc`; resume uses
-XNU's existing `resume_idle_cpu` reset handler and returns through
-`cpu_idle_exit(TRUE)`. The little and big timings are taken independently from
-the two `qcom,pm-cpu` nodes.
+For eight-CPU images, the packer copies the Munch `qcom,lpm-levels` timing
+properties from the captured Android DTB into the Apple-format device tree
+passed to XNU. With `lpm=1`, a CPU whose predicted idle interval exceeds its
+DT entry/exit latency plus minimum residency requests PSCI `CPU_SUSPEND` for
+`rail-pc`; reset-resume reinitializes the GIC redistributor and returns through
+XNU's `resume_idle_cpu` handler.
 
-The parsed `llcc-off` level is reported but remains gated behind the unfinished
-RPMh/PDC broadcast-timer handoff. `lpm_llcc=1` currently reports that gate and
-does not enter the cluster state. This is deliberate: enabling `notify-rpm`
-without programming the Kona wake source can leave the phone asleep until a
-non-timer interrupt.
+`llcc-off` is requested only when the RPMh sleep/wake votes were installed and
+all online CPUs have marked themselves idle. The state combines the CPU and
+cluster PSCI modes from DT. Runtime entry, wake reliability, and power savings
+still require device-side validation; the image's USB log must show the
+`lpm: rail-pc ...` initialization line before a test can establish that LPM
+actually initialized.

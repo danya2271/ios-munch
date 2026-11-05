@@ -19,6 +19,15 @@ FD_BASE = 0x9FC00000
 FD_SIZE = 0x300000
 PAYLOAD_BASE = 0xF0000000
 PAYLOAD_MAX = 0x03FFF000
+LPM_PATH = '/soc/qcom,lpm-levels'
+LPM_STRING_PROPERTIES = {'compatible', 'label'}
+LPM_CELL_PROPERTIES = {
+    'qcom,clstr-tmr-add', 'qcom,psci-mode-shift', 'qcom,psci-mode-mask',
+    'qcom,psci-mode', 'qcom,entry-latency-us', 'qcom,exit-latency-us',
+    'qcom,min-residency-us', 'qcom,min-child-idx', 'qcom,tmr-add',
+    'qcom,psci-cpu-mode',
+}
+LPM_FLAG_PROPERTIES = {'qcom,is-reset', 'qcom,use-broadcast-timer', 'qcom,notify-rpm'}
 
 
 def digest(data):
@@ -71,7 +80,71 @@ def validate_device_inputs(fd_path, dtb_path):
     return fd, metadata
 
 
-def patch_loader(source, work, config, touch, gpu, sde_backend=False, usb_autoboot=False):
+def load_lpm_tree(dtb_path):
+    inspector = Path(__file__).resolve().parents[1] / 'display/inspect-panel.py'
+    spec = importlib.util.spec_from_file_location('munch_lpm_fdt', inspector)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    tree = module.Fdt(dtb_path)
+
+    if tree.string(LPM_PATH, 'compatible') != 'qcom,lpm-levels':
+        raise ValueError('The captured Munch DTB has no qcom,lpm-levels node')
+
+    def node(path, depth=0):
+        if depth > 3:
+            raise ValueError(f'Unexpectedly deep Munch LPM node: {path}')
+        present = tree.properties(path)
+        properties = []
+        for name in sorted(LPM_STRING_PROPERTIES | LPM_CELL_PROPERTIES | LPM_FLAG_PROPERTIES):
+            if name not in present:
+                continue
+            if name in LPM_STRING_PROPERTIES:
+                value = tree.string(path, name)
+                kind = 'string'
+            elif name in LPM_FLAG_PROPERTIES:
+                value = None
+                kind = 'flag'
+            else:
+                values = tree.cells(path, name)
+                if len(values) != 1:
+                    raise ValueError(f'Expected one cell for {path}/{name}')
+                value = values[0]
+                kind = 'cell'
+            properties.append((name, kind, value))
+        children = []
+        for child_name in tree.children(path):
+            if child_name.startswith(('qcom,pm-cluster', 'qcom,pm-cpu')):
+                children.append(node(f'{path}/{child_name}', depth + 1))
+        return {'name': path.rsplit('/', 1)[-1], 'properties': properties, 'children': children}
+
+    result = node(LPM_PATH)
+    cluster = next((child for child in result['children'] if child['name'].startswith('qcom,pm-cluster@')), None)
+    if cluster is None:
+        raise ValueError('The captured Munch DTB has no qcom,pm-cluster node')
+    cpu_groups = [child for child in cluster['children'] if child['name'].startswith('qcom,pm-cpu@')]
+    if len(cpu_groups) != 2:
+        raise ValueError('Expected both Munch CPU LPM groups in the captured DTB')
+    return result
+
+
+def render_lpm_node(entry, indent=2):
+    prefix = '\t' * indent
+    lines = [f'{prefix}dt_begin(&w, {json.dumps(entry["name"])});']
+    for name, kind, value in entry['properties']:
+        quoted_name = json.dumps(name)
+        if kind == 'string':
+            lines.append(f'{prefix}dt_prop_str(&w, {quoted_name}, {json.dumps(value)});')
+        elif kind == 'cell':
+            lines.append(f'{prefix}dt_prop_u32(&w, {quoted_name}, 0x{value:x});')
+        else:
+            lines.append(f'{prefix}dt_prop(&w, {quoted_name}, "", 0);')
+    for child in entry['children']:
+        lines.extend(render_lpm_node(child, indent + 1))
+    lines.append(f'{prefix}dt_end(&w);')
+    return lines
+
+
+def patch_loader(source, work, config, touch, gpu, sde_backend=False, usb_autoboot=False, lpm_tree=None):
     """Make the generic loader select Munch and load the iosroot system image."""
     loader = source.read_text()
     platform = '''
@@ -326,6 +399,14 @@ static const struct platform platform_munch = {
             raise ValueError('Unexpected SDE chosen device-tree hook')
         loader = loader.replace(chosen, metadata, 1)
 
+    if lpm_tree is not None:
+        marker = '\n\tdt_end(&w);\n\n\tuint32_t dt_len = (uint32_t)(w.cur - w.base);'
+        if loader.count(marker) != 1:
+            raise ValueError('Cannot insert the captured Munch LPM levels into the Apple device tree')
+        lpm_block = ('\n\tif (plat == &platform_munch) {\n' +
+                     '\n'.join(render_lpm_node(lpm_tree, 2)) +
+                     '\n\t}\n')
+        loader = loader.replace(marker, lpm_block + marker, 1)
     (work / 'loader.c').write_text(loader)
 
 
@@ -391,6 +472,7 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
         raise ValueError('Use --sde-probe, --sde-backend or --sde-native to select the SDE path')
     config = validate_ios_config(ios_config_path)
     fd, metadata = validate_device_inputs(fd_path, dtb_path)
+    lpm_tree = load_lpm_tree(dtb_path) if cpus == 8 else None
     kernel = kernel_path.read_bytes()
     if kernel[:4] != b'\xcf\xfa\xed\xfe' or b'XNULDRST' not in kernel:
         raise ValueError('Expected a source-built ARM64 Mach-O with the loader return slot')
@@ -435,7 +517,7 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
     with tempfile.TemporaryDirectory(prefix='munch-iosroot-') as directory:
         work = Path(directory)
         shutil.copy2(root / 'xnuloader/efi.h', work / 'efi.h')
-        patch_loader(source, work, config, touch, gpu, sde_backend, usb_autoboot)
+        patch_loader(source, work, config, touch, gpu, sde_backend, usb_autoboot, lpm_tree)
         (work / 'identity.h').write_bytes(identity)
         subprocess.run(['clang', '--target=aarch64-unknown-windows', '-ffreestanding', '-fno-builtin',
                         '-fno-stack-protector', '-fshort-wchar', '-mgeneral-regs-only', '-O1',
@@ -447,6 +529,9 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
         loader_bytes = (work / 'loader.efi').read_bytes()
         if gpu and (b'munch-scm-metadata' not in loader_bytes or b'MUNCH SCM reserved page' not in loader_bytes):
             raise ValueError('GPU image loader is missing the low SCM metadata reservation')
+        if lpm_tree is not None and any(marker not in loader_bytes for marker in (
+                b'qcom,lpm-levels', b'qcom,pm-cluster@0', b'rail-pc', b'llcc-off')):
+            raise ValueError('Eight-CPU image loader is missing the captured Munch LPM levels')
         if sde_backend and (b'munch-sde-buffers' not in loader_bytes or b'munch-sde-buffers' not in kernel):
             raise ValueError('SDE image is missing the loader/kernel reserved-memory contract')
         entries = [('loader.efi', loader_bytes), ('kernel', kernel),
@@ -479,6 +564,7 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
                   'requested_cpu_count': cpus, 'touchscreen': touch, 'gpu_requested': gpu,
                   'gpu_diagnostics': gpu_diagnostics, 'usb_debug': usb_debug,
                   'usb_autoboot': usb_autoboot,
+                  'lpm_dt_embedded': lpm_tree is not None,
                   'sde_probe': sde_probe,
                   'sde_backend': sde_backend, 'sde_panel': sde_panel, 'sde_native': sde_native,
                   'loader_scm_reservation_bytes': 65536 if gpu else 0,
