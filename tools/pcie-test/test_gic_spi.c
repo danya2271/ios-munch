@@ -119,6 +119,8 @@ static void test_lifecycle(void)
 		assert(writes == before);
 		struct gic_spi *slot = gic_spi_dispatch(800 + vector);
 		assert(slot != NULL && slot->busy == 1 && gic_v3_spi_count(800 + vector) == 1);
+		uint64_t bank_count = 0;
+		assert(gic_v3_spi_bank_count(lease, vector, &bank_count) == KERN_SUCCESS && bank_count == 1);
 		gic_spi_complete(slot);
 	}
 	assert(arrived == 32);

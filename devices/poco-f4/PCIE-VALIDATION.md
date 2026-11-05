@@ -101,6 +101,7 @@ are still not registered.
 | Native MHI IRQ/thread-call worker | PASS, 56 callback failures | Real event/IPCR engines, deferred IRQ processing, budgeted retries, 10,000 coalesced kicks, cancellation/join, allocation failures and retained destruction |
 | ath11k PCI lifecycle adapter | PASS, 60 injected failures | Actual adapter with mocked ath11k/native owner; DMA/MSI resource validation, HIF close before fence, partial initialization, QMI_FAIL removal, retained rollback and no double free |
 | Native PCI HIF / CE / DP boundary | PASS, six fault cases plus lifecycle scenarios | Native BAR/window batches, MSI/service mapping, mocked CE/DP dispatch, failed-bind retry without stale vectors and power-up/close serialization |
+| Kona MSI provider | PASS, 32-vector lifecycle and partial rollback | GIC bank lease, masked route attachment, endpoint doorbell map, PCI MSI capability restore and release retry; no live GIC/RC0 access |
 | Atomic/range DMA and linear SKB | PASS | Actual arena and Linux binding, exact byte ownership, adjacent-mapping bounds, alignment/quarantine, pool exhaustion, refcounts, allocation failures and 800 concurrent lifetimes; modeled endpoint backing |
 | Runtime composition | PASS | Actual runtime/PCI/HIF/arena/binding with mocked platform and ath11k; partial prepare, foreign resources, IRQ/drain/fence/release failure retention and epoch recovery |
 | Actual adapter / HIF / DMA / runtime / pinned ath11k ARM64 objects | PASS | Compiles the binding, isolated PCI common base and upstream HAL/CE/DP against real pinned headers; not a full PCI driver link or execution of upstream CE/DP |
@@ -109,12 +110,12 @@ are still not registered.
 | Legacy QMI regression suite | PASS, 59 checks | Canonical QMI source, no optional ath11k tables; legacy transport API remains functional and default transport is not changed by the new endpoint |
 | Clang static analyzer with host shim | No diagnostics | Earlier checks plus wired memory under both VM-page geometries; not an ARM/hardware verification |
 | ARM64 static analysis, new DMA/runtime work | No changed-source diagnostics | Native endpoint/memory/arena clean; four reports of the same pre-existing dead store in imported FreeBSD `linux/pci.h:1159` for PCI translation units; not an entirely warning-free analysis |
-| ARM64 object compilation | PASS, twenty-two files | PCIe, Kona, DMA table/address-space/endpoint/cache/wired-memory/arena, MSI engine/pool, MHI transfer/control/boot/runtime/worker, IPCR, QRTR wire/endpoint, QMI, QCA6390, Wi-Fi and LinuxKPI boundary |
+| ARM64 object compilation | PASS, 26 units | Includes `hakios.msi.kona.c` and capability-only PCI config writes; isolated objects against configured XNU headers |
 | Isolated full kernel compilation/link | PASS | PCIe/DMA/transport/QCA symbols present in the resulting unstripped kernel |
 | Overall full-build command | PASS for the latest snapshot | Command exits zero; public/private and IOKit/Libkern symbol-set artifacts generated |
 | Device boot, firmware boot, association, traffic, suspend/resume | NOT RUN | No working Wi-Fi claim |
 
-The seventeen host executables use `-Wall -Wextra -Werror`, AddressSanitizer and
+The eighteen host executables use `-Wall -Wextra -Werror`, AddressSanitizer and
 UndefinedBehaviorSanitizer. They cover error-path ownership and serialization,
 not real MMIO faults, bus transactions, memory ordering on ARM, DMA coherency,
 MSI delivery or controller power sequencing. Four-thread tests exercise 400
@@ -136,8 +137,9 @@ above it. The cache instructions are compiled, not exercised with real DMA.
 SMMU attachment remains a mandatory owner callback. `WIRED-DMA-MEMORY.md`
 adds actual XNU VM/pmap buffer allocation and an explicit endpoint constructor;
 its VM/pmap and domain dependencies are modeled in the host tests, not run
-against a device. The MSI pool consumes externally granted routes rather than
-allocating GIC hardware by itself.
+against a device. `hakios.msi.kona.c` now reserves the XNU GIC bank, but its
+doorbell map is still supplied by an external endpoint owner and it has no
+boot-time registration caller.
 
 `TRANSPORT-CORE.md` describes the MSI capability engine, IPCR transfer-ring
 core and QRTR codec. The new test connects these software components using
@@ -174,19 +176,23 @@ authentication header or unrelated compiler setting was weakened to hide it.
 
 These are generated ignored outputs, not fresh-checkout dependencies:
 
+- Current 26-unit native ARM64 object compile, including the Kona MSI provider:
+  `xnu-deps/build/pcie-kernel.FNimY6bA/`.
 - Twenty-two native ARM64 objects and compiler commands:
   `xnu-deps/build/pcie-kernel.rvgeyjg8/`.
 - Actual pinned-header PCI DMA/SKB/runtime/base/HAL/CE/DP object check:
   `xnu-deps/build/ath11k-pci-check.5m6P25xD/`.
 - Fresh isolated complete XNU build, command exits zero:
   `xnu-deps/build/pcie-full-kernel.qnTmajeB/build.log`.
-- GCC/Clang ASan/UBSan logs for seventeen executables, ARM64 analysis with
+- GCC/Clang ASan/UBSan logs for eighteen executables, ARM64 analysis with
   the imported-header warning retained, source hashes, canonical-overlay
   verification, patch parsing and nineteen linked arena/alignment/hold APIs:
   `xnu-deps/build/atomic-dma-runtime-analysis.iaPaubeX/`.
 
-All twenty-two overlaid C files and twenty headers match their canonical
-sources. The nineteen APIs are present in the unstripped kernel. This full
+The prior full-kernel artifact predates the Kona MSI provider and capability
+write API. The current 26-unit compile covers those sources as isolated
+objects, but does not link a new full kernel. The nineteen APIs are present in
+that earlier unstripped kernel. This full
 build still uses the existing AHB ath11k object: it does not link the new PCI
 runtime/binding into a complete PCI library or give it a boot-time caller.
 No kernel image was packed, flashed, booted or approved for device testing.
@@ -313,7 +319,7 @@ These are generated, ignored outputs, not inputs required in a fresh checkout:
 That earlier isolated full build and its incremental integration builds
 all exit zero, including kernel link, strip and export checks. The final
 fourteen overlaid sources and thirteen headers matched their canonical files
-at that checkpoint; use the latest twenty-two-source snapshot for this change.
+at that checkpoint; later source counts are recorded with their own artifacts.
 `llvm-nm` confirms four MSI, twenty-four MHI, thirteen QRTR and the new
 `hakios_qmi_handle_init_endpoint` API symbol in the `.unstripped` kernel alongside
 the earlier PCIe/DMA/QCA code. The isolated output also contains

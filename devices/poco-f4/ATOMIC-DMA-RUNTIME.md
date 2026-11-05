@@ -134,7 +134,7 @@ hardware reset, clock/PHY sequencing, global grants or autonomous runtime PM.
 
 ## Offline verification
 
-The host runner now has seventeen executables under GCC/Clang ASan/UBSan.
+The host runner now has eighteen executables under GCC/Clang ASan/UBSan.
 New tests execute the actual arena and Linux binding with modeled endpoint
 backing: byte ranges, adjacent-mapping escape rejection, refcounts, direction
 checks, pool/quarantine exhaustion, retained cleanup, allocation failures and

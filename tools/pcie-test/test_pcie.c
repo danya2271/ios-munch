@@ -583,6 +583,10 @@ test_endpoint_lifecycle(void)
 	uint32_t value;
 	assert(hakios_pcie_config_read(lease, 0, 4, &value) == 0 && value == 0x110117cb);
 	assert(hakios_pcie_config_read(lease, 1, 2, &value) == EINVAL && value == 0);
+	unsigned config_writes = model.config_writes;
+	assert(hakios_pcie_config_write(lease, 4, 2, 7) == EINVAL);
+	assert(hakios_pcie_config_write(lease, 0x40, 2, 0x1234) == 0);
+	assert(config_load(&model, 0x40, 2) == 0x1234 && model.config_writes == config_writes + 1);
 	model.release_error = -ETIMEDOUT;
 	assert(hakios_pcie_endpoint_release(lease) == EIO);
 	assert(hakios_pcie_endpoint_status(lease) == EIO);

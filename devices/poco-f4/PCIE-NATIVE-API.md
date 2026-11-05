@@ -115,9 +115,11 @@ reserved BAR types. BAR size comes from the owner's resource table, never an
 all-ones sizing write. BAR0 address/size and SID must match the request.
 
 If needed, the service enables PCI memory decode with a 16-bit command write,
-then checks memory decode is on and Bus Master remains off. There is no
-public config-write or Bus Master enable API. A validation failure releases
-the owner or quarantines the failed cleanup; it never publishes a lease.
+then checks memory decode is on and Bus Master remains off. Public config
+writes are limited to the conventional capability area `0x40..0xff`; command,
+status and BAR registers cannot be changed through that API. There is no Bus
+Master enable API. A validation failure releases the owner or quarantines the
+failed cleanup; it never publishes a lease.
 
 Published leases use nonzero monotonically increasing identifiers, which
 are not reset on unregister. Old identifiers return `ESTALE`, and exhaustion
@@ -144,11 +146,14 @@ visible. Provider-owned DMA and MSI resources are torn down before the
 endpoint is released. The unverified legacy DMA groundwork remains behind an
 independently unsatisfied prerequisite.
 
-The QCA adapter now accepts explicit DMA and MSI platform providers through
-`sys/hakios.qca6390.h`. `hakios_qca6390_dma_map()` and the Munch IRQ bridge
-remain fail-closed until those providers prove the endpoint SID, doorbell IOVA,
-GIC bank, and PCI MSI capability lifecycle. The historical direct SMMU
-scaffold is no longer a runtime mapping path.
+The QCA adapter accepts explicit DMA and MSI providers through
+`sys/hakios.qca6390.h`. `hakios.msi.kona.c` composes the GIC bank lease, MSI
+capability engine and route pool: it derives INTIDs/payloads from the Kona DT
+parent mapping, installs routes masked, and maps the doorbell through an
+owner-supplied endpoint callback. It has no boot-time owner or doorbell mapper
+registered. Runtime therefore remains fail-closed until a trusted owner proves
+RC0, SID `0x1c01`, DMA/cache behavior and the live GIC route. The historical
+direct SMMU scaffold is not a runtime mapping path.
 
 `hakios_qca6390_read32()` / `write32()` replace the raw BAR-pointer accessor:
 

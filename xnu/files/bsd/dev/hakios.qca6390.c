@@ -823,8 +823,12 @@ hakios_qca6390_msi(uint64_t *address, uint32_t *data, uint32_t *first_intid)
 			    info.first_intid < 32 || info.first_intid > 1019 - (HAKIOS_MSI_VECTORS - 1)) {
 				if (handle != NULL) {
 					int cleanup = qca_provider_error(qca_msi_provider.release(qca_msi_context, &handle));
-					if (error == 0 && cleanup != 0) {
-						error = cleanup;
+					if (cleanup != 0 || handle != NULL) {
+						qca_msi_handle = handle;
+						qca_msi_info = info;
+						if (error == 0) {
+							error = cleanup != 0 ? cleanup : EIO;
+						}
 					}
 				}
 				if (error == 0) {

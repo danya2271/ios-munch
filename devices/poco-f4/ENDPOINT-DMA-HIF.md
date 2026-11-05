@@ -167,7 +167,15 @@ MSI messages must match that allocation's IOVA, payloads and INTIDs. Its fence
 also verifies that the native DMA endpoint is closed and fenced. The current
 adapter explicitly closes an optional native HIF before requesting the fence;
 failure retains the driver rather than continuing its teardown. The current
-GIC hardware driver is unchanged; no global hardware allocation is claimed.
+GIC code offers bank leases, but no global hardware ownership is inferred.
+
+`hakios.msi.kona.c` now supplies a concrete QCA MSI provider over the XNU GIC
+bank lease API and the existing MSI capability/pool engines. It derives payload
+and INTIDs from Kona DT SPI 768 plus the GIC SPI translation, reserves hardware
+INTIDs 800-831, installs all handlers masked, and obtains the doorbell IOVA only
+through the caller's endpoint mapping callbacks. The caller must be an already
+authorized Kona host/DMA owner; activating this provider alone does not acquire
+RC0, validate the live route or register a boot-time runtime owner.
 
 ## Native PCI HIF and deferred CE/DP
 
@@ -228,5 +236,5 @@ bringing the total to fifteen executables; see `WIRED-DMA-MEMORY.md`.
 The real pinned-header object check compiles the HIF and PCI adapter, retains
 PCI/AHB QMI checks, compiles the legacy DMA/SKB base in AHB mode, and rejects
 both legacy bus and DMA files in PCI mode.
-The native object/full-kernel runners now cover twenty-one C units and nineteen
-headers. Concrete logs and validation limits are in `PCIE-VALIDATION.md`.
+The native object runner covers twenty-six C units, including the Kona MSI
+provider. Concrete logs and validation limits are in `PCIE-VALIDATION.md`.

@@ -15,10 +15,10 @@ rsync -a --exclude=/.git --exclude=/BUILD "$SOURCE/" "$OUTPUT/src/"
 for name in gic_v3_irq.c gic_v3_spi.inc gic_v3_spi.h; do
 	cp "$ROOT/xnu/files/osfmk/arm64/$name" "$OUTPUT/src/osfmk/arm64/$name"
 done
-for name in hakios.pcie hakios.pcie.kona hakios.pcie.kona.platform hakios.pcie.kona.mmio hakios.pcie.kona.sid hakios.dma.pagetable hakios.dma.space hakios.dma.endpoint hakios.dma.cache hakios.dma.memory hakios.dma.arena hakios.msi.pool hakios.msi hakios.mhi hakios.mhi.control hakios.mhi.boot hakios.mhi.runtime hakios.mhi.worker hakios.ipcr hakios.qrtr.wire hakios.qrtr.mhi hakios.qmi hakios.qca6390 hakios.wifi hakios.lx; do
+for name in hakios.pcie hakios.pcie.kona hakios.pcie.kona.platform hakios.pcie.kona.mmio hakios.pcie.kona.sid hakios.dma.pagetable hakios.dma.space hakios.dma.endpoint hakios.dma.cache hakios.dma.memory hakios.dma.arena hakios.msi.pool hakios.msi hakios.msi.kona hakios.mhi hakios.mhi.control hakios.mhi.boot hakios.mhi.runtime hakios.mhi.worker hakios.ipcr hakios.qrtr.wire hakios.qrtr.mhi hakios.qmi hakios.qca6390 hakios.wifi hakios.lx; do
 	cp "$ROOT/xnu/files/bsd/dev/$name.c" "$OUTPUT/src/bsd/dev/$name.c"
 done
-for name in hakios.pcie hakios.pcie.kona hakios.pcie.kona.platform hakios.pcie.kona.mmio hakios.pcie.kona.sid hakios.dma.pagetable hakios.dma.space hakios.dma.endpoint hakios.dma.memory hakios.dma.arena hakios.msi.pool hakios.msi hakios.mhi hakios.mhi.boot hakios.mhi.runtime hakios.mhi.worker hakios.ipcr hakios.qrtr.wire hakios.qrtr.mhi hakios.qrtr hakios.qmi hakios.wire hakios.qca6390; do
+for name in hakios.pcie hakios.pcie.kona hakios.pcie.kona.platform hakios.pcie.kona.mmio hakios.pcie.kona.sid hakios.gic hakios.dma.pagetable hakios.dma.space hakios.dma.endpoint hakios.dma.memory hakios.dma.arena hakios.msi.pool hakios.msi hakios.msi.kona hakios.mhi hakios.mhi.boot hakios.mhi.runtime hakios.mhi.worker hakios.ipcr hakios.qrtr.wire hakios.qrtr.mhi hakios.qrtr hakios.qmi hakios.wire hakios.qca6390; do
 	cp "$ROOT/xnu/files/bsd/sys/$name.h" "$OUTPUT/src/bsd/sys/$name.h"
 done
 python3 - "$OUTPUT/src/bsd/conf/files" <<'PY'
@@ -28,7 +28,7 @@ import sys
 manifest = pathlib.Path(sys.argv[1])
 text = manifest.read_text()
 entries = {line.split()[0] for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")}
-for name in ("hakios.pcie", "hakios.pcie.kona", "hakios.pcie.kona.platform", "hakios.pcie.kona.mmio", "hakios.pcie.kona.sid", "hakios.dma.pagetable", "hakios.dma.space", "hakios.dma.endpoint", "hakios.dma.cache", "hakios.dma.memory", "hakios.dma.arena", "hakios.msi.pool", "hakios.msi", "hakios.mhi", "hakios.mhi.control", "hakios.mhi.boot", "hakios.mhi.runtime", "hakios.mhi.worker", "hakios.ipcr", "hakios.qrtr.wire", "hakios.qrtr.mhi", "hakios.qca6390"):
+for name in ("hakios.pcie", "hakios.pcie.kona", "hakios.pcie.kona.platform", "hakios.pcie.kona.mmio", "hakios.pcie.kona.sid", "hakios.dma.pagetable", "hakios.dma.space", "hakios.dma.endpoint", "hakios.dma.cache", "hakios.dma.memory", "hakios.dma.arena", "hakios.msi.pool", "hakios.msi", "hakios.msi.kona", "hakios.mhi", "hakios.mhi.control", "hakios.mhi.boot", "hakios.mhi.runtime", "hakios.mhi.worker", "hakios.ipcr", "hakios.qrtr.wire", "hakios.qrtr.mhi", "hakios.qca6390"):
     entry = f"bsd/dev/{name}.c"
     if entry not in entries:
         text += f"\n{entry}\tstandard\n"

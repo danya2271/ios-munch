@@ -54,6 +54,18 @@ pcie_config_read_locked(uint16_t offset, uint8_t width, uint32_t *value)
 }
 
 static int
+pcie_config_write_locked(uint16_t offset, uint8_t width, uint32_t value)
+{
+	int error;
+
+	error = pcie_error(pcie_provider.config_write(pcie_context, pcie_owner, offset, width, value));
+	if (error != 0) {
+		pcie_faulted = true;
+	}
+	return error;
+}
+
+static int
 pcie_release_locked(void)
 {
 	int error = pcie_error(pcie_provider.release(pcie_context, pcie_owner));
@@ -318,6 +330,24 @@ hakios_pcie_config_read(hakios_pcie_lease_t lease, uint16_t offset, uint8_t widt
 	lck_mtx_lock(&pcie_lock);
 	if ((error = pcie_status_locked(lease)) == 0) {
 		error = pcie_config_read_locked(offset, width, value);
+	}
+	lck_mtx_unlock(&pcie_lock);
+	return error;
+}
+
+int
+hakios_pcie_config_write(hakios_pcie_lease_t lease, uint16_t offset, uint8_t width, uint32_t value)
+{
+	int error;
+
+	if ((width != 1 && width != 2 && width != 4) || (offset & (width - 1)) != 0 ||
+	    offset < 0x40 || offset > 0x100 - width ||
+	    (width == 1 && value > UINT8_MAX) || (width == 2 && value > UINT16_MAX)) {
+		return EINVAL;
+	}
+	lck_mtx_lock(&pcie_lock);
+	if ((error = pcie_status_locked(lease)) == 0) {
+		error = pcie_config_write_locked(offset, width, value);
 	}
 	lck_mtx_unlock(&pcie_lock);
 	return error;
