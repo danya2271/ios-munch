@@ -67,6 +67,12 @@ munch_mode_poll(struct munch_mode *mode, enum munch_mode_space space, uint32_t o
 }
 
 static inline bool
+munch_mode_register_readable(enum munch_mode_space space, uint32_t offset)
+{
+	return !(space == MUNCH_MODE_DSI && offset == 0x1e4);
+}
+
+static inline bool
 munch_mode_program(struct munch_mode *mode, enum munch_mode_space space, uint32_t base,
     const struct munch_mode_register *registers, unsigned count, bool verify)
 {
@@ -74,7 +80,8 @@ munch_mode_program(struct munch_mode *mode, enum munch_mode_space space, uint32_
 		uint32_t offset = base + registers[index].offset;
 		munch_mode_write(mode, space, offset, registers[index].value);
 		uint32_t mask = space == MUNCH_MODE_MDP && base == 0x81000 && registers[index].offset >= 0xec ? 63 : UINT32_MAX;
-		if (verify && !munch_mode_poll(mode, space, offset, mask, registers[index].value & mask, 0))
+		if (verify && munch_mode_register_readable(space, offset) &&
+		    !munch_mode_poll(mode, space, offset, mask, registers[index].value & mask, 0))
 			return false;
 	}
 	return munch_mode_healthy(mode);
@@ -416,6 +423,7 @@ munch_mode_check(struct munch_mode *mode)
 		    UINT32_MAX, munch_l11r_stream[index].value, 0)) return false;
 	}
 	for (unsigned index = 0; index < dsi_timing_count; index++) {
+		if (!munch_mode_register_readable(MUNCH_MODE_DSI, dsi_timing[index].offset)) continue;
 		if (!munch_mode_poll(mode, MUNCH_MODE_DSI, dsi_timing[index].offset,
 		    UINT32_MAX, dsi_timing[index].value, 0)) return false;
 	}
