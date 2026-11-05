@@ -117,10 +117,10 @@ munch_mode_command_batch(struct munch_mode *mode, const struct munch_mode_comman
 			return false;
 		}
 		for (uint32_t index = 0; index < packet_bytes; index++) mode->scratch[bytes + index] = 0xff;
-		mode->scratch[bytes] = long_packet ? (uint8_t)(command->length >> 8) :
+		mode->scratch[bytes] = long_packet ? (uint8_t)command->length : command->payload[0];
+		mode->scratch[bytes + 1] = long_packet ? (uint8_t)(command->length >> 8) :
 		    (command->length > 1 ? command->payload[1] : 0);
-		mode->scratch[bytes + 1] = command->type;
-		mode->scratch[bytes + 2] = long_packet ? (uint8_t)command->length : command->payload[0];
+		mode->scratch[bytes + 2] = command->type;
 		mode->scratch[bytes + 3] = (long_packet ? 0x40 : 0) | (command->last ? 0x80 : 0);
 		if (long_packet) {
 			for (unsigned index = 0; index < command->length; index++)
