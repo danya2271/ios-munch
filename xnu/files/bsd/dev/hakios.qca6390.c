@@ -55,7 +55,7 @@ int
 hakios_qca6390_dma_register(const struct hakios_qca6390_dma_provider *provider, void *context)
 {
 	if (provider == NULL || context == NULL || provider->version != HAKIOS_QCA6390_DMA_PROVIDER_VERSION ||
-	    provider->status == NULL || provider->map == NULL || provider->stop == NULL) {
+	    provider->status == NULL || provider->stop == NULL) {
 		return EINVAL;
 	}
 	lck_mtx_lock(&qca6390_pcie_lock);

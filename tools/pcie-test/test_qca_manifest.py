@@ -17,6 +17,8 @@ def run():
     qca_source = QCA_DRIVER.read_text()
     qca_header = QCA_HEADER.read_text()
     assert "hakios_qca6390_dma_register" in qca_source
+    assert "int (*status)" in qca_header and "int (*stop)" in qca_header
+    assert "int (*map)" not in qca_header
     for legacy in ("SMMU_", "qca_smmu", "ml_io_map_unmappable", "kvtophys", "hakios_smmu_lock",
                    "hakios_qca6390_dma_map", "hakios_qca6390_dma_stop"):
         assert legacy not in qca_source and legacy not in qca_header

@@ -19,15 +19,14 @@ bundle into success.
 
 - `status(endpoint)`: proves that the endpoint owns the exact SID `0x1c01`,
   configured stage-1 tables, cache policy, and a live TLB/invalidation path.
-- `map(endpoint, physical, size, iova)`: maps a page-aligned range using the
-  provider's reserved IOVA space and returns a nonzero endpoint address only
-  after the PTEs are visible and synchronized.
 - `stop(endpoint)`: quiesces device DMA, invalidates outstanding translations,
   and restores or retires the provider's state. Failure retains RC0 ownership.
 
 The former direct SMMU programming path has been removed from
-`hakios.qca6390.c`. Registering a provider is the only path that can satisfy
-`HAKIOS_QCA6390_DMA_DOMAIN`.
+`hakios.qca6390.c`. The runtime's byte-range mappings are owned by the
+`hakios_dma_endpoint`/arena APIs; this provider only proves the active domain
+and performs retryable quiescence. Registering it is the only path that can
+satisfy `HAKIOS_QCA6390_DMA_DOMAIN`.
 
 ## MSI provider
 
