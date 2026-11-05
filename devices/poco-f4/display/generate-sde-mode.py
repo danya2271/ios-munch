@@ -87,8 +87,21 @@ def generate(tree):
 
         return command('on'), command('off'), command('timing-switch')
 
-    on, off, timing_switch = mode_commands('timing@0')
-    on_120, off_120, timing_switch_120 = mode_commands('timing@1')
+    def normalize_off(commands):
+        normalized = bytearray(commands)
+        offset = 0
+        while offset < len(normalized):
+            length = (normalized[offset + 5] << 8) | normalized[offset + 6]
+            if (normalized[offset] == 0x39 and length == 2 and
+                    normalized[offset + 7:offset + 9] == b'\x53\x20'):
+                normalized[offset] = 0x15
+            offset += 7 + length
+        return bytes(normalized)
+
+    on, off_raw, timing_switch = mode_commands('timing@0')
+    on_120, off_120_raw, timing_switch_120 = mode_commands('timing@1')
+    off = normalize_off(off_raw)
+    off_120 = normalize_off(off_120_raw)
 
     def find_pps(commands):
         offset = 0
@@ -144,10 +157,10 @@ def generate(tree):
     if hashlib.sha256(on_120).hexdigest() != expected_120:
         raise ValueError('Local 120-Hz on-command differs from the captured live L11r profile')
     expected_off = observed_modes[60]['qcom,mdss-dsi-off-command']['sha256']
-    if hashlib.sha256(off).hexdigest() != expected_off:
+    if hashlib.sha256(off_raw).hexdigest() != expected_off:
         raise ValueError('Local off-command differs from the captured live L11r profile')
     expected_off_120 = observed_modes[120]['qcom,mdss-dsi-off-command']['sha256']
-    if hashlib.sha256(off_120).hexdigest() != expected_off_120:
+    if hashlib.sha256(off_120_raw).hexdigest() != expected_off_120:
         raise ValueError('Local 120-Hz off-command differs from the captured live L11r profile')
 
     def timing_registers(rate):
