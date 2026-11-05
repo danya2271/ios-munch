@@ -23,10 +23,13 @@
 #define CB_TLBSTATUS 0x7f4u
 
 static uint8_t smmu[SMMU_BYTES];
+static uint8_t host[0x2000], parf[0x3000], phy[0x1000], tlmm[0x100000], gcc[0x90000], config[0x1000];
 static int64_t fail_offset = -1;
 static unsigned map_count;
 static unsigned unmap_count;
 static unsigned read_count;
+static unsigned config_map_count;
+static unsigned endpoint_identity_reads;
 static bool read_cbar;
 static bool read_cba2r;
 static bool read_context;
@@ -41,6 +44,13 @@ put32(uint32_t offset, uint32_t value)
 	memcpy(smmu + offset, &value, sizeof(value));
 }
 
+static void
+put_region32(uint8_t *region, size_t size, uint32_t offset, uint32_t value)
+{
+	assert((uint64_t)offset + sizeof(value) <= size);
+	memcpy(region + offset, &value, sizeof(value));
+}
+
 static uint32_t
 get32(const volatile void *address)
 {
@@ -52,31 +62,66 @@ get32(const volatile void *address)
 vm_offset_t
 ml_io_map_unmappable(vm_offset_t physical, vm_size_t size, unsigned int flags)
 {
-	assert(physical == 0x15000000u);
-	assert(size == SMMU_BYTES);
 	assert(flags == 7u);
 	map_count++;
-	return (vm_offset_t)smmu;
+	if (physical == 0x15000000u && size == SMMU_BYTES) return (vm_offset_t)smmu;
+	if (physical == 0x60000000u && size == sizeof(host)) return (vm_offset_t)host;
+	if (physical == 0x01c00000u && size == sizeof(parf)) return (vm_offset_t)parf;
+	if (physical == 0x01c06000u && size == sizeof(phy)) return (vm_offset_t)phy;
+	if (physical == 0x0f100000u && size == sizeof(tlmm)) return (vm_offset_t)tlmm;
+	if (physical == 0x00100000u && size == sizeof(gcc)) return (vm_offset_t)gcc;
+	if (physical == 0x60100000u && size == sizeof(config)) {
+		config_map_count++;
+		return (vm_offset_t)config;
+	}
+	assert(!"unexpected diagnostic mapping");
+	return 0;
 }
 
 void
 ml_io_unmap(vm_offset_t address, vm_size_t size)
 {
-	assert(address == (vm_offset_t)smmu);
-	assert(size == SMMU_BYTES);
+	assert((address == (vm_offset_t)smmu && size == sizeof(smmu)) ||
+	    (address == (vm_offset_t)host && size == sizeof(host)) ||
+	    (address == (vm_offset_t)parf && size == sizeof(parf)) ||
+	    (address == (vm_offset_t)phy && size == sizeof(phy)) ||
+	    (address == (vm_offset_t)tlmm && size == sizeof(tlmm)) ||
+	    (address == (vm_offset_t)gcc && size == sizeof(gcc)) ||
+	    (address == (vm_offset_t)config && size == sizeof(config)));
 	unmap_count++;
 }
 
 int
 hakios_mmio_read32(const volatile void *address, uint32_t *value)
 {
-	uintptr_t offset = (uintptr_t)address - (uintptr_t)smmu;
-	assert(value != NULL && offset + sizeof(*value) <= sizeof(smmu));
-	if ((int64_t)offset == fail_offset) return -EFAULT;
+	uintptr_t pointer = (uintptr_t)address, base;
+	size_t size;
+	if (pointer >= (uintptr_t)smmu && pointer < (uintptr_t)smmu + sizeof(smmu)) {
+		base = (uintptr_t)smmu; size = sizeof(smmu);
+	} else if (pointer >= (uintptr_t)host && pointer < (uintptr_t)host + sizeof(host)) {
+		base = (uintptr_t)host; size = sizeof(host);
+	} else if (pointer >= (uintptr_t)parf && pointer < (uintptr_t)parf + sizeof(parf)) {
+		base = (uintptr_t)parf; size = sizeof(parf);
+	} else if (pointer >= (uintptr_t)phy && pointer < (uintptr_t)phy + sizeof(phy)) {
+		base = (uintptr_t)phy; size = sizeof(phy);
+	} else if (pointer >= (uintptr_t)tlmm && pointer < (uintptr_t)tlmm + sizeof(tlmm)) {
+		base = (uintptr_t)tlmm; size = sizeof(tlmm);
+	} else if (pointer >= (uintptr_t)gcc && pointer < (uintptr_t)gcc + sizeof(gcc)) {
+		base = (uintptr_t)gcc; size = sizeof(gcc);
+	} else if (pointer >= (uintptr_t)config && pointer < (uintptr_t)config + sizeof(config)) {
+		base = (uintptr_t)config; size = sizeof(config);
+	} else {
+		assert(!"MMIO read outside mapped regions");
+		return -EFAULT;
+	}
+	uintptr_t offset = pointer - base;
+	assert(value != NULL && offset + sizeof(*value) <= size);
+	if (base == (uintptr_t)smmu && (int64_t)offset == fail_offset) return -EFAULT;
 	read_count++;
 	if (offset == CBAR(4)) read_cbar = true;
 	if (offset == CBA2R(4)) read_cba2r = true;
 	if (offset == ((128u + 4u) * 4096u) + CB_TTBR0) read_context = true;
+	if (base == (uintptr_t)config && offset == 0) endpoint_identity_reads++;
 	*value = get32(address);
 	return 0;
 }
@@ -91,8 +136,15 @@ static void
 reset_model(void)
 {
 	memset(smmu, 0, sizeof(smmu));
+	memset(host, 0, sizeof(host));
+	memset(parf, 0, sizeof(parf));
+	memset(phy, 0, sizeof(phy));
+	memset(tlmm, 0, sizeof(tlmm));
+	memset(gcc, 0, sizeof(gcc));
+	memset(config, 0, sizeof(config));
 	fail_offset = -1;
 	map_count = unmap_count = read_count = 0;
+	config_map_count = endpoint_identity_reads = 0;
 	read_cbar = read_cba2r = read_context = false;
 }
 
@@ -162,6 +214,32 @@ main(void)
 	hakios_qca6390_smmu_report();
 	assert(map_count == 1 && unmap_count == 1 && read_count == 3);
 
-	printf("qca-smmu-test: PASS (SID match, bypass, extended SID, context offsets, abort cleanup; read-only)\n");
+	reset_model();
+	put_region32(host, sizeof(host), 0x80, 1u << 29);
+	put_region32(host, sizeof(host), 0xf28, 0x400u);
+	put_region32(host, sizeof(host), 0x000, 4u);
+	put_region32(host, sizeof(host), 0x004, 0x80000000u);
+	put_region32(host, sizeof(host), 0x008, 0x60100000u);
+	put_region32(host, sizeof(host), 0x00c, 0u);
+	put_region32(host, sizeof(host), 0x010, 0x601fffffu);
+	put_region32(host, sizeof(host), 0x014, 0x01000000u);
+	put_region32(host, sizeof(host), 0x018, 0u);
+	put_region32(parf, sizeof(parf), 0x2000 + 0x15u * 4, 0x01000100u);
+	put_region32(config, sizeof(config), 0, 0x110117cbu);
+	put_region32(config, sizeof(config), 8, 0x02800001u);
+	hakios_qca6390_rc0_report();
+	assert(config_map_count == 1 && endpoint_identity_reads == 1 && map_count == unmap_count);
+
+	reset_model();
+	put_region32(host, sizeof(host), 0x80, 1u << 29);
+	put_region32(host, sizeof(host), 0xf28, 0x400u);
+	put_region32(host, sizeof(host), 0x004, 0x80000000u);
+	put_region32(host, sizeof(host), 0x008, 0x60100000u);
+	put_region32(host, sizeof(host), 0x010, 0x601fffffu);
+	put_region32(host, sizeof(host), 0x014, 0x01000000u);
+	hakios_qca6390_rc0_report();
+	assert(config_map_count == 0 && endpoint_identity_reads == 0 && map_count == unmap_count);
+
+	printf("qca-smmu-test: PASS (read-only SID/context snapshot, abort cleanup, guarded CFG0; no writes)\n");
 	return 0;
 }
