@@ -25,7 +25,7 @@ struct munch_mode {
 	enum munch_mode_space failed_space;
 	bool touched, configured, inherited, timingProgrammed, lit, failed, teConnected, vblankFrameValid;
 	uint32_t vblankFrame;
-	uint32_t refresh_hz;
+	uint32_t refresh_hz, inheritedVsync;
 };
 
 static inline bool
@@ -309,7 +309,8 @@ munch_mode_adopt(struct munch_mode *mode)
 		mode->phase = "native-handoff-rejected";
 		return false;
 	}
-	if ((vsync & 0xffff) == (munch_l11r_tear[0].value & 0xffff))
+	if ((vsync & 0xffff) == (munch_l11r_tear[0].value & 0xffff) ||
+	    (vsync & 0xffff) == 0x85)
 		inherited_refresh = 60;
 	else if ((vsync & 0xffff) == (munch_l11r_tear_120hz[0].value & 0xffff))
 		inherited_refresh = 120;
@@ -318,6 +319,7 @@ munch_mode_adopt(struct munch_mode *mode)
 		return false;
 	}
 	mode->refresh_hz = inherited_refresh;
+	mode->inheritedVsync = vsync & 0xffff;
 	mode->teConnected = (vsync & MUNCH_SDE_EXTERNAL_TE) != 0;
 	mode->configured = true;
 	mode->inherited = true;
@@ -523,7 +525,7 @@ munch_mode_check(struct munch_mode *mode)
 		uint32_t expected = mode->refresh_hz == 120 ?
 		    munch_l11r_tear_120hz[0].value : munch_l11r_tear[0].value;
 		return (munch_mode_read(mode, MUNCH_MODE_DSI, 0x004) & 0x1f7) == 0x1f5 &&
-		    (vsync & 0xffff) == (expected & 0xffff) &&
+		    (vsync & 0xffff) == (mode->timingProgrammed ? expected : mode->inheritedVsync) &&
 		    ((vsync & MUNCH_SDE_EXTERNAL_TE) != 0) == mode->teConnected &&
 		    (!mode->timingProgrammed || munch_mode_timing_matches(mode));
 	}
