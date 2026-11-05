@@ -111,8 +111,7 @@ munch_mode_command_batch(struct munch_mode *mode, const struct munch_mode_comman
 		const uint8_t *payload = command->payload;
 		uint8_t type = command->type;
 		if (type == 0x39 && command->length == 2 &&
-		    ((payload[0] == 0x35 && payload[1] == 0) ||
-		    (payload[0] == 0x53 && payload[1] == 0x20)))
+		    payload[0] == 0x53 && payload[1] == 0x20)
 			type = 0x15;
 		bool long_packet = type == 0x39;
 		uint32_t packet_bytes = long_packet ? (4 + command->length + 3) & ~3u : 4;

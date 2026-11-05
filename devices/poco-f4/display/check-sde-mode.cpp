@@ -187,6 +187,15 @@ int main()
 	unsigned totalWrites;
 	{
 		Machine machine;
+		const uint8_t tear[] = {0x35, 0};
+		const uint8_t dimming[] = {0x53, 0x20};
+		assert(munch_mode_command(&machine.mode, 0x39, tear, sizeof(tear), true));
+		assert(machine.mode.last_batch_word0 == 0xc0023900);
+		assert(munch_mode_command(&machine.mode, 0x39, dimming, sizeof(dimming), true));
+		assert(machine.mode.last_batch_word0 == 0x80531520);
+	}
+	{
+		Machine machine;
 		assert(munch_mode_configure(&machine.mode, 60));
 		assert(machine.mode.configured && !machine.mode.lit);
 		assert(!machine.mode.teConnected);
