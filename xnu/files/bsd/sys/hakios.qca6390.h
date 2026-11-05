@@ -12,7 +12,7 @@ enum hakios_qca6390_requirement {
 	HAKIOS_QCA6390_MSI_ROUTES = 1u << 2,
 };
 
-#define HAKIOS_QCA6390_DMA_PROVIDER_VERSION 1u
+#define HAKIOS_QCA6390_DMA_PROVIDER_VERSION 2u
 #define HAKIOS_QCA6390_MSI_PROVIDER_VERSION 1u
 
 typedef void (*hakios_qca6390_irq_handler_t)(void *context, uint32_t intid);
@@ -20,8 +20,6 @@ typedef void (*hakios_qca6390_irq_handler_t)(void *context, uint32_t intid);
 struct hakios_qca6390_dma_provider {
 	uint32_t version;
 	int (*status)(void *context, hakios_pcie_lease_t endpoint);
-	int (*map)(void *context, hakios_pcie_lease_t endpoint, uint64_t physical, uint64_t size,
-	    uint64_t *iova);
 	int (*stop)(void *context, hakios_pcie_lease_t endpoint);
 };
 
