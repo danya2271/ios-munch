@@ -13,6 +13,7 @@ struct Machine {
 	unsigned noLock = 0, noClock = 0, noCommand = 0, badRead = 0, dirty = 0;
 	bool fault = false, staleDone = false;
 	uint64_t elapsed = 0;
+	std::vector<uint32_t> tpgFifo;
 	std::vector<std::vector<uint8_t>> payloads;
 
 	Machine()
@@ -80,29 +81,48 @@ struct Machine {
 			value = (value & 0xaaaaaaaau) | (reg & ~value & 0x55555555);
 			if (machine.staleDone) value |= 1;
 		}
+		if (space == MUNCH_MODE_DSI && offset == 0x17c) {
+			machine.tpgFifo.push_back(value);
+			return;
+		}
+		if (space == MUNCH_MODE_DSI && offset == 0x1ec && value == 1)
+			machine.tpgFifo.clear();
 		reg = value;
 		if (space == MUNCH_MODE_DSI && offset == 0x090) {
-			assert(value == 1 && machine.dsi[0x048 / 4] == machine.mode.scratch_iova);
-			assert(machine.dsi[0x03c / 4] == 0x14000000 && machine.dsi[0x19c / 4] == 0);
+			assert(value == 1);
 			unsigned bytes = machine.dsi[0x04c / 4];
 			assert(bytes <= sizeof(machine.scratch) && machine.dirty == bytes);
+			bool fifoMode = machine.dsi[0x15c / 4] == 0x30006;
+			assert((fifoMode && bytes <= 64) || (!fifoMode &&
+			    machine.dsi[0x048 / 4] == machine.mode.scratch_iova && bytes <= 136));
+			assert(machine.dsi[0x03c / 4] == 0x14000000);
+			uint8_t fifoBytes[64] = {};
+			const uint8_t *buffer = machine.scratch;
+			if (fifoMode) {
+				unsigned words = (bytes + 3) / 4;
+				assert(machine.tpgFifo.size() == words + ((words & 1) != 0));
+				for (unsigned index = 0; index < words; index++)
+					memcpy(fifoBytes + index * 4, &machine.tpgFifo[index], 4);
+				assert(machine.tpgFifo.back() == 0 || !(words & 1));
+				buffer = fifoBytes;
+			}
 			unsigned offset_in_buffer = 0;
 			bool last = false;
 			while (offset_in_buffer < bytes) {
-				uint8_t type = machine.scratch[offset_in_buffer + 2];
-				unsigned length = type == 0x39 ? machine.scratch[offset_in_buffer] |
-				    (unsigned)machine.scratch[offset_in_buffer + 1] << 8 : 0;
+				uint8_t type = buffer[offset_in_buffer + 2];
+				unsigned length = type == 0x39 ? buffer[offset_in_buffer] |
+				    (unsigned)buffer[offset_in_buffer + 1] << 8 : 0;
 				unsigned packet_bytes = type == 0x39 ? (4 + length + 3) & ~3u : 4;
 				assert(packet_bytes <= bytes - offset_in_buffer);
 				if (type == 0x39) {
-					assert(machine.scratch[offset_in_buffer + 3] & 0x40);
-					machine.payloads.emplace_back(machine.scratch + offset_in_buffer + 4,
-					    machine.scratch + offset_in_buffer + 4 + length);
+					assert(buffer[offset_in_buffer + 3] & 0x40);
+					machine.payloads.emplace_back(buffer + offset_in_buffer + 4,
+					    buffer + offset_in_buffer + 4 + length);
 				} else {
-					assert(!(machine.scratch[offset_in_buffer + 3] & 0x40));
-					machine.payloads.push_back({machine.scratch[offset_in_buffer]});
+					assert(!(buffer[offset_in_buffer + 3] & 0x40));
+					machine.payloads.push_back({buffer[offset_in_buffer]});
 				}
-				last = machine.scratch[offset_in_buffer + 3] & 0x80;
+				last = buffer[offset_in_buffer + 3] & 0x80;
 				offset_in_buffer += packet_bytes;
 			}
 			assert(last && offset_in_buffer == bytes);

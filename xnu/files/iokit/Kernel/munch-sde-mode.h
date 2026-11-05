@@ -134,16 +134,27 @@ munch_mode_command_batch(struct munch_mode *mode, const struct munch_mode_comman
 	mode->last_batch_bytes = bytes;
 	mode->last_batch_word0 = ((uint32_t *)mode->scratch)[0];
 	mode->last_batch_word1 = bytes >= 8 ? ((uint32_t *)mode->scratch)[1] : 0;
+	bool fifoMode = bytes <= 64;
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x110, mask | 3);
 	if (!munch_mode_poll(mode, MUNCH_MODE_DSI, 0x110, 1, 0, 0)) return false;
-	munch_mode_write(mode, MUNCH_MODE_DSI, 0x19c, 0);
 	uint32_t dmaControl = munch_mode_read(mode, MUNCH_MODE_DSI, 0x03c);
-	dmaControl &= ~((1u << 31) | (1u << 30) | (1u << 24) | (1u << 29));
-	dmaControl |= (1u << 28) | (1u << 26);
-	munch_mode_write(mode, MUNCH_MODE_DSI, 0x03c, dmaControl);
 	uint32_t fifoControl = munch_mode_read(mode, MUNCH_MODE_DSI, 0x050);
-	munch_mode_write(mode, MUNCH_MODE_DSI, 0x050, fifoControl | (1u << 20) | (1u << 16));
-	munch_mode_write(mode, MUNCH_MODE_DSI, 0x048, mode->scratch_iova);
+	if (fifoMode) {
+		munch_mode_write(mode, MUNCH_MODE_DSI, 0x15c, (1u << 1) | (1u << 2) | (3u << 16));
+		for (uint32_t offset = 0; offset < bytes; offset += 4)
+			munch_mode_write(mode, MUNCH_MODE_DSI, 0x17c, ((uint32_t *)mode->scratch)[offset / 4]);
+		if (((bytes / 4) & 1u) != 0) munch_mode_write(mode, MUNCH_MODE_DSI, 0x17c, 0);
+		dmaControl &= ~((1u << 31) | (1u << 30));
+		dmaControl |= (1u << 28) | (1u << 26);
+		munch_mode_write(mode, MUNCH_MODE_DSI, 0x03c, dmaControl);
+	} else {
+		munch_mode_write(mode, MUNCH_MODE_DSI, 0x19c, 0);
+		dmaControl &= ~((1u << 31) | (1u << 30) | (1u << 24) | (1u << 29));
+		dmaControl |= (1u << 28) | (1u << 26);
+		munch_mode_write(mode, MUNCH_MODE_DSI, 0x03c, dmaControl);
+		munch_mode_write(mode, MUNCH_MODE_DSI, 0x050, fifoControl | (1u << 20) | (1u << 16));
+		munch_mode_write(mode, MUNCH_MODE_DSI, 0x048, mode->scratch_iova);
+	}
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x04c, bytes);
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x090, 1);
 	for (uint32_t elapsed = 0; elapsed < 100000; elapsed += 10) {

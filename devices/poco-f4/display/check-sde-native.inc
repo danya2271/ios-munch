@@ -15,9 +15,12 @@ static void nativeWrite(void *cookie, munch_mode_space space, uint32_t offset, u
 	if (space == MUNCH_MODE_PHY && offset == 0x03c && value == 1 && nativeScenario != 2)
 		state->modeMMIO[MUNCH_MODE_PHY][0x6b0 / 4] = 1;
 	if (space == MUNCH_MODE_DSI && offset == 0x090) {
-		assert(state->dsi[0x048 / 4] == state->buffers[1].iova + 0x9e3400);
-		assert(state->mode.scratch == state->pixels[1] + 0x9e3400);
-		assert(state->dsi[0x04c / 4] <= 136);
+		bool fifoMode = state->dsi[0x15c / 4] == 0x30006;
+		assert((fifoMode && state->dsi[0x04c / 4] <= 64) || (!fifoMode &&
+		    state->dsi[0x048 / 4] == state->buffers[1].iova + 0x9e3400 &&
+		    state->mode.scratch == state->pixels[1] + 0x9e3400 &&
+		    state->dsi[0x04c / 4] <= 136));
+		assert(state->dsi[0x03c / 4] == 0x14000000);
 		state->dsi[0x110 / 4] |= 1;
 	}
 }
