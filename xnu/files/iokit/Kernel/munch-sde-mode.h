@@ -20,7 +20,8 @@ struct munch_mode {
 	uint8_t *scratch;
 	uint32_t scratch_iova, scratch_size;
 	const char *phase;
-	uint32_t commands, failed_offset, failed_value;
+	uint32_t commands, batches, last_batch_count, last_batch_bytes;
+	uint32_t last_batch_word0, last_batch_word1, failed_offset, failed_value;
 	enum munch_mode_space failed_space;
 	bool touched, configured, lit, failed, teConnected, vblankFrameValid;
 	uint32_t vblankFrame;
@@ -128,11 +129,20 @@ munch_mode_command_batch(struct munch_mode *mode, const struct munch_mode_comman
 		bytes += packet_bytes;
 	}
 	mode->io.clean(mode->io.cookie, mode->scratch, bytes);
+	mode->batches++;
+	mode->last_batch_count = count;
+	mode->last_batch_bytes = bytes;
+	mode->last_batch_word0 = ((uint32_t *)mode->scratch)[0];
+	mode->last_batch_word1 = bytes >= 8 ? ((uint32_t *)mode->scratch)[1] : 0;
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x110, mask | 3);
 	if (!munch_mode_poll(mode, MUNCH_MODE_DSI, 0x110, 1, 0, 0)) return false;
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x19c, 0);
-	munch_mode_write(mode, MUNCH_MODE_DSI, 0x03c, (1u << 28) | (1u << 26));
-	munch_mode_write(mode, MUNCH_MODE_DSI, 0x050, (1u << 20) | (1u << 16));
+	uint32_t dmaControl = munch_mode_read(mode, MUNCH_MODE_DSI, 0x03c);
+	dmaControl &= ~((1u << 31) | (1u << 30) | (1u << 24) | (1u << 29));
+	dmaControl |= (1u << 28) | (1u << 26);
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x03c, dmaControl);
+	uint32_t fifoControl = munch_mode_read(mode, MUNCH_MODE_DSI, 0x050);
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x050, fifoControl | (1u << 20) | (1u << 16));
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x048, mode->scratch_iova);
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x04c, bytes);
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x090, 1);

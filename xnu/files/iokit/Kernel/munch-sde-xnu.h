@@ -835,13 +835,19 @@ munchSdeSubmitFrame(MunchSDE *state)
 			state->mode.scratch_size = state->buffers[index].length - offset;
 			if (!munch_mode_configure(&state->mode, state->nativeRefreshHz)) {
 				volatile uint32_t *dma = (volatile uint32_t *)state->mode.scratch;
-				IOLog("MUNCH SDE DSI FAIL: ctrl=%08x status=%08x dma=%08x addr=%08x len=%08x fifo=%08x "
-				    "trig=%08x sched=%08x/%08x sw=%08x int=%08x failed=%u:%x=%x\n",
-				    state->dsi[0x004 / 4], state->dsi[0x008 / 4], state->dsi[0x03c / 4],
-				    state->dsi[0x048 / 4], state->dsi[0x04c / 4], state->dsi[0x050 / 4],
-				    state->dsi[0x084 / 4], state->dsi[0x100 / 4], state->dsi[0x104 / 4],
-				    state->dsi[0x090 / 4], state->dsi[0x110 / 4], state->mode.failed,
-				    state->mode.failed_offset, state->mode.failed_value);
+				IOLog("MUNCH SDE DSI FAIL: ctrl=%08x status=%08x fifo=%08x dma=%08x addr=%08x len=%08x "
+				    "dfifo=%08x tpgfifo=%08x trig=%08x sched=%08x/%08x sw=%08x int=%08x "
+				    "ack=%08x timeout=%08x lane=%08x clk=%08x idle=%08x failed=%u:%x=%x "
+				    "batches=%u last=%u/%u words=%08x/%08x\n",
+				    state->dsi[0x004 / 4], state->dsi[0x008 / 4], state->dsi[0x00c / 4],
+				    state->dsi[0x03c / 4], state->dsi[0x048 / 4], state->dsi[0x04c / 4],
+				    state->dsi[0x050 / 4], state->dsi[0x1dc / 4], state->dsi[0x084 / 4],
+				    state->dsi[0x100 / 4], state->dsi[0x104 / 4], state->dsi[0x090 / 4],
+				    state->dsi[0x110 / 4], state->dsi[0x068 / 4], state->dsi[0x0c0 / 4],
+				    state->dsi[0x0b4 / 4], state->dsi[0x120 / 4], state->dsi[0x194 / 4],
+				    state->mode.failed, state->mode.failed_offset, state->mode.failed_value,
+				    state->mode.batches, state->mode.last_batch_count, state->mode.last_batch_bytes,
+				    state->mode.last_batch_word0, state->mode.last_batch_word1);
 				IOLog("MUNCH SDE DSI DMA: %08x %08x %08x %08x %08x %08x\n",
 				    dma[0], dma[1], dma[2], dma[3], dma[4], dma[5]);
 				result = MUNCH_SDE_FAULT;
