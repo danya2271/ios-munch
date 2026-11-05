@@ -192,7 +192,7 @@ int main()
 		assert(munch_mode_command(&machine.mode, 0x39, tear, sizeof(tear), true));
 		assert(machine.mode.last_batch_word0 == 0xc0023900);
 		assert(munch_mode_command(&machine.mode, 0x39, dimming, sizeof(dimming), true));
-		assert(machine.mode.last_batch_word0 == 0x80531520);
+		assert(machine.mode.last_batch_word0 == 0xc0023900);
 	}
 	{
 		Machine machine;

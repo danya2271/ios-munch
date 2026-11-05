@@ -85,10 +85,10 @@ def generate(tree):
             raw = re.search(rf'qcom,mdss-dsi-{name}-command\s*=\s*\[([^]]+)\]', mode)[1]
             return bytes.fromhex(re.sub(r'/\*.*?\*/', '', raw, flags=re.S))
 
-        return command('on'), command('timing-switch')
+        return command('on'), command('off'), command('timing-switch')
 
-    on, timing_switch = mode_commands('timing@0')
-    on_120, timing_switch_120 = mode_commands('timing@1')
+    on, off, timing_switch = mode_commands('timing@0')
+    on_120, off_120, timing_switch_120 = mode_commands('timing@1')
 
     def find_pps(commands):
         offset = 0
@@ -143,6 +143,12 @@ def generate(tree):
     expected_120 = observed_modes[120]['qcom,mdss-dsi-on-command']['sha256']
     if hashlib.sha256(on_120).hexdigest() != expected_120:
         raise ValueError('Local 120-Hz on-command differs from the captured live L11r profile')
+    expected_off = observed_modes[60]['qcom,mdss-dsi-off-command']['sha256']
+    if hashlib.sha256(off).hexdigest() != expected_off:
+        raise ValueError('Local off-command differs from the captured live L11r profile')
+    expected_off_120 = observed_modes[120]['qcom,mdss-dsi-off-command']['sha256']
+    if hashlib.sha256(off_120).hexdigest() != expected_off_120:
+        raise ValueError('Local 120-Hz off-command differs from the captured live L11r profile')
 
     def timing_registers(rate):
         mode = observed_modes[rate]
@@ -195,14 +201,18 @@ def generate(tree):
         for offset, value in values:
             result += f'\t{{ 0x{offset:03x}, 0x{value:08x} }},\n'
         result += '};\n'
-    result += '\nstatic const uint8_t munch_l11r_on[] = {\n'
-    for offset in range(0, len(on), 16):
-        result += '\t' + ', '.join(f'0x{value:02x}' for value in on[offset:offset + 16]) + ',\n'
-    result += '};\n\n'
-    result += 'static const uint8_t munch_l11r_on_120hz[] = {\n'
-    for offset in range(0, len(on_120), 16):
-        result += '\t' + ', '.join(f'0x{value:02x}' for value in on_120[offset:offset + 16]) + ',\n'
-    result += '};\n\n'
+    def emit_bytes(name, data):
+        nonlocal result
+        result += f'\nstatic const uint8_t {name}[] = {{\n'
+        for offset in range(0, len(data), 16):
+            result += '\t' + ', '.join(f'0x{value:02x}' for value in data[offset:offset + 16]) + ',\n'
+        result += '};\n'
+
+    emit_bytes('munch_l11r_on', on)
+    emit_bytes('munch_l11r_on_120hz', on_120)
+    emit_bytes('munch_l11r_off', off)
+    emit_bytes('munch_l11r_off_120hz', off_120)
+    result += '\n'
     result += ('struct munch_mode_command { uint8_t type, length; uint16_t delay_ms; '
                'bool last; const uint8_t *payload; };\n\n')
     def emit_switch(name, commands):

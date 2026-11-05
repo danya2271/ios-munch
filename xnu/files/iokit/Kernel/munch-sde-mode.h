@@ -108,14 +108,9 @@ munch_mode_command_batch(struct munch_mode *mode, const struct munch_mode_comman
 	}
 	for (unsigned command_index = 0; command_index < count; command_index++) {
 		const struct munch_mode_command *command = &commands[command_index];
-		const uint8_t *payload = command->payload;
-		uint8_t type = command->type;
-		if (type == 0x39 && command->length == 2 &&
-		    payload[0] == 0x53 && payload[1] == 0x20)
-			type = 0x15;
-		bool long_packet = type == 0x39;
+		bool long_packet = command->type == 0x39;
 		uint32_t packet_bytes = long_packet ? (4 + command->length + 3) & ~3u : 4;
-		if (!command->length || (!long_packet && (type != 0x05 && type != 0x15)) ||
+		if (!command->length || (!long_packet && (command->type != 0x05 && command->type != 0x15)) ||
 		    (!long_packet && command->length > 2) || bytes + packet_bytes > mode->scratch_size ||
 		    (command_index + 1 == count && !command->last)) {
 			mode->failed = true;
@@ -124,7 +119,7 @@ munch_mode_command_batch(struct munch_mode *mode, const struct munch_mode_comman
 		for (uint32_t index = 0; index < packet_bytes; index++) mode->scratch[bytes + index] = 0xff;
 		mode->scratch[bytes] = long_packet ? (uint8_t)(command->length >> 8) :
 		    (command->length > 1 ? command->payload[1] : 0);
-		mode->scratch[bytes + 1] = type;
+		mode->scratch[bytes + 1] = command->type;
 		mode->scratch[bytes + 2] = long_packet ? (uint8_t)command->length : command->payload[0];
 		mode->scratch[bytes + 3] = (long_packet ? 0x40 : 0) | (command->last ? 0x80 : 0);
 		if (long_packet) {
@@ -303,11 +298,12 @@ static inline bool
 munch_mode_configure(struct munch_mode *mode, uint32_t refresh_hz)
 {
 	static const uint32_t branches[] = { 0x2004, 0x202c, 0x2028, 0x2038, 0x2024 };
-	static const uint8_t display_off[] = { 0x28 }, sleep_in[] = { 0x10 }, dimming[] = { 0x53, 0x20 };
 	const struct munch_mode_register *tear;
 	unsigned tear_count;
 	const uint8_t *panel_on;
 	unsigned panel_on_size;
+	const uint8_t *panel_off;
+	unsigned panel_off_size;
 	const struct munch_mode_register *dsi_timing;
 	unsigned dsi_timing_count;
 	const struct munch_mode_register *intf_timing;
@@ -344,6 +340,8 @@ munch_mode_configure(struct munch_mode *mode, uint32_t refresh_hz)
 	    sizeof(munch_l11r_intf_timing_60) / sizeof(munch_l11r_intf_timing_60[0]);
 	panel_on = refresh_hz == 120 ? munch_l11r_on_120hz : munch_l11r_on;
 	panel_on_size = refresh_hz == 120 ? sizeof(munch_l11r_on_120hz) : sizeof(munch_l11r_on);
+	panel_off = refresh_hz == 120 ? munch_l11r_off_120hz : munch_l11r_off;
+	panel_off_size = refresh_hz == 120 ? sizeof(munch_l11r_off_120hz) : sizeof(munch_l11r_off);
 	mode->phase = "native-preflight";
 	if (mode->touched || mode->configured || !mode->scratch || mode->scratch_size < 136 ||
 	    !mode->scratch_iova || (mode->scratch_iova & 7) ||
@@ -356,11 +354,7 @@ munch_mode_configure(struct munch_mode *mode, uint32_t refresh_hz)
 	    (munch_mode_read(mode, MUNCH_MODE_DSI, 0x004) & 0x1f7) != 0x1f5) return false;
 	if (!munch_mode_poll(mode, MUNCH_MODE_PHY, 0x140, 1, 1, 1000)) return false;
 	mode->phase = "native-panel-sleep";
-	if (!munch_mode_command(mode, 5, display_off, sizeof(display_off), true)) return false;
-	mode->io.delay(mode->io.cookie, 20000);
-	if (!munch_mode_command(mode, 0x39, dimming, sizeof(dimming), true) ||
-	    !munch_mode_command(mode, 5, sleep_in, sizeof(sleep_in), true)) return false;
-	mode->io.delay(mode->io.cookie, 120000);
+	if (!munch_mode_byte_sequence(mode, panel_off, panel_off_size)) return false;
 	mode->phase = "native-link-stop";
 	munch_mode_write(mode, MUNCH_MODE_MDP, 0x6ba84, 0);
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x004, 0x1f0);
