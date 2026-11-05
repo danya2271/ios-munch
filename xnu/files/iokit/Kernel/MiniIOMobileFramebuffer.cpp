@@ -2251,8 +2251,9 @@ IOMobileFramebuffer::show(const uint8_t * swap, MiniIOSurface ** surfaces)
 		    fSDENativeRequested ? munchSdeSubmitFrame(fSDE) : munchSdeEndFrame(fSDE);
 		if (fSDENativeRequested) IOLockUnlock(fDisplayLock);
 		if (fSDENativeRequested && !fGraphics) {
-			IOLog("MUNCH SDE NATIVE r16: phase=%s result=%s inherited-refresh=%uHz panel=%ux%u\n",
-			    fSDE->mode.phase, munch_sde_result_name(result), refreshHz(), fPanelWidth, fPanelHeight);
+			IOLog("MUNCH SDE NATIVE r16: phase=%s result=%s inherited-refresh=%uHz requested-refresh=%uHz panel=%ux%u\n",
+			    fSDE->mode.phase, munch_sde_result_name(result), fSDE->mode.refresh_hz,
+			    refreshHz(), fPanelWidth, fPanelHeight);
 		}
 		fStatSDECommit += mach_absolute_time() - commit;
 		if (result != MUNCH_SDE_OK) {

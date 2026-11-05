@@ -23,7 +23,7 @@ struct munch_mode {
 	uint32_t commands, batches, last_batch_count, last_batch_bytes;
 	uint32_t last_batch_word0, last_batch_word1, failed_offset, failed_value;
 	enum munch_mode_space failed_space;
-	bool touched, configured, inherited, lit, failed, teConnected, vblankFrameValid;
+	bool touched, configured, inherited, timingProgrammed, lit, failed, teConnected, vblankFrameValid;
 	uint32_t vblankFrame;
 	uint32_t refresh_hz;
 };
@@ -239,7 +239,7 @@ munch_mode_switch_refresh(struct munch_mode *mode, uint32_t refresh_hz)
 		return false;
 	}
 	mode->refresh_hz = refresh_hz;
-	mode->inherited = false;
+	mode->timingProgrammed = mode->inherited;
 	mode->vblankFrameValid = false;
 	return true;
 }
@@ -301,24 +301,27 @@ munch_mode_adopt(struct munch_mode *mode)
 	uint32_t vsync = munch_mode_read(mode, MUNCH_MODE_MDP, 0x6b800 + 0x288);
 	uint32_t inherited_refresh;
 
+	mode->phase = "native-handoff-detect";
 	if (mode->touched || mode->configured || !mode->scratch || mode->scratch_size < 136 ||
 	    !mode->scratch_iova || (mode->scratch_iova & 7) ||
 	    (uint64_t)mode->scratch_iova + mode->scratch_size > (1ULL << 32) ||
-	    (munch_mode_read(mode, MUNCH_MODE_DSI, 0x004) & 0x1f7) != 0x1f5 ||
-	    (munch_mode_read(mode, MUNCH_MODE_DSI, 0x110) & (1u << 24)) ||
-	    !(munch_mode_read(mode, MUNCH_MODE_PHY, 0x6b0) & 1) ||
-	    !(munch_mode_read(mode, MUNCH_MODE_MDP, 0x6ba84) & 1))
+	    (munch_mode_read(mode, MUNCH_MODE_DSI, 0x004) & 0x1f7) != 0x1f5) {
+		mode->phase = "native-handoff-rejected";
 		return false;
+	}
 	if ((vsync & 0xffff) == (munch_l11r_tear[0].value & 0xffff))
 		inherited_refresh = 60;
 	else if ((vsync & 0xffff) == (munch_l11r_tear_120hz[0].value & 0xffff))
 		inherited_refresh = 120;
-	else
+	else {
+		mode->phase = "native-handoff-unknown-refresh";
 		return false;
+	}
 	mode->refresh_hz = inherited_refresh;
 	mode->teConnected = (vsync & MUNCH_SDE_EXTERNAL_TE) != 0;
 	mode->configured = true;
 	mode->inherited = true;
+	mode->timingProgrammed = false;
 	mode->lit = true;
 	mode->phase = "native-inherited";
 	mode->touched = true;
@@ -467,6 +470,44 @@ munch_mode_connect_te(struct munch_mode *mode, bool enable)
 }
 
 static inline bool
+munch_mode_timing_matches(struct munch_mode *mode)
+{
+	const struct munch_mode_register *tear = mode->refresh_hz == 120 ?
+	    munch_l11r_tear_120hz : munch_l11r_tear;
+	unsigned tear_count = mode->refresh_hz == 120 ?
+	    sizeof(munch_l11r_tear_120hz) / sizeof(munch_l11r_tear_120hz[0]) :
+	    sizeof(munch_l11r_tear) / sizeof(munch_l11r_tear[0]);
+	const struct munch_mode_register *dsi_timing = mode->refresh_hz == 120 ?
+	    munch_l11r_dsi_timing_120 : munch_l11r_dsi_timing_60;
+	unsigned dsi_timing_count = mode->refresh_hz == 120 ?
+	    sizeof(munch_l11r_dsi_timing_120) / sizeof(munch_l11r_dsi_timing_120[0]) :
+	    sizeof(munch_l11r_dsi_timing_60) / sizeof(munch_l11r_dsi_timing_60[0]);
+	const struct munch_mode_register *intf_timing = mode->refresh_hz == 120 ?
+	    munch_l11r_intf_timing_120 : munch_l11r_intf_timing_60;
+	unsigned intf_timing_count = mode->refresh_hz == 120 ?
+	    sizeof(munch_l11r_intf_timing_120) / sizeof(munch_l11r_intf_timing_120[0]) :
+	    sizeof(munch_l11r_intf_timing_60) / sizeof(munch_l11r_intf_timing_60[0]);
+
+	for (unsigned index = 0; index < dsi_timing_count; index++) {
+		if (!munch_mode_register_readable(MUNCH_MODE_DSI, dsi_timing[index].offset)) continue;
+		if (munch_mode_read(mode, MUNCH_MODE_DSI, dsi_timing[index].offset) != dsi_timing[index].value)
+			return false;
+	}
+	for (unsigned index = 0; index < intf_timing_count; index++) {
+		if (munch_mode_read(mode, MUNCH_MODE_MDP, MUNCH_SDE_INTF1_OFFSET + intf_timing[index].offset) !=
+		    intf_timing[index].value)
+			return false;
+	}
+	for (unsigned index = 0; index < tear_count; index++) {
+		uint32_t expected = tear[index].value;
+		if (index == 0 && mode->teConnected) expected |= MUNCH_SDE_EXTERNAL_TE;
+		if (munch_mode_read(mode, MUNCH_MODE_MDP, MUNCH_SDE_INTF1_OFFSET + tear[index].offset) != expected)
+			return false;
+	}
+	return true;
+}
+
+static inline bool
 munch_mode_check(struct munch_mode *mode)
 {
 	const struct munch_mode_register *tear;
@@ -478,10 +519,13 @@ munch_mode_check(struct munch_mode *mode)
 
 	if (!mode->configured || mode->failed || !munch_mode_healthy(mode)) return false;
 	if (mode->inherited) {
-		return (munch_mode_read(mode, MUNCH_MODE_PHY, 0x6b0) & 1) &&
-		    (munch_mode_read(mode, MUNCH_MODE_DSI, 0x004) & 0x1f7) == 0x1f5 &&
-		    !(munch_mode_read(mode, MUNCH_MODE_DSI, 0x110) & (1u << 24)) &&
-		    (munch_mode_read(mode, MUNCH_MODE_MDP, 0x6ba84) & 1);
+		uint32_t vsync = munch_mode_read(mode, MUNCH_MODE_MDP, 0x6b800 + 0x288);
+		uint32_t expected = mode->refresh_hz == 120 ?
+		    munch_l11r_tear_120hz[0].value : munch_l11r_tear[0].value;
+		return (munch_mode_read(mode, MUNCH_MODE_DSI, 0x004) & 0x1f7) == 0x1f5 &&
+		    (vsync & 0xffff) == (expected & 0xffff) &&
+		    ((vsync & MUNCH_SDE_EXTERNAL_TE) != 0) == mode->teConnected &&
+		    (!mode->timingProgrammed || munch_mode_timing_matches(mode));
 	}
 	tear = mode->refresh_hz == 120 ? munch_l11r_tear_120hz : munch_l11r_tear;
 	tear_count = mode->refresh_hz == 120 ?
