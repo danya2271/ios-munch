@@ -95,7 +95,7 @@ def generate(tree):
             payload = normalized[offset + 7:offset + 7 + length]
             if normalized[offset] == 0x39 and length == 2:
                 if payload == b'\x35\x00':
-                    normalized[offset] = 0x05
+                    normalized[offset] = 0x15
                 elif payload == b'\x53\x20':
                     normalized[offset] = 0x15
             offset += 7 + length
@@ -103,8 +103,8 @@ def generate(tree):
 
     on_raw, off_raw, timing_switch = mode_commands('timing@0')
     on_120_raw, off_120_raw, timing_switch_120 = mode_commands('timing@1')
-    on = on_raw
-    on_120 = on_120_raw
+    on = normalize_dcs_commands(on_raw)
+    on_120 = normalize_dcs_commands(on_120_raw)
     off = normalize_dcs_commands(off_raw)
     off_120 = normalize_dcs_commands(off_120_raw)
 
