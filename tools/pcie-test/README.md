@@ -92,7 +92,7 @@ effects, partial-restoration retention and explicit wired endpoint/bounce
 integration. This does not execute ARM cache instructions or real DMA. See
 `devices/poco-f4/WIRED-DMA-MEMORY.md` for native APIs and remaining blockers.
 
-The arena and common-runtime tests bring the current total to seventeen.
+The arena, Kona MSI, and common-runtime tests bring the current total to eighteen.
 They link the real preallocated DMA/linear-SKB binding and runtime/PCI/HIF
 composition with modeled endpoint backing and upstream driver functions.
 Coverage includes exact byte-range ownership, adjacent-mapping escape refusal,
@@ -160,7 +160,7 @@ JOBS=4 bash tools/pcie-test/build-kernel.sh
 Requires a previously prepared XNU source tree, its external build dependencies
 and `rsync`. This copies the existing source tree, excluding `.git` and `BUILD`,
 into a fresh `xnu-deps/build/pcie-full-kernel.*` directory. Only that copy receives
-the canonical twenty-two Wi-Fi/PCIe/DMA/transport C files, twenty headers and nineteen new BSD
+the canonical QCA Wi-Fi/PCIe/DMA/transport source lists and any missing BSD
 manifest entries. All unrelated staged source changes are retained in the
 copy, so this is an integration check against that snapshot, not a pristine
 release build or a reproducibility claim.

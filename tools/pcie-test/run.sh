@@ -5,7 +5,9 @@ ROOT=$(cd "$HERE/../.." && pwd)
 BUILD=$(mktemp -d "${TMPDIR:-/tmp}/hakios-pcie-test.XXXXXXXX")
 trap 'rm -rf "$BUILD"' EXIT
 mkdir -p "$BUILD/include/sys"
-for header in hakios.pcie.h hakios.pcie.kona.h hakios.pcie.kona.platform.h hakios.pcie.kona.mmio.h hakios.pcie.kona.sid.h hakios.mmio.h hakios.dma.pagetable.h hakios.dma.space.h hakios.dma.endpoint.h hakios.dma.memory.h hakios.dma.arena.h hakios.msi.h hakios.msi.pool.h hakios.mhi.h hakios.mhi.boot.h hakios.mhi.runtime.h hakios.mhi.worker.h hakios.ipcr.h hakios.qrtr.wire.h hakios.qrtr.mhi.h hakios.qrtr.h hakios.qmi.h hakios.wire.h; do
+mkdir -p "$BUILD/osfmk/arm64"
+ln -s "$ROOT/xnu/files/osfmk/arm64/gic_v3_spi.h" "$BUILD/osfmk/arm64/gic_v3_spi.h"
+for header in hakios.pcie.h hakios.pcie.kona.h hakios.pcie.kona.platform.h hakios.pcie.kona.mmio.h hakios.pcie.kona.sid.h hakios.gic.h hakios.mmio.h hakios.dma.pagetable.h hakios.dma.space.h hakios.dma.endpoint.h hakios.dma.memory.h hakios.dma.arena.h hakios.msi.h hakios.msi.pool.h hakios.msi.kona.h hakios.qca6390.h hakios.mhi.h hakios.mhi.boot.h hakios.mhi.runtime.h hakios.mhi.worker.h hakios.ipcr.h hakios.qrtr.wire.h hakios.qrtr.mhi.h hakios.qrtr.h hakios.qmi.h hakios.wire.h; do
 	ln -s "$ROOT/xnu/files/bsd/sys/$header" "$BUILD/include/sys/$header"
 done
 ln -s "$ROOT/wifi/lx/include/lx_qca_pci.h" "$BUILD/include/lx_qca_pci.h"
@@ -16,7 +18,7 @@ ln -s "$ROOT/wifi/lx/include/linux/dma-mapping.h" "$BUILD/include/linux/dma-mapp
 python3 "$HERE/test_qca_manifest.py"
 FLAGS=(-std=c11 -D_DEFAULT_SOURCE -O1 -g -Wall -Wextra -Werror -pthread
     -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all)
-"${CC:-cc}" "${FLAGS[@]}" -I"$HERE/shim" -I"$ROOT/xnu/files/osfmk/arm64" \
+"${CC:-cc}" "${FLAGS[@]}" -I"$HERE/shim" -I"$ROOT/xnu/files/osfmk/arm64" -I"$BUILD/include" \
     "$HERE/test_gic_spi.c" -o "$BUILD/test-gic-spi"
 "$BUILD/test-gic-spi"
 "${CC:-cc}" "${FLAGS[@]}" -I"$HERE/shim" -I"$BUILD/include" \
@@ -43,6 +45,11 @@ FLAGS=(-std=c11 -D_DEFAULT_SOURCE -O1 -g -Wall -Wextra -Werror -pthread
     "$ROOT/xnu/files/bsd/dev/hakios.dma.pagetable.c" "$ROOT/xnu/files/bsd/dev/hakios.msi.pool.c" \
     -o "$BUILD/test-endpoint-resources"
 "$BUILD/test-endpoint-resources"
+"${CC:-cc}" "${FLAGS[@]}" -I"$HERE/shim" -I"$BUILD/include" -I"$ROOT/xnu/files/osfmk" \
+    "$HERE/test_msi_kona.c" "$ROOT/xnu/files/bsd/dev/hakios.msi.kona.c" \
+    "$ROOT/xnu/files/bsd/dev/hakios.msi.c" "$ROOT/xnu/files/bsd/dev/hakios.msi.pool.c" \
+    -o "$BUILD/test-msi-kona"
+"$BUILD/test-msi-kona"
 for PAGE_SHIFT in 12 14; do
 	"${CC:-cc}" "${FLAGS[@]}" -DPCIE_TEST_NATIVE_PAGE_SHIFT="$PAGE_SHIFT" -I"$HERE/shim" -I"$BUILD/include" \
 	    "$HERE/test_dma_memory.c" "$ROOT/xnu/files/bsd/dev/hakios.dma.memory.c" \

@@ -12,6 +12,7 @@ kern_return_t gic_v3_spi_bank_reserve(uint32_t first, uint32_t count, gic_v3_spi
 kern_return_t gic_v3_spi_bank_attach(gic_v3_spi_lease_t lease, uint32_t vector, bool edge,
     gic_v3_spi_handler_t handler, void *context);
 kern_return_t gic_v3_spi_bank_intid(gic_v3_spi_lease_t lease, uint32_t vector, uint32_t *intid);
+kern_return_t gic_v3_spi_bank_count(gic_v3_spi_lease_t lease, uint32_t vector, uint64_t *count);
 kern_return_t gic_v3_spi_bank_enable(gic_v3_spi_lease_t lease, uint32_t vector, bool enable);
 kern_return_t gic_v3_spi_bank_quiesce(gic_v3_spi_lease_t lease);
 kern_return_t gic_v3_spi_bank_release(gic_v3_spi_lease_t *lease);

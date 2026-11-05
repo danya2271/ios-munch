@@ -150,6 +150,18 @@ kern_return_t gic_v3_spi_bank_intid(gic_v3_spi_lease_t lease, uint32_t vector, u
 	spi_unlock(interrupts);
 	return error;
 }
+kern_return_t gic_v3_spi_bank_count(gic_v3_spi_lease_t lease, uint32_t vector, uint64_t *count)
+{
+	if (count == NULL) { return KERN_INVALID_ARGUMENT; }
+	*count = 0;
+	if (gicd_base == 0 || lease == 0) { return KERN_INVALID_ARGUMENT; }
+	boolean_t interrupts = spi_lock();
+	struct gic_spi *slot = spi_find(lease, vector);
+	kern_return_t error = slot == NULL ? KERN_INVALID_ARGUMENT : KERN_SUCCESS;
+	if (error == KERN_SUCCESS) { *count = slot->count; }
+	spi_unlock(interrupts);
+	return error;
+}
 kern_return_t gic_v3_spi_bank_enable(gic_v3_spi_lease_t lease, uint32_t vector, bool enable)
 {
 	if (gicd_base == 0 || lease == 0) { return KERN_INVALID_ARGUMENT; }

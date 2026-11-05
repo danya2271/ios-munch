@@ -20,6 +20,7 @@ QCA_SOURCES = (
     "hakios.dma.arena",
     "hakios.msi.pool",
     "hakios.msi",
+    "hakios.msi.kona",
     "hakios.mhi",
     "hakios.mhi.control",
     "hakios.mhi.boot",

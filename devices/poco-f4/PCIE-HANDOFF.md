@@ -210,11 +210,13 @@ configuration, but it does not prove an XNU ownership grant. The provider must
 obtain and retain the actual payload and endpoint-specific doorbell IOVA; no
 code may derive payload from a guessed DT value or from a Linux virtual IRQ.
 
-This is a topology derivation, not proof of XNU routing. Allocation,
-capability programming, IRQ ownership, and teardown are still missing.
-The old code that returned an expected INTID and a page-mapped doorbell as
-a usable message has been removed. `hakios_qca6390_msi()` clears outputs
-and returns failure until an actual allocator supplies a complete message.
+This is a topology derivation, not proof of XNU routing. A Kona MSI owner now
+reserves the expected GIC bank, installs handlers masked, maps the doorbell
+through an explicit endpoint callback, programs the PCI MSI capability, and
+restores those resources on teardown. It has no boot-time caller and does not
+acquire RC0, provide the doorbell DMA mapping, or prove resident-firmware
+exclusion. `hakios_qca6390_msi()` remains fail-closed until an authorized owner
+activates and registers the provider.
 
 ## DMA groundwork audit before enabling it
 

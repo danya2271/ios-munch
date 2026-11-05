@@ -65,6 +65,7 @@ int hakios_pcie_endpoint_drop(hakios_pcie_lease_t lease);
 int hakios_pcie_endpoint_status(hakios_pcie_lease_t lease);
 int hakios_pcie_endpoint_resources(hakios_pcie_lease_t lease, struct hakios_pcie_endpoint_resources *resources);
 int hakios_pcie_config_read(hakios_pcie_lease_t lease, uint16_t offset, uint8_t width, uint32_t *value);
+int hakios_pcie_config_write(hakios_pcie_lease_t lease, uint16_t offset, uint8_t width, uint32_t value);
 int hakios_pcie_bar0_transfer(hakios_pcie_lease_t lease, struct hakios_pcie_bar_operation *operations,
     uint32_t count, bool wake_required);
 

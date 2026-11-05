@@ -31,6 +31,13 @@ that can satisfy `HAKIOS_QCA6390_DMA_DOMAIN`.
 
 ## MSI provider
 
+`hakios.msi.kona.c` implements the provider callbacks over the XNU GIC bank
+lease API, `hakios.msi.pool.c`, and the PCI MSI capability engine. The platform
+owner supplies only the endpoint doorbell map/unmap callbacks and must activate
+the provider after its RC0/DMA owner is established. The provider does not
+initialize the GIC, acquire RC0, or prove that resident firmware relinquished
+these resources.
+
 `hakios_qca6390_msi_register()` accepts a provider with an allocation and a
 per-vector lifecycle. `allocate()` receives the validated PCI MSI capability
 offset and must complete all of the following before returning:
@@ -44,11 +51,11 @@ offset and must complete all of the following before returning:
 5. return a handle plus the message address, base data, and first hardware
    INTID.
 
-The provider must use the GIC lease API from
-`xnu/files/osfmk/arm64/gic_v3_spi.h` for reserve, masked attach, enable,
-quiesce, and restore. The adapter never assumes that DT SPI `768` is the
-message payload; on Kona the expected hardware INTID range is derived as
-`800..831`, and the provider must verify the actual route before publishing it.
+The Kona provider reserves hardware INTIDs `800..831`, derived from DT
+`GIC_SPI 768..799` plus the GIC SPI translation. It attaches all 32 trampoline
+handlers while masked before enabling the PCI MSI capability; the per-vector
+ath11k callbacks are published before each vector is unmasked. The adapter
+never treats the DT SPI or a Linux virtual IRQ as MSI payload.
 `hakios_msi_create()` supports both 32-bit and 64-bit PCI MSI layouts and rejects
 a 32-bit capability paired with an IOVA above `UINT32_MAX`.
 
@@ -65,6 +72,11 @@ bank. Any failed step keeps the handle and endpoint ownership live for retry.
 
 - Registration does not claim hardware and does not clear any preflight bit.
 - The callbacks must not re-enter the QCA adapter or wait on its mutex.
+- Serialize Kona MSI provider activation/deactivation against QCA start/stop.
+  Deactivate only after the QCA MSI allocation and endpoint lease are released.
+- Doorbell map/unmap callbacks must use the exact endpoint's SID and retain a
+  retryable mapping token; they must not fall back to a physical/identity DMA
+  address or re-enter QCA while its provider callback is active.
 - A successful callback must return a non-null handle where the API requires
   one; malformed success is converted to `EPROTO` and cleaned up.
 - `hakios_qca6390_release()` tears down MSI and DMA providers before releasing
