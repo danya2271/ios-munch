@@ -34,7 +34,7 @@
  * buffer, a panic's text). loader_log_linearize() puts the pieces in order before returning.
  */
 #define LOADER_LOG_SIZE (1536 * 1024)
-#define LOADER_LOG_HEAD (256 * 1024)
+#define LOADER_LOG_HEAD (512 * 1024)
 #define LOADER_LOG_RING (1024 * 1024)
 
 #if defined(GENERIC_GIC_V3_IRQ)
@@ -185,7 +185,7 @@ loader_log_position(void)
 uint32_t
 loader_log_copy(uint64_t *position, char *out, uint32_t maximum)
 {
-	uint64_t daif, total, oldest, start, ring_oldest;
+	uint64_t daif, total, start, ring_oldest;
 	uint32_t count;
 	bool locked = false;
 
@@ -198,13 +198,16 @@ loader_log_copy(uint64_t *position, char *out, uint32_t maximum)
 		locked = os_atomic_cmpxchg(&loader_log_lock, 0, 1, acquire);
 	}
 	total = loader_log_total;
-	oldest = total > LOADER_LOG_SIZE ? total - LOADER_LOG_SIZE : 0;
-	if (*position < oldest) {
-		*position = oldest;
+	ring_oldest = total > LOADER_LOG_HEAD + LOADER_LOG_RING ? total - LOADER_LOG_RING : 0;
+	if (ring_oldest != 0 && *position >= LOADER_LOG_HEAD && *position < ring_oldest) {
+		*position = ring_oldest;
 	}
 	start = *position;
-	count = (uint32_t)((total - start) < maximum ? total - start : maximum);
-	ring_oldest = total > LOADER_LOG_HEAD + LOADER_LOG_RING ? total - LOADER_LOG_RING : LOADER_LOG_HEAD;
+	uint64_t available = start < total ? total - start : 0;
+	if (ring_oldest != 0 && start < LOADER_LOG_HEAD) {
+		available = MIN(available, (uint64_t)LOADER_LOG_HEAD - start);
+	}
+	count = (uint32_t)(available < maximum ? available : maximum);
 	for (uint32_t i = 0; i < count; i++) {
 		uint64_t sequence = start + i;
 		uint32_t index;
@@ -230,7 +233,7 @@ loader_log_copy(uint64_t *position, char *out, uint32_t maximum)
 static void
 loader_log_linearize(void)
 {
-	static const char note[] = "\n\n[... the log between the first 256 KB and the last 1 MB was dropped ...]\n\n";
+	static const char note[] = "\n\n[... the log between the first 512 KB and the last 1 MB was dropped ...]\n\n";
 	uint32_t older = LOADER_LOG_RING - loader_log_ring_at, n = LOADER_LOG_HEAD;
 
 	if (loader_log_linear) {

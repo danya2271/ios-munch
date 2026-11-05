@@ -1155,12 +1155,12 @@ ud_thread(void *arg __unused, wait_result_t wr __unused)
 /*
  * Live console log over USB Ethernet: every 100 ms the new bytes of the
  * console ring (bsd/dev/munch_ufs.c) go as UDP datagrams to
- * 192.168.7.1:5140 (on the PC: nc -ukl 5140). Starts with the last 64 KiB
- * so the boot is included. Nothing here may print (it would feed itself).
+ * 192.168.7.1:5140 (on the PC: nc -ukl 5140). Replays the retained boot
+ * prefix first, then follows the live tail. Nothing here may print (it would
+ * feed itself).
  * Boot-arg munchusblog=0 disables it.
  */
 extern uint32_t loader_log_copy(uint64_t *pos, char *out, uint32_t max);
-extern uint64_t loader_log_position(void);
 extern void loader_log_append_msgbuf_delta(void);
 
 static void
@@ -1169,10 +1169,8 @@ ud_log_thread(void *arg __unused, wait_result_t wr __unused)
 	static char chunk[1400];
 	socket_t so = NULL;
 	struct sockaddr_in to;
-	uint64_t pos = loader_log_position();
-
-	pos = pos > 65536 ? pos - 65536 : 0;
 	loader_log_append_msgbuf_delta();
+	uint64_t pos = 0;
 	bzero(&to, sizeof(to));
 	to.sin_len = sizeof(to);
 	to.sin_family = AF_INET;

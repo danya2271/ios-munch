@@ -89,7 +89,8 @@ side ECM MAC is `02:00:5e:77:ee:01` and the phone MAC is
 `02:00:5e:77:ee:02`. The listener recognizes either MAC.
 
 Keep the listener running while XNU is up. `logs/munch-live.log` should grow as
-kernel message-buffer and console messages arrive. To watch only the Wi-Fi
+the retained boot prefix is replayed first, followed by kernel message-buffer
+and live console messages. To watch only the Wi-Fi
 diagnostic lines in another terminal:
 
 ```sh

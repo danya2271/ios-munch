@@ -15,7 +15,7 @@ def stage_native_return(early):
             '\t\tprintf("MUNCH SDE: native mode owns the link; loader return refused before CPU shutdown\\n");\n'
             '\t\treturn;\n\t}\n')
     if 'munch_sde_native_owned' in early:
-        if early.count(declaration) != 1 or early.count(hook) != 1 or early.count('munch_sde_native_owned') != 4:
+        if early.count(declaration) != 1 or early.count(hook) != 1 or early.count('munch_sde_native_owned') < 2:
             raise ValueError('Refusing to replace independently modified native return hook')
         if 'loader_return(void)\n{\n' + hook not in early:
             raise ValueError('Native return hook must precede CPU shutdown')
@@ -119,6 +119,35 @@ cpu_target.write_text(cpu_source)
 
 gic_target = a.tree / 'osfmk/arm64/gic_v3_irq.c'
 gic_source = gic_target.read_text()
+resume_flag = 'static bool gic_v3_irq_resume_in_progress[MAX_CPUS];'
+resume_flag_marker = ("static vm_offset_t gicr_cpu_base[MAX_CPUS]; "
+                      "/* each processor's redistributor frame */")
+stale_resume_flag = resume_flag + " /* each processor's redistributor frame */"
+stale_resume_marker = 'static vm_offset_t gicr_cpu_base[MAX_CPUS];\n' + stale_resume_flag
+if stale_resume_marker in gic_source:
+    gic_source = gic_source.replace(
+        stale_resume_marker, resume_flag_marker + '\n' + resume_flag, 1)
+if resume_flag not in gic_source:
+    if gic_source.count(resume_flag_marker) != 1:
+        raise ValueError('Cannot stage GIC resume diagnostic state')
+    gic_source = gic_source.replace(
+        resume_flag_marker, resume_flag_marker + '\n' + resume_flag, 1)
+
+gic_log = ('\tkprintf("gic: v3, distributor %p, cpu %d\'s redistributor %p, '
+           'virtual timer on PPI %d\\n",\n'
+           '\t    (void *)gicd_base, cpu, (void *)gicr, GIC_INTID_VTIMER);')
+quiet_gic_log = ('\tif (!gic_v3_irq_resume_in_progress[cpu]) {\n' +
+                 '\t' + gic_log.replace('\n', '\n\t') + '\n\t}')
+if quiet_gic_log not in gic_source:
+    old_quiet_gic_log = ('\tif (!gic_v3_irq_resume_in_progress[cpu]) {\n' +
+                         gic_log + '\n\t}')
+    if old_quiet_gic_log in gic_source:
+        gic_source = gic_source.replace(old_quiet_gic_log, quiet_gic_log, 1)
+    elif gic_source.count(gic_log) == 1:
+        gic_source = gic_source.replace(gic_log, quiet_gic_log, 1)
+    else:
+        raise ValueError('Cannot stage quiet GIC resume diagnostics')
+
 gic_resume = ('void\n'
               'gic_v3_irq_cpu_resume(void)\n'
               '{\n'
@@ -127,13 +156,29 @@ gic_resume = ('void\n'
               '\tif (cpu < 0 || cpu >= MAX_CPUS || gicr_base == 0) return;\n'
               '\tgicr_cpu_base[cpu] = 0;\n'
               '\tgic_active_iar[cpu] = 0;\n'
+              '\tgic_v3_irq_resume_in_progress[cpu] = true;\n'
               '\tgic_v3_irq_cpu_init();\n'
+              '\tgic_v3_irq_resume_in_progress[cpu] = false;\n'
               '}\n')
 if 'gic_v3_irq_cpu_resume' not in gic_source:
     gic_marker = '\n#endif /* GENERIC_GIC_V3_IRQ */'
     if gic_source.count(gic_marker) != 1:
         raise ValueError('Cannot stage GIC redistributor reset-resume hook')
     gic_source = gic_source.replace(gic_marker, '\n' + gic_resume + gic_marker, 1)
+else:
+    helper_start = gic_source.index('void\ngic_v3_irq_cpu_resume(void)')
+    helper_end = gic_source.index('\n}', helper_start) + 2
+    helper = gic_source[helper_start:helper_end]
+    if 'gic_v3_irq_resume_in_progress[cpu] = true;' not in helper:
+        old_call = '\tgic_v3_irq_cpu_init();'
+        if helper.count(old_call) != 1:
+            raise ValueError('Cannot quiet existing GIC reset-resume hook')
+        helper = helper.replace(
+            old_call,
+            '\tgic_v3_irq_resume_in_progress[cpu] = true;\n'
+            '\tgic_v3_irq_cpu_init();\n'
+            '\tgic_v3_irq_resume_in_progress[cpu] = false;', 1)
+        gic_source = gic_source[:helper_start] + helper + gic_source[helper_end:]
 gic_target.write_text(gic_source)
 
 arm_init_target = a.tree / 'osfmk/arm/arm_init.c'

@@ -66,7 +66,7 @@ tell(const char *format, ...)
 #define EPSS_PERF_STATE         0x320           /* the row that is wanted */
 #define XO_KHZ                  19200
 #define ALTERNATE_KHZ           300000          /* source 0: a fixed 300 MHz */
-#define CPUFREQ_SAMPLE_MS       20
+#define CPUFREQ_SAMPLE_MS       2
 #define CPUFREQ_DOWNSHIFT_SAMPLES 3
 #define CPUFREQ_UTIL_HEADROOM   125
 
