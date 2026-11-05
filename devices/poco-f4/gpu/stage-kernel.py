@@ -70,7 +70,7 @@ wifi_dev = ('hakios.wifi', 'hakios.lx', 'hakios.pcie', 'hakios.pcie.kona', 'haki
             'hakios.dma.endpoint', 'hakios.dma.cache', 'hakios.dma.memory', 'hakios.dma.arena',
             'hakios.msi.pool', 'hakios.msi', 'hakios.mhi', 'hakios.mhi.control', 'hakios.mhi.boot',
             'hakios.mhi.runtime', 'hakios.mhi.worker', 'hakios.ipcr', 'hakios.qmi', 'hakios.qrtr.wire',
-            'hakios.qrtr.mhi', 'hakios.qca6390')
+            'hakios.qrtr.mhi', 'hakios.qca6390.diag', 'hakios.qca6390')
 wifi_sys = ('hakios.lx', 'hakios.pcie', 'hakios.pcie.kona', 'hakios.pcie.kona.platform', 'hakios.pcie.kona.mmio', 'hakios.pcie.kona.sid', 'hakios.mmio', 'hakios.dma.pagetable', 'hakios.dma.space',
             'hakios.dma.endpoint', 'hakios.dma.memory', 'hakios.dma.arena', 'hakios.msi.pool',
             'hakios.msi', 'hakios.mhi', 'hakios.mhi.boot', 'hakios.mhi.runtime', 'hakios.mhi.worker',
