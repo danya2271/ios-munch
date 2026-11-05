@@ -218,37 +218,29 @@ acquire RC0, provide the doorbell DMA mapping, or prove resident-firmware
 exclusion. `hakios_qca6390_msi()` remains fail-closed until an authorized owner
 activates and registers the provider.
 
-## DMA groundwork audit before enabling it
+## DMA provider prerequisites
 
 The independent `hakios.dma.pagetable.c` component now addresses software
 table geometry, map/unmap preflight and failure retention for a bounded
-4 KiB/39-bit stage-1 profile; see `DMA-PAGETABLE.md`. It does not replace the
-hardware owner or validate the legacy QCA SMMU register programming listed
-below. Its root-info/status APIs must not be used to clear DMA preflight.
+4 KiB/39-bit stage-1 profile; see `DMA-PAGETABLE.md`. The former direct QCA
+SMMU programming path has been removed. This software component does not
+replace or validate a hardware owner. Its root-info/status APIs must not be
+used to clear DMA preflight.
 The separate `hakios.dma.space.c` layer adds bounded IOVA allocation and lease
 retention around that engine (`DMA-SPACE.md`); it likewise supplies no actual
 SID/context ownership or endpoint buffer/cache implementation.
 
-Keep `HAKIOS_QCA6390_DMA_DOMAIN` missing until these issues are resolved:
+Keep `HAKIOS_QCA6390_DMA_DOMAIN` missing until one owner can prove all of:
 
-- Validate IDR geometry, context-bank addressing, granule and level count,
-  physical/IOVA widths, TCR/TCR2, descriptor permissions, MAIR indices, and
-  walker coherency against the actual SMMU owner and hardware.
-- The mapper accepts contiguous physical memory and advances a bump IOVA
-  cursor. It lacks allocation ownership, streaming sync, unmap, and IOVA reuse;
-  it must not become the general ath11k DMA API unchanged.
-- Partial page-table population and allocation failures need rollback. Failed
-  TLB invalidation must not leave apparently reusable IOVAs or physical pages.
-- `qca_smmu_restore()` bounds its TLB wait but does not propagate timeout.
-  `dma_stop()` retains `found`, saved registers, tables, and the IOVA cursor.
-  Restart must not reuse that ownership snapshot blindly.
-- Endpoint and SMMU state use different locks. Map, release, direct stop, and
-  MSI setup need one documented lifetime/lock order; checks outside it do not
-  exclude concurrent teardown.
-- Native endpoint release now refuses an active legacy SMMU context rather
-  than tearing it down first. It delegates resource restoration to the actual
-  provider and propagates failure. A complete DMA/MHI shutdown path is still
-  required before bus mastering becomes possible.
+- The Kona SMMU geometry, context bank, table format, attributes and walker
+  coherency match the actual hardware and the live owner.
+- RID `0x100` is routed to the exact SID `0x1c01`, and the owner's IOVA range
+  is exclusive and bounded.
+- Pinned/coherent storage, streaming sync, unmap, TLB invalidation and failed
+  teardown all retain backing until the endpoint is fenced.
+- Mapping, MSI doorbell access, endpoint release and recovery share a
+  serialized owner lifetime; every failed callback remains retryable.
+- Bus Master remains disabled until DMA, MHI and interrupt ownership are live.
 
 ## Next implementation gate
 

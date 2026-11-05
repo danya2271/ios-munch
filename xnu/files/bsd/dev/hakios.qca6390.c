@@ -1,20 +1,11 @@
-#include <kern/kalloc.h>
-#include <kern/clock.h>
 #include <kern/locks.h>
 #include <libkern/libkern.h>
-#include <mach/vm_param.h>
 #include <pexpert/device_tree.h>
 #include <pexpert/pexpert.h>
 #include <sys/errno.h>
 #include <sys/hakios.pcie.h>
 #include <sys/hakios.qca6390.h>
 #include <sys/systm.h>
-#include <vm/memory_types.h>
-#include <vm/vm_kern.h>
-
-extern vm_offset_t ml_io_map_unmappable(vm_offset_t phys_addr, vm_size_t size, unsigned int flags);
-extern uint64_t kvtophys(vm_offset_t va);
-extern lck_mtx_t hakios_smmu_lock;
 
 static LCK_GRP_DECLARE(qca6390_lock_group, "hakios-qca6390");
 static LCK_MTX_DECLARE(qca6390_pcie_lock, &qca6390_lock_group);
@@ -27,6 +18,7 @@ static LCK_MTX_DECLARE(qca6390_pcie_lock, &qca6390_lock_group);
 
 #define QCA6390_BAR0_SIZE              0x00100000u
 #define QCA6390_REQUESTER_ID           0x0100u
+#define QCA6390_STREAM_ID              0x1c01u
 #define QCA6390_WINDOW_REGISTER        0x310cu
 #define QCA6390_WINDOW_ENABLE          0x40000000u
 #define QCA6390_WINDOW_START           0x80000u
@@ -35,67 +27,6 @@ static LCK_MTX_DECLARE(qca6390_pcie_lock, &qca6390_lock_group);
 #define QCA6390_REGISTER_LIMIT         0x02000000u
 #define QCA6390_ACCESS_ALWAYS_LIMIT    0x0fe0u
 
-#define QCA6390_SMMU_PHYS              0x15000000ull
-#define QCA6390_STREAM_ID              0x1c01u
-#define QCA6390_IOVA_BASE              0x100000000ull
-#define QCA6390_IOVA_SIZE              0x04000000ull
-#define QCA6390_TABLE_COUNT            36u
-#define QCA6390_PAGE_SIZE              0x1000ull
-#define QCA6390_PTE_ADDRESS            0x0000fffffffff000ull
-#define QCA6390_PTE_NORMAL             (3ull | 1ull << 6 | 2ull << 8 | 1ull << 10 | 1ull << 11)
-
-#define SMMU_SCR0                      0x000
-#define SMMU_IDR0                      0x020
-#define SMMU_IDR1                      0x024
-#define SMMU_IDR0_EXIDS                (1u << 8)
-#define SMMU_SCR0_EXIDENABLE           (1u << 3)
-#define SMMU_SMR(n)                    (0x800 + 4 * (n))
-#define SMMU_S2CR(n)                   (0xc00 + 4 * (n))
-#define SMMU_CBAR(n)                   (4 * (n))
-#define SMMU_CBA2R(n)                  (0x800 + 4 * (n))
-#define SMMU_CB_SCTLR                  0x00
-#define SMMU_CB_TCR2                   0x10
-#define SMMU_CB_TTBR0                  0x20
-#define SMMU_CB_TTBR1                  0x28
-#define SMMU_CB_TCR                    0x30
-#define SMMU_CB_MAIR0                  0x38
-#define SMMU_CB_MAIR1                  0x3c
-#define SMMU_CB_TLBIASID               0x610
-#define SMMU_CB_TLBSYNC                0x7f0
-#define SMMU_CB_TLBSTATUS              0x7f4
-#define SMMU_CBAR_STAGE_1              (1u << 16 | 3u << 8 | 0xfu << 12)
-#define SMMU_SCTLR_ON                  (1u | 1u << 1 | 1u << 2 | 1u << 5 | 1u << 8 | 1u << 12)
-#define SMMU_TCR_39_BITS               (25u | 1u << 8 | 1u << 10 | 3u << 12 | 1u << 23)
-#define SMMU_TCR2                      (1u | 1u << 4 | 7u << 15)
-#define SMMU_MAIR0                     0xf404ff44u
-#define SMMU_S2CR_VALID                (1u << 10)
-
-struct qca6390_smmu_state {
-	volatile uint32_t *base;
-	volatile uint32_t *second;
-	volatile uint32_t *context_regs;
-	vm_offset_t tables;
-	uint32_t table_count;
-	uint32_t match;
-	uint32_t context;
-	uint32_t old_smr;
-	uint32_t old_s2cr;
-	uint32_t old_cbar;
-	uint32_t old_cba2r;
-	uint32_t old_sctlr;
-	uint32_t old_tcr;
-	uint32_t old_tcr2;
-	uint32_t old_ttbr0[2];
-	uint32_t old_ttbr1[2];
-	uint32_t old_mair[2];
-	uint32_t page_count;
-	uint64_t next_iova;
-	bool wide_sid;
-	bool found;
-	bool active;
-};
-
-static struct qca6390_smmu_state qca_smmu;
 static hakios_pcie_lease_t qca_endpoint;
 static bool qca_endpoint_owned;
 static struct hakios_qca6390_dma_provider qca_dma_provider;
@@ -244,27 +175,6 @@ hakios_qca6390_preflight(uint32_t required, uint32_t *missing)
 }
 
 static int
-qca_require(uint32_t required)
-{
-	uint32_t missing;
-
-	return hakios_qca6390_preflight(required, &missing);
-}
-
-static inline uint32_t
-qca_rd(volatile uint32_t *base, uint32_t offset)
-{
-	return base[offset / sizeof(uint32_t)];
-}
-
-static inline void
-qca_wr(volatile uint32_t *base, uint32_t offset, uint32_t value)
-{
-	base[offset / sizeof(uint32_t)] = value;
-	__asm__ volatile("dsb sy" ::: "memory");
-}
-
-static int
 qca_config_find_msi_locked(uint16_t *cap)
 {
 	uint32_t value, status;
@@ -298,14 +208,6 @@ qca_config_find_msi_locked(uint16_t *cap)
 		next = (header >> 8) & 0xff;
 	}
 	return ENODEV;
-}
-
-static volatile uint32_t *
-qca_map_registers(uint64_t physical, uint32_t size)
-{
-	vm_offset_t mapped = ml_io_map_unmappable((vm_offset_t)physical, size, VM_WIMG_IO);
-
-	return mapped == 0 ? NULL : (volatile uint32_t *)mapped;
 }
 
 static int
@@ -473,297 +375,6 @@ hakios_qca6390_write32(uint32_t offset, uint32_t value)
 	return qca_register_access(offset, &value, true);
 }
 
-static volatile uint32_t *
-qca_context_map(uint32_t context, uint32_t page_size, uint32_t pages)
-{
-	uint64_t offset = (uint64_t)(pages + context) * page_size;
-
-	return qca_map_registers(QCA6390_SMMU_PHYS + offset, QCA6390_PAGE_SIZE);
-}
-
-static uint64_t *
-qca_table(uint32_t index)
-{
-	return (uint64_t *)(qca_smmu.tables + QCA6390_PAGE_SIZE * index);
-}
-
-static uint64_t *
-qca_next_table(uint64_t *entry)
-{
-	if (*entry & 1) {
-		for (uint32_t i = 0; i < qca_smmu.table_count; i++) {
-			if (kvtophys((vm_offset_t)qca_table(i)) == (*entry & QCA6390_PTE_ADDRESS)) {
-				return qca_table(i);
-			}
-		}
-		return NULL;
-	}
-	if (qca_smmu.table_count == QCA6390_TABLE_COUNT) {
-		return NULL;
-	}
-	uint64_t *table = qca_table(qca_smmu.table_count++);
-	*entry = kvtophys((vm_offset_t)table) | 3;
-	return table;
-}
-
-static bool
-qca_map_pages(uint64_t iova, uint64_t physical, uint64_t size, uint64_t attributes)
-{
-	if (qca_smmu.tables == 0) {
-		vm_size_t bytes = round_page(QCA6390_PAGE_SIZE * QCA6390_TABLE_COUNT);
-
-		if (kmem_alloc(kernel_map, &qca_smmu.tables, bytes, KMA_KOBJECT | KMA_ZERO | KMA_DATA, VM_KERN_MEMORY_IOKIT) != KERN_SUCCESS) {
-			return false;
-		}
-		qca_smmu.table_count = 1;
-	}
-	for (uint64_t offset = 0; offset < size; offset += QCA6390_PAGE_SIZE) {
-		uint64_t at = iova + offset;
-		uint64_t *level2 = qca_next_table(&qca_table(0)[at >> 30 & 0x1ff]);
-		uint64_t *level3 = level2 == NULL ? NULL : qca_next_table(&level2[at >> 21 & 0x1ff]);
-
-		if (level3 == NULL || physical + offset > QCA6390_PTE_ADDRESS) {
-			return false;
-		}
-		level3[at >> 12 & 0x1ff] = (physical + offset) | attributes;
-	}
-	for (vm_offset_t line = qca_smmu.tables; line < qca_smmu.tables + QCA6390_PAGE_SIZE * QCA6390_TABLE_COUNT; line += 64) {
-		__asm__ volatile("dc civac, %0" : : "r"(line));
-	}
-	__asm__ volatile("dsb sy" ::: "memory");
-	return true;
-}
-
-static bool
-qca_smmu_find(void)
-{
-	bool used[256] = { false };
-	uint32_t scr0, idr0, idr1, matches, contexts;
-	uint32_t requested_mask = 0;
-
-	qca_smmu.base = qca_map_registers(QCA6390_SMMU_PHYS, 0x2000);
-	if (qca_smmu.base == NULL) {
-		return false;
-	}
-	scr0 = qca_rd(qca_smmu.base, SMMU_SCR0);
-	idr0 = qca_rd(qca_smmu.base, SMMU_IDR0);
-	idr1 = qca_rd(qca_smmu.base, SMMU_IDR1);
-	if (scr0 & 1) {
-		printf("qca6390: apps SMMU is disabled\n");
-		return false;
-	}
-	qca_smmu.wide_sid = (scr0 & SMMU_SCR0_EXIDENABLE) != 0;
-	if (qca_smmu.wide_sid && (idr0 & SMMU_IDR0_EXIDS) == 0) {
-		printf("qca6390: SMMU enables extended stream IDs without advertising EXIDS (IDR0 %#x, SCR0 %#x)\n", idr0, scr0);
-		return false;
-	}
-	if (!qca_smmu.wide_sid && QCA6390_STREAM_ID > 0x7fff) {
-		return false;
-	}
-	if ((idr1 & (1u << 31)) != 0 || (2u << (idr1 >> 28 & 7)) * 2u * QCA6390_PAGE_SIZE != 0x100000) {
-		printf("qca6390: unsupported apps SMMU page geometry (IDR1 %#x)\n", idr1);
-		return false;
-	}
-	matches = idr0 & 0xff;
-	contexts = idr1 & 0xff;
-	qca_smmu.match = ~0u;
-	for (uint32_t n = 0; n < matches && SMMU_SMR(n) < 0xc00; n++) {
-		uint32_t smr = qca_rd(qca_smmu.base, SMMU_SMR(n));
-		uint32_t s2cr = qca_rd(qca_smmu.base, SMMU_S2CR(n));
-		bool active = qca_smmu.wide_sid ? (s2cr & SMMU_S2CR_VALID) != 0 : (smr >> 31) != 0;
-
-		if (!active) {
-			if (qca_smmu.match == ~0u) {
-				qca_smmu.match = n;
-				qca_smmu.old_smr = smr;
-				qca_smmu.old_s2cr = s2cr;
-			}
-			continue;
-		}
-		uint32_t width_mask = qca_smmu.wide_sid ? 0xffffu : 0x7fffu;
-		uint32_t stream = smr & width_mask;
-		uint32_t mask = (smr >> 16) & width_mask;
-
-		if (((stream ^ QCA6390_STREAM_ID) & ~(mask | requested_mask)) == 0) {
-			printf("qca6390: active SMMU match %u overlaps endpoint SID %#x (SMR %#x, S2CR %#x); refusing takeover\n",
-			    n, QCA6390_STREAM_ID, smr, s2cr);
-			return false;
-		}
-		used[s2cr & 0xff] = true;
-	}
-	qca_smmu.context = 0;
-	while (qca_smmu.context < contexts && used[qca_smmu.context]) {
-		qca_smmu.context++;
-	}
-	if (qca_smmu.match == ~0u || qca_smmu.context >= contexts) {
-		printf("qca6390: no unclaimed SMMU match/context pair for SID %#x\n", QCA6390_STREAM_ID);
-		return false;
-	}
-	qca_smmu.second = qca_map_registers(QCA6390_SMMU_PHYS + 0x1000, 0x1000);
-	qca_smmu.page_count = 2u << (idr1 >> 28 & 7);
-	qca_smmu.context_regs = qca_context_map(qca_smmu.context, 0x1000, qca_smmu.page_count);
-	if (qca_smmu.second == NULL || qca_smmu.context_regs == NULL) {
-		return false;
-	}
-	qca_smmu.old_cbar = qca_rd(qca_smmu.second, SMMU_CBAR(qca_smmu.context));
-	qca_smmu.old_cba2r = qca_rd(qca_smmu.second, SMMU_CBA2R(qca_smmu.context));
-	qca_smmu.old_sctlr = qca_rd(qca_smmu.context_regs, SMMU_CB_SCTLR);
-	qca_smmu.old_tcr2 = qca_rd(qca_smmu.context_regs, SMMU_CB_TCR2);
-	qca_smmu.old_ttbr0[0] = qca_rd(qca_smmu.context_regs, SMMU_CB_TTBR0);
-	qca_smmu.old_ttbr0[1] = qca_rd(qca_smmu.context_regs, SMMU_CB_TTBR0 + 4);
-	qca_smmu.old_ttbr1[0] = qca_rd(qca_smmu.context_regs, SMMU_CB_TTBR1);
-	qca_smmu.old_ttbr1[1] = qca_rd(qca_smmu.context_regs, SMMU_CB_TTBR1 + 4);
-	qca_smmu.old_tcr = qca_rd(qca_smmu.context_regs, SMMU_CB_TCR);
-	qca_smmu.old_mair[0] = qca_rd(qca_smmu.context_regs, SMMU_CB_MAIR0);
-	qca_smmu.old_mair[1] = qca_rd(qca_smmu.context_regs, SMMU_CB_MAIR1);
-	if (qca_smmu.old_sctlr & 1) {
-		printf("qca6390: SMMU context %u is active; leaving it alone\n", qca_smmu.context);
-		return false;
-	}
-	qca_smmu.next_iova = QCA6390_IOVA_BASE;
-	qca_smmu.found = true;
-	return true;
-}
-
-static bool
-qca_smmu_enable(void)
-{
-	uint32_t smr = SMMU_SMR(qca_smmu.match), s2cr = SMMU_S2CR(qca_smmu.match);
-	uint32_t stream_mask = qca_smmu.wide_sid ? 0xffffu : 0x7fffu;
-	uint32_t smr_value = (QCA6390_STREAM_ID & stream_mask) | (qca_smmu.wide_sid ? 0 : 1u << 31);
-	uint32_t s2cr_value = qca_smmu.context | (qca_smmu.wide_sid ? SMMU_S2CR_VALID : 0);
-	uint64_t root = kvtophys(qca_smmu.tables) | (uint64_t)qca_smmu.context << 48;
-
-	qca_wr(qca_smmu.context_regs, SMMU_CB_SCTLR, 0);
-	qca_wr(qca_smmu.second, SMMU_CBA2R(qca_smmu.context), 1);
-	qca_wr(qca_smmu.second, SMMU_CBAR(qca_smmu.context), SMMU_CBAR_STAGE_1);
-	qca_wr(qca_smmu.context_regs, SMMU_CB_TCR2, SMMU_TCR2);
-	qca_wr(qca_smmu.context_regs, SMMU_CB_TCR, SMMU_TCR_39_BITS);
-	qca_wr(qca_smmu.context_regs, SMMU_CB_TTBR0, (uint32_t)root);
-	qca_wr(qca_smmu.context_regs, SMMU_CB_TTBR0 + 4, (uint32_t)(root >> 32));
-	qca_wr(qca_smmu.context_regs, SMMU_CB_TTBR1, 0);
-	qca_wr(qca_smmu.context_regs, SMMU_CB_TTBR1 + 4, 0);
-	qca_wr(qca_smmu.context_regs, SMMU_CB_MAIR0, SMMU_MAIR0);
-	qca_wr(qca_smmu.context_regs, SMMU_CB_MAIR1, 0);
-	qca_wr(qca_smmu.context_regs, SMMU_CB_TLBIASID, qca_smmu.context);
-	qca_wr(qca_smmu.context_regs, SMMU_CB_TLBSYNC, 1);
-	for (unsigned ms = 0; (qca_rd(qca_smmu.context_regs, SMMU_CB_TLBSTATUS) & 1) != 0; ms++) {
-		if (ms == 100) {
-			return false;
-		}
-		delay(1);
-	}
-	qca_wr(qca_smmu.context_regs, SMMU_CB_SCTLR, SMMU_SCTLR_ON);
-	qca_wr(qca_smmu.base, s2cr, s2cr_value);
-	qca_wr(qca_smmu.base, smr, smr_value);
-	if (qca_rd(qca_smmu.base, smr) != smr_value ||
-	    (qca_rd(qca_smmu.base, s2cr) & (0x300ff | SMMU_S2CR_VALID)) != s2cr_value ||
-	    (qca_rd(qca_smmu.context_regs, SMMU_CB_SCTLR) & 1) == 0 ||
-	    qca_rd(qca_smmu.context_regs, SMMU_CB_TTBR0) != (uint32_t)root ||
-	    qca_rd(qca_smmu.context_regs, SMMU_CB_TTBR0 + 4) != (uint32_t)(root >> 32) ||
-	    qca_rd(qca_smmu.second, SMMU_CBAR(qca_smmu.context)) != SMMU_CBAR_STAGE_1 ||
-	    qca_rd(qca_smmu.second, SMMU_CBA2R(qca_smmu.context)) != 1) {
-		return false;
-	}
-	qca_smmu.active = true;
-	return true;
-}
-
-static bool
-qca_smmu_invalidate(void)
-{
-	qca_wr(qca_smmu.context_regs, SMMU_CB_TLBIASID, qca_smmu.context);
-	qca_wr(qca_smmu.context_regs, SMMU_CB_TLBSYNC, 1);
-	for (unsigned ms = 0; ms < 100; ms++) {
-		if ((qca_rd(qca_smmu.context_regs, SMMU_CB_TLBSTATUS) & 1) == 0) {
-			return true;
-		}
-		delay(1);
-	}
-	return false;
-}
-
-static void
-qca_smmu_restore(void)
-{
-	if (!qca_smmu.found || qca_smmu.base == NULL || qca_smmu.match == ~0u) {
-		return;
-	}
-	if (qca_smmu.wide_sid) {
-		qca_wr(qca_smmu.base, SMMU_S2CR(qca_smmu.match), qca_smmu.old_s2cr & ~SMMU_S2CR_VALID);
-	} else {
-		qca_wr(qca_smmu.base, SMMU_SMR(qca_smmu.match), qca_smmu.old_smr & ~(1u << 31));
-	}
-	if (qca_smmu.context_regs != NULL) {
-		qca_wr(qca_smmu.context_regs, SMMU_CB_SCTLR, 0);
-		qca_wr(qca_smmu.context_regs, SMMU_CB_TLBIASID, qca_smmu.context);
-		qca_wr(qca_smmu.context_regs, SMMU_CB_TLBSYNC, 1);
-		for (unsigned ms = 0; (qca_rd(qca_smmu.context_regs, SMMU_CB_TLBSTATUS) & 1) != 0 && ms < 100; ms++) {
-			delay(1);
-		}
-	}
-	if (qca_smmu.context_regs != NULL) {
-		qca_wr(qca_smmu.context_regs, SMMU_CB_TCR2, qca_smmu.old_tcr2);
-		qca_wr(qca_smmu.context_regs, SMMU_CB_TTBR0, qca_smmu.old_ttbr0[0]);
-		qca_wr(qca_smmu.context_regs, SMMU_CB_TTBR0 + 4, qca_smmu.old_ttbr0[1]);
-		qca_wr(qca_smmu.context_regs, SMMU_CB_TTBR1, qca_smmu.old_ttbr1[0]);
-		qca_wr(qca_smmu.context_regs, SMMU_CB_TTBR1 + 4, qca_smmu.old_ttbr1[1]);
-		qca_wr(qca_smmu.context_regs, SMMU_CB_TCR, qca_smmu.old_tcr);
-		qca_wr(qca_smmu.context_regs, SMMU_CB_MAIR0, qca_smmu.old_mair[0]);
-		qca_wr(qca_smmu.context_regs, SMMU_CB_MAIR1, qca_smmu.old_mair[1]);
-	}
-	if (qca_smmu.second != NULL) {
-		qca_wr(qca_smmu.second, SMMU_CBAR(qca_smmu.context), qca_smmu.old_cbar);
-		qca_wr(qca_smmu.second, SMMU_CBA2R(qca_smmu.context), qca_smmu.old_cba2r);
-	}
-	if (qca_smmu.context_regs != NULL) {
-		qca_wr(qca_smmu.context_regs, SMMU_CB_SCTLR, qca_smmu.old_sctlr);
-	}
-	qca_wr(qca_smmu.base, SMMU_S2CR(qca_smmu.match), qca_smmu.old_s2cr);
-	qca_wr(qca_smmu.base, SMMU_SMR(qca_smmu.match), qca_smmu.old_smr);
-	qca_smmu.active = false;
-}
-
-static bool
-qca_dma_map(uint64_t physical, uint64_t size, uint64_t attributes, uint64_t *iova)
-{
-	uint64_t rounded;
-	bool result = false;
-
-	if (iova != NULL) {
-		*iova = 0;
-	}
-	if (qca_require(HAKIOS_QCA6390_RC0_HANDOFF | HAKIOS_QCA6390_DMA_DOMAIN) != 0) {
-		return false;
-	}
-	if (!qca_endpoint_owned || !hakios_qca6390_platform_matches() || iova == NULL || size == 0 || size > QCA6390_IOVA_SIZE ||
-	    size > UINT64_MAX - (QCA6390_PAGE_SIZE - 1) || (physical & (QCA6390_PAGE_SIZE - 1)) != 0 ||
-	    physical > QCA6390_PTE_ADDRESS || size - 1 > QCA6390_PTE_ADDRESS - physical) {
-		return false;
-	}
-	rounded = (size + QCA6390_PAGE_SIZE - 1) & ~(QCA6390_PAGE_SIZE - 1);
-	lck_mtx_lock(&hakios_smmu_lock);
-	if ((!qca_smmu.found && !qca_smmu_find()) || qca_smmu.next_iova + rounded > QCA6390_IOVA_BASE + QCA6390_IOVA_SIZE ||
-	    !qca_map_pages(qca_smmu.next_iova, physical, rounded, attributes)) {
-		goto out;
-	}
-	if (!qca_smmu.active) {
-		if (!qca_smmu_enable()) {
-			qca_smmu_restore();
-			goto out;
-		}
-	} else if (!qca_smmu_invalidate()) {
-		printf("qca6390: SMMU context %u TLB invalidation timed out; DMA mapping refused\n", qca_smmu.context);
-		goto out;
-	}
-	*iova = qca_smmu.next_iova;
-	qca_smmu.next_iova += rounded;
-	result = true;
-out:
-	lck_mtx_unlock(&hakios_smmu_lock);
-	return result;
-}
-
 bool
 hakios_qca6390_msi(uint64_t *address, uint32_t *data, uint32_t *first_intid)
 {
@@ -894,14 +505,4 @@ hakios_qca6390_irq_count(uint32_t vector)
 	}
 	lck_mtx_unlock(&qca6390_pcie_lock);
 	return count;
-}
-
-void
-hakios_qca6390_dma_stop(void)
-{
-	lck_mtx_lock(&qca6390_pcie_lock);
-	if (qca_dma_registered && qca_endpoint != 0) {
-		(void)qca_provider_error(qca_dma_provider.stop(qca_dma_context, qca_endpoint));
-	}
-	lck_mtx_unlock(&qca6390_pcie_lock);
 }

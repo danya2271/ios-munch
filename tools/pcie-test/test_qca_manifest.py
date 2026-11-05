@@ -9,9 +9,18 @@ SOURCE = ROOT / "xnu/register-qca-sources.py"
 SPEC = importlib.util.spec_from_file_location("register_qca_sources", SOURCE)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+QCA_DRIVER = ROOT / "xnu/files/bsd/dev/hakios.qca6390.c"
+QCA_HEADER = ROOT / "xnu/files/bsd/sys/hakios.qca6390.h"
 
 
 def run():
+    qca_source = QCA_DRIVER.read_text()
+    qca_header = QCA_HEADER.read_text()
+    assert "hakios_qca6390_dma_register" in qca_source
+    for legacy in ("SMMU_", "qca_smmu", "ml_io_map_unmappable", "kvtophys", "hakios_smmu_lock",
+                   "hakios_qca6390_dma_map", "hakios_qca6390_dma_stop"):
+        assert legacy not in qca_source and legacy not in qca_header
+
     with tempfile.TemporaryDirectory(prefix="qca-manifest-test-") as temporary:
         root = Path(temporary)
         manifest = root / "bsd/conf/files"
@@ -44,7 +53,7 @@ def run():
             raise AssertionError("missing QCA sources must be rejected")
         assert manifest.read_text() == "base.c standard\n"
 
-    print("qca-manifest-test: PASS (complete source check, idempotent registration, no partial write)")
+    print("qca-manifest-test: PASS (provider-only QCA DMA, source check, idempotent registration)")
 
 
 if __name__ == "__main__":
