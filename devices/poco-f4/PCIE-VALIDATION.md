@@ -68,6 +68,22 @@ owner code must quarantine the transaction. The fixup does not handle
 asynchronous SError or prove controller ownership, powered state, or firmware
 exclusion.
 
+## Read-only QCA SMMU snapshot — November 5, 2026
+
+| Check | Result | Scope |
+| --- | --- | --- |
+| GCC host model, ASan + UBSan | PASS | SID coverage, translated/bypass routes, extended-SID validity, CB geometry and abort cleanup |
+| ARM64 object compilation | PASS, 27 units | Includes `hakios.qca6390.diag.c` and the `wifi_qca_status=1` call site |
+| Device snapshot | NOT RUN | Existing diagnostic option only; the function performs reads and cleanup |
+
+The diagnostic reports the SMMU ID registers and global fault state, matching
+SMR/S2CR entries for RID `0x100` / SID `0x1c01`, and referenced translation
+contexts. It uses the synchronous-abort-safe MMIO reader, checks IDR geometry
+against the 1 MiB DT aperture before reading a context, and unmaps its view on
+every mapped path. It does not acknowledge faults, program SMMU registers or
+clear a QCA readiness gate. The host test exercises software and cleanup with
+a memory-backed register window; it does not establish live device state.
+
 ## Resource-backed Kona MMIO/config/BAR backend — November 5, 2026
 
 | Check | Result | Scope |

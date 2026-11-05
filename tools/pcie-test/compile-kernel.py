@@ -35,7 +35,7 @@ def main():
     names = ("hakios.pcie", "hakios.pcie.kona", "hakios.pcie.kona.platform", "hakios.pcie.kona.mmio", "hakios.pcie.kona.sid", "hakios.dma.pagetable", "hakios.dma.space",
              "hakios.dma.endpoint", "hakios.dma.cache", "hakios.dma.memory", "hakios.dma.arena", "hakios.msi.pool",
              "hakios.msi", "hakios.msi.kona", "hakios.mhi", "hakios.mhi.control", "hakios.mhi.boot", "hakios.mhi.runtime", "hakios.mhi.worker", "hakios.ipcr",
-             "hakios.qrtr.wire", "hakios.qrtr.mhi",
+             "hakios.qrtr.wire", "hakios.qrtr.mhi", "hakios.qca6390.diag",
              "hakios.qmi", "hakios.qca6390", "hakios.wifi", "hakios.lx")
     for name in names:
         command = [arguments[0], f"-I{root / 'xnu/files/bsd'}", *flags,
