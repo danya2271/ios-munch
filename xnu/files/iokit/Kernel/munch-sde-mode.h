@@ -69,7 +69,8 @@ munch_mode_poll(struct munch_mode *mode, enum munch_mode_space space, uint32_t o
 static inline bool
 munch_mode_register_readable(enum munch_mode_space space, uint32_t offset)
 {
-	return !(space == MUNCH_MODE_DSI && offset == 0x1e4);
+	return !(space == MUNCH_MODE_DSI && offset == 0x1e4) &&
+	    !(space == MUNCH_MODE_MDP && offset == MUNCH_SDE_INTF1_OFFSET + 0x0a8);
 }
 
 static inline bool
