@@ -102,13 +102,11 @@ lx_os_radio_memory(unsigned long size, unsigned long long *address)
 {
 	vm_offset_t cached = 0, uncached;
 	uint64_t physical;
-	uint32_t missing;
 
-	if (lx_munch_platform() && hakios_qca6390_preflight(
-	    HAKIOS_QCA6390_RC0_HANDOFF | HAKIOS_QCA6390_DMA_DOMAIN, &missing) != 0) {
-		if (address != NULL) {
-			*address = 0;
-		}
+	if (address != NULL) {
+		*address = 0;
+	}
+	if (address == NULL || lx_munch_platform()) {
 		return NULL;
 	}
 
@@ -125,8 +123,7 @@ lx_os_radio_memory(unsigned long size, unsigned long long *address)
 	}
 	__asm__ volatile ("dsb sy");
 	uncached = ml_io_map_unmappable(physical, size, VM_WIMG_WCOMB);
-	if (uncached == 0 || !(lx_munch_platform() ? hakios_qca6390_dma_map(physical, size, address) :
-	    hakios_wifi_radio_map(physical, size, address))) {
+	if (uncached == 0 || !hakios_wifi_radio_map(physical, size, address)) {
 		return NULL;
 	}
 	return (void *)uncached;

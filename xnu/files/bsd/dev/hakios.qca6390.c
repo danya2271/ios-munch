@@ -765,33 +765,6 @@ out:
 }
 
 bool
-hakios_qca6390_dma_map(uint64_t physical, uint64_t size, uint64_t *iova)
-{
-	int error;
-
-	if (iova != NULL) {
-		*iova = 0;
-	}
-	if (iova == NULL || !hakios_qca6390_platform_matches()) {
-		return false;
-	}
-	lck_mtx_lock(&qca6390_pcie_lock);
-	error = qca_claim_locked();
-	if (error == 0 && (!qca_dma_registered ||
-	    qca_dma_provider.status(qca_dma_context, qca_endpoint) != 0)) {
-		error = ENOTSUP;
-	}
-	if (error == 0) {
-		error = qca_provider_error(qca_dma_provider.map(qca_dma_context, qca_endpoint, physical, size, iova));
-		if (error == 0 && *iova == 0) {
-			error = EPROTO;
-		}
-	}
-	lck_mtx_unlock(&qca6390_pcie_lock);
-	return error == 0;
-}
-
-bool
 hakios_qca6390_msi(uint64_t *address, uint32_t *data, uint32_t *first_intid)
 {
 	int error;

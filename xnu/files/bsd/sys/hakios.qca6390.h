@@ -54,7 +54,6 @@ int hakios_qca6390_claim(void);
 int hakios_qca6390_release(void);
 int hakios_qca6390_read32(uint32_t offset, uint32_t *value);
 int hakios_qca6390_write32(uint32_t offset, uint32_t value);
-bool hakios_qca6390_dma_map(uint64_t physical, uint64_t size, uint64_t *iova);
 bool hakios_qca6390_msi(uint64_t *address, uint32_t *data, uint32_t *first_intid);
 int hakios_qca6390_irq_attach(uint32_t vector, hakios_qca6390_irq_handler_t handler, void *context);
 int hakios_qca6390_irq_enable(uint32_t vector, bool enable);
