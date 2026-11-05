@@ -3,16 +3,15 @@
 ## Native display image
 
 `pack-iosroot.py --sde-backend --sde-native` selects the deferred, fixed L11r
-1080x2400@120 SDE handoff. The default native path keeps the inherited panel
-link and clocks while XNU owns guarded SDE commits. `--sde-backend` alone retains
-the prior qualified inherited path. The native option requires the captured live
-60-Hz panel profile and kernel signatures for the SDE and return guard. It sets
-`munch_sde_native=1`, keeps the guarded timed loader return, and rejects conflicting
+1080x2400 SDE handoff. Native mode owns the panel link and programs the selected
+60/120-Hz timing before the first frame; `--sde-backend` alone retains the prior
+qualified inherited path. The native option requires the captured live 60-Hz
+panel profile and kernel signatures for the SDE and return guard. It sets
+`munch_sde_native=1 munch_sde_takeover=1`, keeps the guarded timed loader return, and rejects conflicting
 `fb_hz` or `loader_return_after` overrides. It does not flash the device.
 
-The diagnostic full panel takeover is separate: add
-`munch_sde_takeover=1` through the extra kernel command line only when testing
-the unverified PHY/PLL/panel sequence.
+Add `munch_sde_hz=120` through `--extra-cmdline` to select the 120-Hz panel
+command sequence and timing registers.
 
 The separately named image is
 `artifacts/munch-build/munch-iosroot-l11r-sde-native-r15.img`; r13/r14 are preserved.

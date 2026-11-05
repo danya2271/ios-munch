@@ -466,10 +466,13 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
         raise ValueError('Native L11r mode requires --sde-backend')
     if usb_autoboot and usb_debug:
         raise ValueError('--usb-autoboot and --usb-debug are mutually exclusive')
-    if sde_native and any(argument.startswith(('fb_hz=', 'loader_return_after=')) for argument in extra.split()):
-        raise ValueError('Native mode fixes 60 Hz and uses the guarded timed loader return')
-    if any(argument.startswith('munch_sde') for argument in extra.split()):
-        raise ValueError('Use --sde-probe, --sde-backend or --sde-native to select the SDE path')
+    if sde_native and any(argument.startswith('loader_return_after=') for argument in extra.split()):
+        raise ValueError('Native mode uses the guarded timed loader return')
+    for argument in extra.split():
+        if argument.startswith('munch_sde_hz=') and argument.split('=', 1)[1] not in ('60', '120'):
+            raise ValueError('munch_sde_hz must be 60 or 120')
+        if argument.startswith('munch_sde') and not argument.startswith('munch_sde_hz='):
+            raise ValueError('Use --sde-probe, --sde-backend, --sde-native, or munch_sde_hz=...')
     config = validate_ios_config(ios_config_path)
     fd, metadata = validate_device_inputs(fd_path, dtb_path)
     lpm_tree = load_lpm_tree(dtb_path) if cpus == 8 else None
@@ -506,6 +509,7 @@ def pack(fd_path, dtb_path, kernel_path, ios_config_path, output, cpus, touch, g
         cmdline += ' munch_sde=1'
     if sde_native:
         cmdline += ' munch_sde_native=1'
+        cmdline += ' munch_sde_takeover=1'
     if (usb_debug or usb_autoboot) and not any(argument.startswith('munchusb=') for argument in extra.split()):
         cmdline += ' munchusb=2 usb_handoff=1 munchusblog=1'
     if verbose and '-v' not in cmdline.split():
@@ -593,7 +597,7 @@ if __name__ == '__main__':
     parser.add_argument('--gpu-diagnostics', action='store_true')
     parser.add_argument('--sde-probe', action='store_true', help='Enable the read-only Kona SDE snapshot')
     parser.add_argument('--sde-backend', action='store_true', help='Opt in to qualified L11r hardware presentation; no live-scanout fallback')
-    parser.add_argument('--sde-native', action='store_true', help='Opt in to native L11r 60-Hz SDE handoff; keeps the inherited panel mode')
+    parser.add_argument('--sde-native', action='store_true', help='Opt in to native L11r SDE handoff; use munch_sde_hz=120 for the experimental 120-Hz mode')
     parser.add_argument('--usb-debug', action='store_true')
     parser.add_argument('--usb-autoboot', action='store_true',
                         help='Release UEFI USB ownership in one-shot boot before starting XNU')

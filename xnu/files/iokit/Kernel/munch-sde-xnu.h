@@ -25,6 +25,7 @@ struct MunchSDE {
 	struct munch_mode mode;
 	volatile uint32_t *modeMMIO[4];
 	bool nativeRequested, nativeTakeover;
+	uint32_t nativeRefreshHz;
 	uint64_t vblankCount, vblankTime;
 	uint64_t vblankLastHardwareUs, vblankFallbackNextUs;
 	uint64_t vblankHardwareEvents, vblankFallbackEvents;
@@ -79,6 +80,15 @@ struct MunchSDE {
 };
 
 static MunchSDE *gMunchSDEOwner;
+
+static uint32_t
+munchSdeRequestedRefreshHz(void)
+{
+	uint32_t refresh = 60;
+
+	PE_parse_boot_argn("munch_sde_hz", &refresh, sizeof(refresh));
+	return refresh == 120 ? 120 : 60;
+}
 
 static void
 munchSdeCompletionIRQ(void *cookie, uint32_t intid)
@@ -606,6 +616,7 @@ munchSdeInstallBuffers(MunchSDE *state)
 static enum munch_sde_result
 munchSdeInitialize(MunchSDE *state, uint8_t *bootPixels, uint32_t stride, uint32_t width, uint32_t height)
 {
+	state->nativeRefreshHz = munchSdeRequestedRefreshHz();
 	state->initPhase = "boot-geometry";
 	if (width != MUNCH_PANEL_WIDTH || height != MUNCH_PANEL_HEIGHT || stride < width * 4 || stride > 0xffff)
 		return MUNCH_SDE_FORMAT;
@@ -778,6 +789,22 @@ munchSdeRestoreRefresh(MunchSDE *state)
 }
 
 static enum munch_sde_result
+munchSdeSwitchRefresh(MunchSDE *state, uint32_t refresh_hz)
+{
+	if (!state || !state->nativeTakeover || !state->mode.configured ||
+	    (refresh_hz != 60 && refresh_hz != 120)) return MUNCH_SDE_UNSUPPORTED;
+	enum munch_sde_result result = munch_sde_pause_refresh(&state->refresh, &state->presenter.io,
+	    &state->baseline, &state->route, munchSdeBusyDelay);
+	if (result != MUNCH_SDE_OK) return result;
+	if (!munch_mode_switch_refresh(&state->mode, refresh_hz)) return MUNCH_SDE_FAULT;
+	state->nativeRefreshHz = refresh_hz;
+	state->baseline.tear_vsync = state->mdp[MUNCH_SDE_INTF1_OFFSET / 4 + MUNCH_SDE_INTF_TEAR_SYNC_VSYNC / 4];
+	state->refresh.vsync = state->baseline.tear_vsync;
+	/* Native takeover keeps autorefresh paused between command-mode frames. */
+	return MUNCH_SDE_OK;
+}
+
+static enum munch_sde_result
 munchSdeSubmitFrame(MunchSDE *state)
 {
 	lck_mtx_lock(&hakios_smmu_lock);
@@ -806,7 +833,7 @@ munchSdeSubmitFrame(MunchSDE *state)
 			state->mode.scratch = state->pixels[index] + offset;
 			state->mode.scratch_iova = state->buffers[index].iova + offset;
 			state->mode.scratch_size = state->buffers[index].length - offset;
-			if (!munch_mode_configure(&state->mode)) result = MUNCH_SDE_FAULT;
+			if (!munch_mode_configure(&state->mode, state->nativeRefreshHz)) result = MUNCH_SDE_FAULT;
 			else {
 				munchSdeReadSnapshot(state->mdp, state->dsi, &state->baseline, false);
 				state->baseline.dsi_status = 0;

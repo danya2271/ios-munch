@@ -2,17 +2,20 @@
 
 ## Native L11r handoff (current)
 
-`--sde-backend --sde-native` selects a fixed **1080x2400@60** XNU presentation
-path. The default handoff keeps the panel, DSI link, PHY and clocks inherited
-from the bootloader, then takes ownership of guarded SDE buffer commits. This
-avoids blanking the panel while XNU is still missing the complete Linux power
-and reset sequence.
+`--sde-backend --sde-native` selects a native **1080x2400** XNU presentation
+path. Native mode performs the guarded panel/DSI/PHY/PLL takeover before the
+first frame, then owns SDE buffer commits and panel power transitions.
 
-The inherited refresh is drained around each guarded commit and restored after
+The native path defaults to 60 Hz. Add `munch_sde_hz=120` to select the
+captured L11r 120-Hz panel init and tear timing. Native framebuffer
+`ChangeFrameInfo` requests for 60 or 120 Hz are also handled at runtime by
+pausing the command-mode refresh, sending the panel timing-switch sequence,
+updating the tear counter, and leaving native autorefresh paused for the next
+frame.
+
+The active refresh is drained around each guarded commit and restored after
 hardware completion. Native VSync samples the INTF1 hardware frame counter,
 including during idle periods, while the CPU compositor remains unchanged.
-The framework is advertised at 60 Hz to match the inherited physical panel
-mode; `fb_hz` cannot raise the panel's scanout rate.
 
 The r33 safe-refresh image was reported to show the Apple logo and then leave
 the display off; it is not hardware-validated. The r34 candidate addresses two
@@ -73,15 +76,9 @@ interval, confirming that the fence path is needed to push batches. The r43
 diagnostic image restores `glsync=1` and adds `glframes=1 glslow=20000
 touch_lat=1` to expose producer-side frame gaps and slow GL calls.
 
-120 Hz is a separate modeset task. Although the panel description contains
-120-Hz timing data, its captured profile does not match the live device tree and
-the active bootloader mode has not been verified at 120 Hz. The safe handoff
-therefore does not advertise or assume 120-Hz scanout.
-
-The previous full panel takeover remains available only with the explicit
-`munch_sde_takeover=1` boot argument. It sleeps the panel and rewrites DPHY,
-PLL, clocks, DSI, DSC and panel commands; it is a diagnostic path until the
-missing XNU panel power/reset sequence is implemented and tested on hardware.
+The native path programs the selected 60/120-Hz DSI and INTF timing registers.
+`pack-iosroot.py --sde-native` adds `munch_sde_takeover=1` automatically; the
+explicit boot argument is only needed for manually assembled diagnostic images.
 
 Full takeover mode keeps external TE disconnected while programming the
 tear-check registers and through the first CTL START. It reconnects TE after

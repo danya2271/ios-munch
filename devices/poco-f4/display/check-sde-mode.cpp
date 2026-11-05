@@ -123,12 +123,25 @@ static unsigned panelCommandCount()
 	return count;
 }
 
+static unsigned panelCommandCount120()
+{
+	unsigned count = 0;
+	for (unsigned offset = 0; offset < sizeof(munch_l11r_on_120hz);) {
+		assert(sizeof(munch_l11r_on_120hz) - offset >= 7);
+		unsigned length = ((unsigned)munch_l11r_on_120hz[offset + 5] << 8) | munch_l11r_on_120hz[offset + 6];
+		assert(length <= sizeof(munch_l11r_on_120hz) - offset - 7);
+		offset += 7 + length;
+		count++;
+	}
+	return count;
+}
+
 int main()
 {
 	unsigned totalWrites;
 	{
 		Machine machine;
-		assert(munch_mode_configure(&machine.mode));
+		assert(munch_mode_configure(&machine.mode, 60));
 		assert(machine.mode.configured && !machine.mode.lit);
 		assert(!machine.mode.teConnected);
 		assert(machine.mdp[0x6ba88 / 4] == 0x80059);
@@ -163,15 +176,26 @@ int main()
 	}
 	{
 		Machine machine;
-		assert(munch_mode_configure(&machine.mode));
+		assert(munch_mode_configure(&machine.mode, 60));
 		machine.payloads.clear();
 		assert(munch_mode_panel_on(&machine.mode) && !machine.mode.lit);
 		assert(machine.payloads.back() == std::vector<uint8_t>({0x60, 0}));
 		assert(munch_mode_light(&machine.mode));
 	}
+	{
+		Machine machine;
+		assert(munch_mode_configure(&machine.mode, 120));
+		assert(machine.mode.refresh_hz == 120);
+		assert(machine.mdp[0x6ba88 / 4] == 0x80042);
+		assert(munch_mode_check(&machine.mode));
+		machine.payloads.clear();
+		assert(munch_mode_panel_on(&machine.mode));
+		assert(machine.payloads.back() == std::vector<uint8_t>({0x60, 0x10}));
+		assert(machine.mode.commands == panelCommandCount120() * 2 + 3);
+	}
 	for (unsigned drift = 0; drift < 3; drift++) {
 		Machine machine;
-		assert(munch_mode_configure(&machine.mode));
+		assert(munch_mode_configure(&machine.mode, 60));
 		if (drift == 0) machine.mdp[0x6ba84 / 4] ^= 1;
 		if (drift == 1) machine.phy[0x6b0 / 4] = 0;
 		if (drift == 2) machine.dsi[0x004 / 4] ^= 1;
@@ -182,7 +206,7 @@ int main()
 	for (unsigned boundary = 0; boundary < totalWrites; boundary++) {
 		Machine machine;
 		machine.failAfter = boundary;
-		bool configured = munch_mode_configure(&machine.mode);
+		bool configured = munch_mode_configure(&machine.mode, 60);
 		if (configured) assert(!munch_mode_light(&machine.mode));
 		assert(machine.mode.failed && machine.writes <= boundary);
 		assert(!munch_mode_vblank(&machine.mode));
@@ -204,7 +228,7 @@ int main()
 		case 11: machine.mdp[0x201c / 4] = 1; break;
 		case 12: machine.mdp[0x6bab4 / 4] = 0x80000001; break;
 		}
-		assert(!munch_mode_configure(&machine.mode));
+		assert(!munch_mode_configure(&machine.mode, 60));
 		assert(!machine.mode.configured && !machine.mode.lit);
 		assert(machine.elapsed < 1000000);
 		if (scenario >= 6) assert(!machine.writes);

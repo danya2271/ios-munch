@@ -74,38 +74,56 @@ def generate(tree):
     functions += [block(mdss, 'struct sde_hw_tear_check {') + ';',
                   block(intf, 'static int sde_hw_intf_setup_te_config(')]
     observed = json.loads((here / 'l11r-observed.json').read_text())
-    timing = bytes.fromhex(observed['profile']['modes'][0]['qcom,mdss-dsi-panel-phy-timings'])
+    observed_modes = {mode['qcom,mdss-dsi-panel-framerate']: mode
+                      for mode in observed['profile']['modes']}
+    timing = bytes.fromhex(observed_modes[60]['qcom,mdss-dsi-panel-phy-timings'])
     dts = (tree / 'arch/arm64/boot/dts/vendor/qcom/dsi-panel-l11r-38-08-0a-dsc-cmd.dtsi').read_text()
-    mode = block(dts, 'timing@0')
-    on = re.search(r'qcom,mdss-dsi-on-command\s*=\s*\[([^]]+)\]', mode)[1]
-    on = bytes.fromhex(re.sub(r'/\*.*?\*/', '', on, flags=re.S))
-    timing_switch = re.search(r'qcom,mdss-dsi-timing-switch-command\s*=\s*\[([^]]+)\]', mode)[1]
-    timing_switch = bytes.fromhex(re.sub(r'/\*.*?\*/', '', timing_switch, flags=re.S))
-    offset = 0
-    pps = None
-    while offset < len(on):
-        length = int.from_bytes(on[offset + 5:offset + 7], 'big')
-        payload = on[offset + 7:offset + 7 + length]
-        if len(payload) == 129 and payload[0] == 0x9e:
-            pps = payload[1:]
-        offset += 7 + length
+    def mode_commands(mode_name):
+        mode = block(dts, mode_name)
+
+        def command(name):
+            raw = re.search(rf'qcom,mdss-dsi-{name}-command\s*=\s*\[([^]]+)\]', mode)[1]
+            return bytes.fromhex(re.sub(r'/\*.*?\*/', '', raw, flags=re.S))
+
+        return command('on'), command('timing-switch')
+
+    on, timing_switch = mode_commands('timing@0')
+    on_120, timing_switch_120 = mode_commands('timing@1')
+
+    def find_pps(commands):
+        offset = 0
+        while offset < len(commands):
+            length = int.from_bytes(commands[offset + 5:offset + 7], 'big')
+            payload = commands[offset + 7:offset + 7 + length]
+            if len(payload) == 129 and payload[0] == 0x9e:
+                return payload[1:]
+            offset += 7 + length
+        return None
+
+    pps = find_pps(on)
     if pps is None:
         raise ValueError('No complete L11r DSC PPS')
-    switch_commands = []
-    offset = 0
-    while offset < len(timing_switch):
-        if offset + 7 > len(timing_switch):
-            raise ValueError('Truncated L11r timing-switch command header')
-        command_type = timing_switch[offset]
-        delay = timing_switch[offset + 4]
-        length = int.from_bytes(timing_switch[offset + 5:offset + 7], 'big')
-        payload = timing_switch[offset + 7:offset + 7 + length]
-        if len(payload) != length:
-            raise ValueError('Truncated L11r timing-switch command payload')
-        if command_type != 0x39 or not payload or len(payload) > 3:
-            raise ValueError('Unsupported L11r timing-switch packet')
-        switch_commands.append((command_type, delay, payload))
-        offset += 7 + length
+
+    def parse_switch(commands):
+        result = []
+        offset = 0
+        while offset < len(commands):
+            if offset + 7 > len(commands):
+                raise ValueError('Truncated L11r timing-switch command header')
+            command_type = commands[offset]
+            delay = commands[offset + 4]
+            length = int.from_bytes(commands[offset + 5:offset + 7], 'big')
+            payload = commands[offset + 7:offset + 7 + length]
+            if len(payload) != length:
+                raise ValueError('Truncated L11r timing-switch command payload')
+            if command_type != 0x39 or not payload or len(payload) > 3:
+                raise ValueError('Unsupported L11r timing-switch packet')
+            result.append((command_type, delay, payload))
+            offset += 7 + length
+        return result
+
+    switch_commands = parse_switch(timing_switch)
+    switch_commands_120 = parse_switch(timing_switch_120)
     template = (here / 'sde-mode-reference.c').read_text()
     template = template.replace('MODE_LINUX_FUNCTIONS', '\n'.join(functions))
     template = template.replace('MODE_PHY_TIMINGS', ', '.join(str(value) for value in timing))
@@ -119,24 +137,96 @@ def generate(tree):
                         '-fsanitize=undefined', str(source), '-o', str(binary)], check=True)
         registers = subprocess.check_output([str(binary)], text=True)
     import hashlib
-    expected = observed['profile']['modes'][0]['qcom,mdss-dsi-on-command']['sha256']
+    expected = observed_modes[60]['qcom,mdss-dsi-on-command']['sha256']
     if hashlib.sha256(on).hexdigest() != expected:
         raise ValueError('Local on-command differs from the captured live L11r profile')
+    expected_120 = observed_modes[120]['qcom,mdss-dsi-on-command']['sha256']
+    if hashlib.sha256(on_120).hexdigest() != expected_120:
+        raise ValueError('Local 120-Hz on-command differs from the captured live L11r profile')
+
+    def timing_registers(rate):
+        mode = observed_modes[rate]
+        h_active = mode['qcom,mdss-dsi-panel-width']
+        h_sync = mode['qcom,mdss-dsi-h-pulse-width']
+        h_back = mode['qcom,mdss-dsi-h-back-porch']
+        h_front = mode['qcom,mdss-dsi-h-front-porch']
+        v_active = mode['qcom,mdss-dsi-panel-height']
+        v_sync = mode['qcom,mdss-dsi-v-pulse-width']
+        v_back = mode['qcom,mdss-dsi-v-back-porch']
+        v_front = mode['qcom,mdss-dsi-v-front-porch']
+        h_period = h_sync + h_back + h_active + h_front
+        v_period = v_sync + v_back + v_active + v_front
+        dsi_width = 360
+        dsi_h_period = h_sync + h_back + dsi_width + h_front
+        dsi = [
+            (0x024, ((h_sync + h_back + dsi_width) << 16) | (h_sync + h_back)),
+            (0x028, ((v_sync + v_back + v_active) << 16) | (v_sync + v_back)),
+            (0x02c, ((v_period - 1) << 16) | (dsi_h_period - 1)),
+            (0x030, h_sync << 16),
+            (0x034, v_sync << 16),
+            (0x038, v_sync << 16),
+            (0x0bc, 0x3fd08),
+            (0x0a4, 0x10100),
+            (0x1e4, 1),
+        ]
+        intf = [
+            (0x008, (h_period << 16) | h_sync),
+            (0x00c, v_period * h_period),
+            (0x014, v_sync * h_period),
+            (0x01c, (v_sync + v_back) * h_period),
+            (0x024, ((v_period - v_front) * h_period) - 1),
+            (0x03c, ((h_period - h_front - 1) << 16) | (h_sync + h_back)),
+            (0x0a8, 3),
+        ]
+        tear_vsync = 19200000 // (v_period * rate)
+        return dsi, intf, tear_vsync
+
+    dsi_timing_60, intf_timing_60, tear_vsync_60 = timing_registers(60)
+    dsi_timing_120, intf_timing_120, tear_vsync_120 = timing_registers(120)
     result = '#ifndef _IOKIT_MUNCH_SDE_MODE_DATA_H\n#define _IOKIT_MUNCH_SDE_MODE_DATA_H\n\n'
     result += 'struct munch_mode_register { uint32_t offset, value; };\n\n' + registers
+    for name, values in (
+        ('munch_l11r_dsi_timing_60', dsi_timing_60),
+        ('munch_l11r_dsi_timing_120', dsi_timing_120),
+        ('munch_l11r_intf_timing_60', intf_timing_60),
+        ('munch_l11r_intf_timing_120', intf_timing_120),
+    ):
+        result += f'\nstatic const struct munch_mode_register {name}[] = {{\n'
+        for offset, value in values:
+            result += f'\t{{ 0x{offset:03x}, 0x{value:08x} }},\n'
+        result += '};\n'
     result += '\nstatic const uint8_t munch_l11r_on[] = {\n'
     for offset in range(0, len(on), 16):
         result += '\t' + ', '.join(f'0x{value:02x}' for value in on[offset:offset + 16]) + ',\n'
     result += '};\n\n'
-    result += 'struct munch_mode_command { uint8_t type, length; uint16_t delay_ms; const uint8_t *payload; };\n\n'
-    result += 'static const uint8_t munch_l11r_60hz_payloads[][3] = {\n'
-    for _, _, payload in switch_commands:
-        result += '\t{' + ', '.join(f'0x{value:02x}' for value in payload)
-        result += ', 0' * (3 - len(payload)) + '},\n'
+    result += 'static const uint8_t munch_l11r_on_120hz[] = {\n'
+    for offset in range(0, len(on_120), 16):
+        result += '\t' + ', '.join(f'0x{value:02x}' for value in on_120[offset:offset + 16]) + ',\n'
     result += '};\n\n'
-    result += 'static const struct munch_mode_command munch_l11r_60hz[] = {\n'
-    for index, (command_type, delay, payload) in enumerate(switch_commands):
-        result += f'\t{{ 0x{command_type:02x}, {len(payload)}, {delay}, munch_l11r_60hz_payloads[{index}] }},\n'
+    result += 'struct munch_mode_command { uint8_t type, length; uint16_t delay_ms; const uint8_t *payload; };\n\n'
+    def emit_switch(name, commands):
+        nonlocal result
+        result += f'static const uint8_t {name}_payloads[][3] = {{\n'
+        for _, _, payload in commands:
+            result += '\t{' + ', '.join(f'0x{value:02x}' for value in payload)
+            result += ', 0' * (3 - len(payload)) + '},\n'
+        result += '};\n\n'
+        result += f'static const struct munch_mode_command {name}[] = {{\n'
+        for index, (command_type, delay, payload) in enumerate(commands):
+            result += f'\t{{ 0x{command_type:02x}, {len(payload)}, {delay}, {name}_payloads[{index}] }},\n'
+        result += '};\n\n'
+
+    emit_switch('munch_l11r_60hz', switch_commands)
+    emit_switch('munch_l11r_120hz', switch_commands_120)
+    result += 'static const struct munch_mode_register munch_l11r_tear_120hz[] = {\n'
+    result += f'\t{{ 0x288, 0x000800{tear_vsync_120:02x} }},\n'
+    result += '\t{ 0x28c, 0x0000fff0 },\n'
+    result += '\t{ 0x294, 0x00000960 },\n'
+    result += '\t{ 0x2a4, 0x00000961 },\n'
+    result += '\t{ 0x2a8, 0x00000001 },\n'
+    result += '\t{ 0x2a0, 0x00000960 },\n'
+    result += '\t{ 0x29c, 0x00040004 },\n'
+    result += '\t{ 0x290, 0x00000965 },\n'
     result += '};\n\n#endif\n'
     return result
 

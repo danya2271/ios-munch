@@ -24,6 +24,7 @@ struct munch_mode {
 	enum munch_mode_space failed_space;
 	bool touched, configured, lit, failed, teConnected, vblankFrameValid;
 	uint32_t vblankFrame;
+	uint32_t refresh_hz;
 };
 
 static inline bool
@@ -144,6 +145,48 @@ munch_mode_command_sequence(struct munch_mode *mode, const struct munch_mode_com
 }
 
 static inline bool
+munch_mode_switch_refresh(struct munch_mode *mode, uint32_t refresh_hz)
+{
+	const struct munch_mode_command *commands;
+	unsigned command_count;
+	const struct munch_mode_register *tear;
+	unsigned tear_count;
+	const struct munch_mode_register *dsi_timing;
+	unsigned dsi_timing_count;
+	const struct munch_mode_register *intf_timing;
+	unsigned intf_timing_count;
+
+	if (!mode->configured || mode->failed || (refresh_hz != 60 && refresh_hz != 120)) return false;
+	if (mode->refresh_hz == refresh_hz) return true;
+	commands = refresh_hz == 120 ? munch_l11r_120hz : munch_l11r_60hz;
+	command_count = refresh_hz == 120 ?
+	    sizeof(munch_l11r_120hz) / sizeof(munch_l11r_120hz[0]) :
+	    sizeof(munch_l11r_60hz) / sizeof(munch_l11r_60hz[0]);
+	tear = refresh_hz == 120 ? munch_l11r_tear_120hz : munch_l11r_tear;
+	tear_count = refresh_hz == 120 ?
+	    sizeof(munch_l11r_tear_120hz) / sizeof(munch_l11r_tear_120hz[0]) :
+	    sizeof(munch_l11r_tear) / sizeof(munch_l11r_tear[0]);
+	dsi_timing = refresh_hz == 120 ? munch_l11r_dsi_timing_120 : munch_l11r_dsi_timing_60;
+	dsi_timing_count = refresh_hz == 120 ?
+	    sizeof(munch_l11r_dsi_timing_120) / sizeof(munch_l11r_dsi_timing_120[0]) :
+	    sizeof(munch_l11r_dsi_timing_60) / sizeof(munch_l11r_dsi_timing_60[0]);
+	intf_timing = refresh_hz == 120 ? munch_l11r_intf_timing_120 : munch_l11r_intf_timing_60;
+	intf_timing_count = refresh_hz == 120 ?
+	    sizeof(munch_l11r_intf_timing_120) / sizeof(munch_l11r_intf_timing_120[0]) :
+	    sizeof(munch_l11r_intf_timing_60) / sizeof(munch_l11r_intf_timing_60[0]);
+	mode->phase = refresh_hz == 120 ? "native-switch-120hz" : "native-switch-60hz";
+	if (!munch_mode_program(mode, MUNCH_MODE_DSI, 0, dsi_timing, dsi_timing_count, true) ||
+	    !munch_mode_program(mode, MUNCH_MODE_MDP, 0x6b800, intf_timing, intf_timing_count, true) ||
+	    !munch_mode_command_sequence(mode, commands, command_count) ||
+	    !munch_mode_program(mode, MUNCH_MODE_MDP, 0x6b800, tear, tear_count, true)) {
+		return false;
+	}
+	mode->refresh_hz = refresh_hz;
+	mode->vblankFrameValid = false;
+	return true;
+}
+
+static inline bool
 munch_mode_byte_sequence(struct munch_mode *mode, const uint8_t *bytes, unsigned size)
 {
 	for (unsigned offset = 0; offset < size;) {
@@ -185,10 +228,18 @@ munch_mode_branch(struct munch_mode *mode, uint32_t offset, bool enable)
 }
 
 static inline bool
-munch_mode_configure(struct munch_mode *mode)
+munch_mode_configure(struct munch_mode *mode, uint32_t refresh_hz)
 {
 	static const uint32_t branches[] = { 0x2004, 0x202c, 0x2028, 0x2038, 0x2024 };
 	static const uint8_t display_off[] = { 0x28 }, sleep_in[] = { 0x10 }, dimming[] = { 0x53, 0x20 };
+	const struct munch_mode_register *tear;
+	unsigned tear_count;
+	const uint8_t *panel_on;
+	unsigned panel_on_size;
+	const struct munch_mode_register *dsi_timing;
+	unsigned dsi_timing_count;
+	const struct munch_mode_register *intf_timing;
+	unsigned intf_timing_count;
 	static const struct munch_mode_register host[] = {
 		{ 0x004, 0x1f0 }, { 0x084, 0x80000004 }, { 0x0c4, 0 }, { 0x0cc, 1 },
 		{ 0x11c, 0x23f },
@@ -205,6 +256,22 @@ munch_mode_configure(struct munch_mode *mode)
 		{ 0x02000, 0x01000005 }, { 0x02014, 0x20000 }, { 0x020f4, 2 },
 		{ 0x6ba5c, 0 },
 	};
+	if (refresh_hz != 60 && refresh_hz != 120) return false;
+	mode->refresh_hz = refresh_hz;
+	tear = refresh_hz == 120 ? munch_l11r_tear_120hz : munch_l11r_tear;
+	tear_count = refresh_hz == 120 ?
+	    sizeof(munch_l11r_tear_120hz) / sizeof(munch_l11r_tear_120hz[0]) :
+	    sizeof(munch_l11r_tear) / sizeof(munch_l11r_tear[0]);
+	dsi_timing = refresh_hz == 120 ? munch_l11r_dsi_timing_120 : munch_l11r_dsi_timing_60;
+	dsi_timing_count = refresh_hz == 120 ?
+	    sizeof(munch_l11r_dsi_timing_120) / sizeof(munch_l11r_dsi_timing_120[0]) :
+	    sizeof(munch_l11r_dsi_timing_60) / sizeof(munch_l11r_dsi_timing_60[0]);
+	intf_timing = refresh_hz == 120 ? munch_l11r_intf_timing_120 : munch_l11r_intf_timing_60;
+	intf_timing_count = refresh_hz == 120 ?
+	    sizeof(munch_l11r_intf_timing_120) / sizeof(munch_l11r_intf_timing_120[0]) :
+	    sizeof(munch_l11r_intf_timing_60) / sizeof(munch_l11r_intf_timing_60[0]);
+	panel_on = refresh_hz == 120 ? munch_l11r_on_120hz : munch_l11r_on;
+	panel_on_size = refresh_hz == 120 ? sizeof(munch_l11r_on_120hz) : sizeof(munch_l11r_on);
 	mode->phase = "native-preflight";
 	if (mode->touched || mode->configured || !mode->scratch || mode->scratch_size < 136 ||
 	    !mode->scratch_iova || (mode->scratch_iova & 7) ||
@@ -263,6 +330,7 @@ munch_mode_configure(struct munch_mode *mode)
 	if (!munch_mode_program(mode, MUNCH_MODE_DSI, 0, host, sizeof(host) / sizeof(host[0]), true)) return false;
 	if (!munch_mode_program(mode, MUNCH_MODE_DSI, 0, munch_l11r_stream,
 	    sizeof(munch_l11r_stream) / sizeof(munch_l11r_stream[0]), true)) return false;
+	if (!munch_mode_program(mode, MUNCH_MODE_DSI, 0, dsi_timing, dsi_timing_count, true)) return false;
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x004, 0x1f5);
 	mode->phase = "native-dsc";
 	if (!munch_mode_program(mode, MUNCH_MODE_MDP, 0x81000, munch_l11r_dsc,
@@ -271,21 +339,21 @@ munch_mode_configure(struct munch_mode *mode)
 	munch_mode_write(mode, MUNCH_MODE_MDP, 0x710a0, 1);
 	mode->phase = "native-route";
 	if (!munch_mode_program(mode, MUNCH_MODE_MDP, 0, route, sizeof(route) / sizeof(route[0]), true)) return false;
+	if (!munch_mode_program(mode, MUNCH_MODE_MDP, 0x6b800, intf_timing, intf_timing_count, true)) return false;
 	mode->phase = "native-panel-init";
-	for (unsigned offset = 0; offset < sizeof(munch_l11r_on);) {
-		if (sizeof(munch_l11r_on) - offset < 7) { mode->failed = true; return false; }
-		unsigned length = ((unsigned)munch_l11r_on[offset + 5] << 8) | munch_l11r_on[offset + 6];
-		if (length > sizeof(munch_l11r_on) - offset - 7 || munch_l11r_on[offset + 2] || munch_l11r_on[offset + 3]) {
+	for (unsigned offset = 0; offset < panel_on_size;) {
+		if (panel_on_size - offset < 7) { mode->failed = true; return false; }
+		unsigned length = ((unsigned)panel_on[offset + 5] << 8) | panel_on[offset + 6];
+		if (length > panel_on_size - offset - 7 || panel_on[offset + 2] || panel_on[offset + 3]) {
 			mode->failed = true;
 			return false;
 		}
-		if (!munch_mode_command(mode, munch_l11r_on[offset], munch_l11r_on + offset + 7, length)) return false;
-		mode->io.delay(mode->io.cookie, (uint32_t)munch_l11r_on[offset + 4] * 1000);
+		if (!munch_mode_command(mode, panel_on[offset], panel_on + offset + 7, length)) return false;
+		mode->io.delay(mode->io.cookie, (uint32_t)panel_on[offset + 4] * 1000);
 		offset += length + 7;
 	}
 	mode->phase = "native-tearcheck";
-	if (!munch_mode_program(mode, MUNCH_MODE_MDP, 0x6b800, munch_l11r_tear,
-	    sizeof(munch_l11r_tear) / sizeof(munch_l11r_tear[0]), true)) return false;
+	if (!munch_mode_program(mode, MUNCH_MODE_MDP, 0x6b800, tear, tear_count, true)) return false;
 	munch_mode_write(mode, MUNCH_MODE_MDP, 0x6ba80, 0);
 	munch_mode_write(mode, MUNCH_MODE_MDP, 0x6bab4, 0);
 	munch_mode_write(mode, MUNCH_MODE_MDP, 0x6ba84, 1);
@@ -313,7 +381,26 @@ munch_mode_connect_te(struct munch_mode *mode, bool enable)
 static inline bool
 munch_mode_check(struct munch_mode *mode)
 {
+	const struct munch_mode_register *tear;
+	const struct munch_mode_register *dsi_timing;
+	const struct munch_mode_register *intf_timing;
+	unsigned tear_count;
+	unsigned dsi_timing_count;
+	unsigned intf_timing_count;
+
 	if (!mode->configured || mode->failed || !munch_mode_healthy(mode)) return false;
+	tear = mode->refresh_hz == 120 ? munch_l11r_tear_120hz : munch_l11r_tear;
+	tear_count = mode->refresh_hz == 120 ?
+	    sizeof(munch_l11r_tear_120hz) / sizeof(munch_l11r_tear_120hz[0]) :
+	    sizeof(munch_l11r_tear) / sizeof(munch_l11r_tear[0]);
+	dsi_timing = mode->refresh_hz == 120 ? munch_l11r_dsi_timing_120 : munch_l11r_dsi_timing_60;
+	dsi_timing_count = mode->refresh_hz == 120 ?
+	    sizeof(munch_l11r_dsi_timing_120) / sizeof(munch_l11r_dsi_timing_120[0]) :
+	    sizeof(munch_l11r_dsi_timing_60) / sizeof(munch_l11r_dsi_timing_60[0]);
+	intf_timing = mode->refresh_hz == 120 ? munch_l11r_intf_timing_120 : munch_l11r_intf_timing_60;
+	intf_timing_count = mode->refresh_hz == 120 ?
+	    sizeof(munch_l11r_intf_timing_120) / sizeof(munch_l11r_intf_timing_120[0]) :
+	    sizeof(munch_l11r_intf_timing_60) / sizeof(munch_l11r_intf_timing_60[0]);
 	if (!munch_mode_poll(mode, MUNCH_MODE_PHY, 0x6b0, 1, 1, 0) ||
 	    !munch_mode_poll(mode, MUNCH_MODE_PHY, 0x010, 0xff, 0x31, 0) ||
 	    !munch_mode_poll(mode, MUNCH_MODE_PHY, 0x014, 0x3f, 0x31, 0) ||
@@ -328,10 +415,18 @@ munch_mode_check(struct munch_mode *mode)
 		if (!munch_mode_poll(mode, MUNCH_MODE_DSI, munch_l11r_stream[index].offset,
 		    UINT32_MAX, munch_l11r_stream[index].value, 0)) return false;
 	}
-	for (unsigned index = 0; index < sizeof(munch_l11r_tear) / sizeof(munch_l11r_tear[0]); index++) {
-		uint32_t value = munch_l11r_tear[index].value;
+	for (unsigned index = 0; index < dsi_timing_count; index++) {
+		if (!munch_mode_poll(mode, MUNCH_MODE_DSI, dsi_timing[index].offset,
+		    UINT32_MAX, dsi_timing[index].value, 0)) return false;
+	}
+	for (unsigned index = 0; index < intf_timing_count; index++) {
+		if (!munch_mode_poll(mode, MUNCH_MODE_MDP, MUNCH_SDE_INTF1_OFFSET + intf_timing[index].offset,
+		    UINT32_MAX, intf_timing[index].value, 0)) return false;
+	}
+	for (unsigned index = 0; index < tear_count; index++) {
+		uint32_t value = tear[index].value;
 		if (index == 0 && mode->teConnected) value |= MUNCH_SDE_EXTERNAL_TE;
-		if (!munch_mode_poll(mode, MUNCH_MODE_MDP, 0x6b800 + munch_l11r_tear[index].offset,
+		if (!munch_mode_poll(mode, MUNCH_MODE_MDP, 0x6b800 + tear[index].offset,
 		    UINT32_MAX, value, 0)) return false;
 	}
 	if (!munch_mode_poll(mode, MUNCH_MODE_MDP, 0x6ba84, 1, 1, 0)) return false;
@@ -382,7 +477,9 @@ munch_mode_panel_on(struct munch_mode *mode)
 	if (!mode->configured || mode->failed) return false;
 	mode->phase = "native-panel-on";
 	mode->lit = false;
-	return munch_mode_byte_sequence(mode, munch_l11r_on, sizeof(munch_l11r_on));
+	const uint8_t *panel_on = mode->refresh_hz == 120 ? munch_l11r_on_120hz : munch_l11r_on;
+	unsigned panel_on_size = mode->refresh_hz == 120 ? sizeof(munch_l11r_on_120hz) : sizeof(munch_l11r_on);
+	return munch_mode_byte_sequence(mode, panel_on, panel_on_size);
 }
 
 #endif

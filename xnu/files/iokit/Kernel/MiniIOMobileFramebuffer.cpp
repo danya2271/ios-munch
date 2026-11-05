@@ -109,7 +109,7 @@ enum {
 #define kFBNotifyVSync          5
 #define kFBNotifyTypes          8
 #define kFBRefreshHz            60                      /* unless boot-arg fb_hz says otherwise */
-#define kFBNativeRefreshHz      60                      /* native handoff inherits the bootloader's ~60-Hz mode */
+#define kFBNativeRefreshHz      60                      /* native handoff defaults to the inherited 60-Hz mode */
 
 #define FRAME_TIMES             64                      /* milliseconds told apart between two frames */
 #define FRAME_PAUSE             90                      /* from so many on, nothing was moving: not a slow frame */
@@ -183,6 +183,7 @@ static TUNABLE(uint32_t, gDiff, "fb_diff", 0);
  */
 static TUNABLE(uint32_t, gFilter, "fb_filter", 0);
 static TUNABLE(uint32_t, gRefreshHz, "fb_hz", kFBRefreshHz);
+static TUNABLE(uint32_t, gNativeRefreshHz, "munch_sde_hz", kFBNativeRefreshHz);
 static TUNABLE(uint32_t, gOnTheBeat, "fb_beat", 0);
 static TUNABLE(uint32_t, gMunchSDEProbe, "munch_sde_probe", 0);
 static TUNABLE(uint32_t, gMunchSDEPresent, "munch_sde", 0);
@@ -220,7 +221,7 @@ micros(uint64_t absolute)
 static inline uint32_t
 refreshHz(void)
 {
-	if (gMunchSDENative) return kFBNativeRefreshHz;
+	if (gMunchSDENative) return gNativeRefreshHz == 120 ? 120 : kFBNativeRefreshHz;
 	return gRefreshHz >= 1 && gRefreshHz <= 240 ? gRefreshHz : kFBRefreshHz;
 }
 static inline uint32_t
@@ -389,6 +390,7 @@ public:
 	unsigned        fHelpersBusy, fHelpersStarted;
 	uint32_t *      fHelperBlend[7];
 	void record(MiniIOSurface * s);
+	IOReturn changeRefresh(uint32_t refresh_hz);
 };
 
 static IOPMPowerState gFramebufferPowerStates[2] = {
@@ -1018,6 +1020,7 @@ IOMobileFramebuffer::setDisplayPower(uint32_t state)
 {
 	IOReturn result = kIOReturnSuccess;
 	bool on;
+	bool blanked_for_transition = false;
 
 	if (state > 1) return kIOReturnBadArgument;
 	if (fDisplayLock == NULL) return kIOReturnNotReady;
@@ -1031,9 +1034,49 @@ IOMobileFramebuffer::setDisplayPower(uint32_t state)
 		IOLockUnlock(fDisplayLock);
 		return kIOReturnSuccess;
 	}
+	if (!on && fSDERequested && fSDENativeRequested && fSDE && fSDE->nativeTakeover) {
+		IOLockLock(fSwapLock);
+		fDisplayBlanked = true;
+		IOLockWakeup(fSwapLock, &fSwapsWaiting, false);
+		IOLockUnlock(fSwapLock);
+		blanked_for_transition = true;
+		IOLockUnlock(fDisplayLock);
+
+		bool drained = false;
+		for (unsigned attempt = 0; attempt < 500; attempt++) {
+			IOLockLock(fSwapLock);
+			bool in_flight = fSDEInFlight;
+			bool queued = fSwapsWaiting != 0;
+			IOLockUnlock(fSwapLock);
+			if (in_flight) {
+				if (waitNativeFrame() != MUNCH_SDE_OK) break;
+			} else if (!queued && fSDE->presenter.pending == 3 && fSDE->presenter.drawing == 3) {
+				drained = true;
+				break;
+			} else {
+				IODelay(1000);
+			}
+		}
+		IOLockLock(fDisplayLock);
+		if (!drained) {
+			IOLockLock(fSwapLock);
+			fDisplayBlanked = false;
+			IOLockWakeup(fSwapLock, &fSwapsWaiting, false);
+			IOLockUnlock(fSwapLock);
+			IOLockUnlock(fDisplayLock);
+			IOLog("MiniIOMobileFramebuffer: native panel-off drain timed out\n");
+			return kIOReturnBusy;
+		}
+	}
 	if (fSDERequested) {
 		enum munch_sde_result prepared = munchSdePreparePanel(fSDE);
 		if (prepared != MUNCH_SDE_OK) {
+			if (blanked_for_transition) {
+				IOLockLock(fSwapLock);
+				fDisplayBlanked = false;
+				IOLockWakeup(fSwapLock, &fSwapsWaiting, false);
+				IOLockUnlock(fSwapLock);
+			}
 			IOLockUnlock(fDisplayLock);
 			return prepared == MUNCH_SDE_BUSY ? kIOReturnBusy : kIOReturnNotReady;
 		}
@@ -1074,11 +1117,35 @@ IOMobileFramebuffer::setDisplayPower(uint32_t state)
 	}
 	if (result == kIOReturnSuccess) fPanelOn = on;
 	if (result == kIOReturnSuccess) hakios_cpufreq_set_screen_on(on ? 1 : 0);
+	IOLog("MiniIOMobileFramebuffer: panel power request %u result=0x%x\n", state, result);
 	IOLockUnlock(fDisplayLock);
 	if (result != kIOReturnSuccess) {
 		IOLog("MiniIOMobileFramebuffer: panel power transition to %u failed: 0x%x\n", state, result);
 	}
 	return result;
+}
+
+IOReturn
+IOMobileFramebuffer::changeRefresh(uint32_t refresh_hz)
+{
+	if (refresh_hz != 60 && refresh_hz != 120) return kIOReturnBadArgument;
+	if (!fDisplayLock || !fSDERequested || !fSDENativeRequested || !fSDE ||
+	    !fSDE->nativeTakeover || !fPanelOn) return kIOReturnUnsupported;
+	IOLockLock(fDisplayLock);
+	if (fSDE->presenter.pending != 3 || fSDE->panelCommandActive || fSDE->panelCommandFailed) {
+		IOLockUnlock(fDisplayLock);
+		return kIOReturnBusy;
+	}
+	lck_mtx_lock(&hakios_smmu_lock);
+	enum munch_sde_result result = munchSdeSwitchRefresh(fSDE, refresh_hz);
+	lck_mtx_unlock(&hakios_smmu_lock);
+	if (result == MUNCH_SDE_OK) {
+		gNativeRefreshHz = refresh_hz;
+		IOLog("MUNCH SDE: dynamic refresh switched to %u Hz\n", refresh_hz);
+	}
+	IOLockUnlock(fDisplayLock);
+	return result == MUNCH_SDE_OK ? kIOReturnSuccess :
+	    result == MUNCH_SDE_BUSY ? kIOReturnBusy : kIOReturnIOError;
 }
 
 static bool
@@ -2773,7 +2840,13 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
 		}
 		return fOwner->setDisplayPower((uint32_t) in[0]);
 	case kFBMethodChangeFrameInfo:
-		return kIOReturnSuccess;
+		if (args->scalarInputCount < 2) return kIOReturnBadArgument;
+		{
+			uint32_t refresh_hz = in[1] == 60 || in[1] == 120 ? (uint32_t)in[1] :
+			    (in[0] == 60 || in[0] == 120 ? (uint32_t)in[0] : 0);
+			/* Type 3 is a framework frame-info query/update, not a Hz value. */
+			return refresh_hz ? fOwner->changeRefresh(refresh_hz) : kIOReturnSuccess;
+		}
 
 	case kFBMethodNotifications:                    /* in: callback (0 = off), its argument, type, 0 */
 		if (args->scalarInputCount < 3 || in[2] >= kFBNotifyTypes) {
@@ -2791,11 +2864,16 @@ IOMobileFramebufferUserClient::externalMethod(uint32_t selector, IOExternalMetho
 
 	case kFBMethodSupportedFrameInfo:               /* in: type; out: how many, and their tags: none */
 		if (args->scalarOutputCount >= 1) {
-			out[0] = 0;
+			out[0] = 2;
 			args->scalarOutputCount = 1;
 		}
 		if (args->structureOutput != NULL) {
 			bzero(args->structureOutput, args->structureOutputSize);
+			if (args->structureOutputSize >= 8) {
+				uint32_t *rates = (uint32_t *)args->structureOutput;
+				rates[0] = 60;
+				rates[1] = 120;
+			}
 		}
 		return kIOReturnSuccess;
 
