@@ -131,6 +131,11 @@ munch_mode_command_batch(struct munch_mode *mode, const struct munch_mode_comman
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x110, mask | 3);
 	if (!munch_mode_poll(mode, MUNCH_MODE_DSI, 0x110, 1, 0, 0)) return false;
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x19c, 0);
+	uint32_t trigger = munch_mode_read(mode, MUNCH_MODE_DSI, 0x084);
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x084, (trigger & ~0xfu) | 0xc);
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x100, 0);
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x104,
+	    ((MUNCH_PANEL_HEIGHT & 0xffffu) << 16) | ((MUNCH_PANEL_HEIGHT + 5) & 0xffffu));
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x03c, (1u << 28) | (1u << 26));
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x050, (1u << 20) | (1u << 16));
 	munch_mode_write(mode, MUNCH_MODE_DSI, 0x048, mode->scratch_iova);

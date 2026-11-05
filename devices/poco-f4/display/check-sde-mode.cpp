@@ -84,6 +84,9 @@ struct Machine {
 		if (space == MUNCH_MODE_DSI && offset == 0x090) {
 			assert(value == 1 && machine.dsi[0x048 / 4] == machine.mode.scratch_iova);
 			assert(machine.dsi[0x03c / 4] == 0x14000000 && machine.dsi[0x19c / 4] == 0);
+			assert((machine.dsi[0x084 / 4] & 0xf) == 0xc);
+			assert(machine.dsi[0x100 / 4] == 0);
+			assert(machine.dsi[0x104 / 4] == 0x09600965);
 			unsigned bytes = machine.dsi[0x04c / 4];
 			assert(bytes <= sizeof(machine.scratch) && machine.dirty == bytes);
 			unsigned offset_in_buffer = 0;

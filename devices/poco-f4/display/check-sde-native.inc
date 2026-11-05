@@ -18,6 +18,9 @@ static void nativeWrite(void *cookie, munch_mode_space space, uint32_t offset, u
 		assert(state->dsi[0x048 / 4] == state->buffers[1].iova + 0x9e3400);
 		assert(state->mode.scratch == state->pixels[1] + 0x9e3400);
 		assert(state->dsi[0x04c / 4] <= 136);
+		assert((state->dsi[0x084 / 4] & 0xf) == 0xc);
+		assert(state->dsi[0x100 / 4] == 0);
+		assert(state->dsi[0x104 / 4] == 0x09600965);
 		state->dsi[0x110 / 4] |= 1;
 	}
 }
