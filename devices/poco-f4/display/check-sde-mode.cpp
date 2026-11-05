@@ -86,15 +86,26 @@ struct Machine {
 			assert(machine.dsi[0x03c / 4] == 0x14000000 && machine.dsi[0x19c / 4] == 0);
 			unsigned bytes = machine.dsi[0x04c / 4];
 			assert(bytes <= sizeof(machine.scratch) && machine.dirty == bytes);
-			assert(machine.scratch[3] & 0x80);
-			unsigned length = machine.scratch[0] | (unsigned)machine.scratch[1] << 8;
-			if (machine.scratch[3] & 0x40) {
-				assert(machine.scratch[2] == 0x39 && bytes == ((length + 7) & ~3u));
-				machine.payloads.emplace_back(machine.scratch + 4, machine.scratch + 4 + length);
-			} else {
-				assert(bytes == 4);
-				machine.payloads.push_back({machine.scratch[0]});
+			unsigned offset_in_buffer = 0;
+			bool last = false;
+			while (offset_in_buffer < bytes) {
+				uint8_t type = machine.scratch[offset_in_buffer + 2];
+				unsigned length = type == 0x39 ? machine.scratch[offset_in_buffer] |
+				    (unsigned)machine.scratch[offset_in_buffer + 1] << 8 : 0;
+				unsigned packet_bytes = type == 0x39 ? (4 + length + 3) & ~3u : 4;
+				assert(packet_bytes <= bytes - offset_in_buffer);
+				if (type == 0x39) {
+					assert(machine.scratch[offset_in_buffer + 3] & 0x40);
+					machine.payloads.emplace_back(machine.scratch + offset_in_buffer + 4,
+					    machine.scratch + offset_in_buffer + 4 + length);
+				} else {
+					assert(!(machine.scratch[offset_in_buffer + 3] & 0x40));
+					machine.payloads.push_back({machine.scratch[offset_in_buffer]});
+				}
+				last = machine.scratch[offset_in_buffer + 3] & 0x80;
+				offset_in_buffer += packet_bytes;
 			}
+			assert(last && offset_in_buffer == bytes);
 			machine.dirty = 0;
 			machine.packets++;
 			if (!machine.noCommand) machine.dsi[0x110 / 4] |= 1;
@@ -136,6 +147,20 @@ static unsigned panelCommandCount120()
 	return count;
 }
 
+static unsigned panelBatchCount(const uint8_t *bytes, unsigned size)
+{
+	unsigned count = 0;
+	for (unsigned offset = 0; offset < size;) {
+		assert(size - offset >= 7);
+		bool last = bytes[offset + 1] != 0;
+		unsigned length = ((unsigned)bytes[offset + 5] << 8) | bytes[offset + 6];
+		assert(length <= size - offset - 7);
+		offset += 7 + length;
+		if (last) count++;
+	}
+	return count;
+}
+
 int main()
 {
 	unsigned totalWrites;
@@ -165,7 +190,8 @@ int main()
 		assert(machine.payloads.size() == panelCommandCount() + 4);
 		assert(machine.payloads.back() == std::vector<uint8_t>({0x51, 2, 0}));
 		assert(machine.mode.commands == panelCommandCount() + 4 &&
-		    machine.packets == machine.mode.commands && machine.elapsed == 240002);
+		    machine.packets == panelBatchCount(munch_l11r_on, sizeof(munch_l11r_on)) + 4 &&
+		    machine.elapsed == 240002);
 		totalWrites = machine.writes;
 		for (unsigned event = 0; event < 10; event++) {
 			assert(!munch_mode_vblank(&machine.mode));
@@ -192,6 +218,7 @@ int main()
 		assert(munch_mode_panel_on(&machine.mode));
 		assert(machine.payloads.back() == std::vector<uint8_t>({0x60, 0x10}));
 		assert(machine.mode.commands == panelCommandCount120() * 2 + 3);
+		assert(machine.packets == panelBatchCount(munch_l11r_on_120hz, sizeof(munch_l11r_on_120hz)) * 2 + 3);
 	}
 	for (unsigned drift = 0; drift < 3; drift++) {
 		Machine machine;

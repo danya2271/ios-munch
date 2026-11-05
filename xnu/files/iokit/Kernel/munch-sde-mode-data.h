@@ -477,7 +477,7 @@ static const uint8_t munch_l11r_on_120hz[] = {
 	0x00, 0x02, 0x29, 0x00, 0x39, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x60, 0x10,
 };
 
-struct munch_mode_command { uint8_t type, length; uint16_t delay_ms; const uint8_t *payload; };
+struct munch_mode_command { uint8_t type, length; uint16_t delay_ms; bool last; const uint8_t *payload; };
 
 static const uint8_t munch_l11r_60hz_payloads[][3] = {
 	{0x60, 0x00, 0},
@@ -500,23 +500,23 @@ static const uint8_t munch_l11r_60hz_payloads[][3] = {
 };
 
 static const struct munch_mode_command munch_l11r_60hz[] = {
-	{ 0x39, 2, 0, munch_l11r_60hz_payloads[0] },
-	{ 0x39, 3, 0, munch_l11r_60hz_payloads[1] },
-	{ 0x39, 3, 0, munch_l11r_60hz_payloads[2] },
-	{ 0x39, 2, 0, munch_l11r_60hz_payloads[3] },
-	{ 0x39, 3, 0, munch_l11r_60hz_payloads[4] },
-	{ 0x39, 2, 0, munch_l11r_60hz_payloads[5] },
-	{ 0x39, 3, 0, munch_l11r_60hz_payloads[6] },
-	{ 0x39, 2, 0, munch_l11r_60hz_payloads[7] },
-	{ 0x39, 3, 0, munch_l11r_60hz_payloads[8] },
-	{ 0x39, 2, 0, munch_l11r_60hz_payloads[9] },
-	{ 0x39, 2, 0, munch_l11r_60hz_payloads[10] },
-	{ 0x39, 2, 0, munch_l11r_60hz_payloads[11] },
-	{ 0x39, 2, 0, munch_l11r_60hz_payloads[12] },
-	{ 0x39, 2, 0, munch_l11r_60hz_payloads[13] },
-	{ 0x39, 2, 0, munch_l11r_60hz_payloads[14] },
-	{ 0x39, 3, 0, munch_l11r_60hz_payloads[15] },
-	{ 0x39, 3, 12, munch_l11r_60hz_payloads[16] },
+	{ 0x39, 2, 0, false, munch_l11r_60hz_payloads[0] },
+	{ 0x39, 3, 0, false, munch_l11r_60hz_payloads[1] },
+	{ 0x39, 3, 0, false, munch_l11r_60hz_payloads[2] },
+	{ 0x39, 2, 0, false, munch_l11r_60hz_payloads[3] },
+	{ 0x39, 3, 0, true, munch_l11r_60hz_payloads[4] },
+	{ 0x39, 2, 0, false, munch_l11r_60hz_payloads[5] },
+	{ 0x39, 3, 0, true, munch_l11r_60hz_payloads[6] },
+	{ 0x39, 2, 0, false, munch_l11r_60hz_payloads[7] },
+	{ 0x39, 3, 0, true, munch_l11r_60hz_payloads[8] },
+	{ 0x39, 2, 0, false, munch_l11r_60hz_payloads[9] },
+	{ 0x39, 2, 0, false, munch_l11r_60hz_payloads[10] },
+	{ 0x39, 2, 0, false, munch_l11r_60hz_payloads[11] },
+	{ 0x39, 2, 0, false, munch_l11r_60hz_payloads[12] },
+	{ 0x39, 2, 0, false, munch_l11r_60hz_payloads[13] },
+	{ 0x39, 2, 0, false, munch_l11r_60hz_payloads[14] },
+	{ 0x39, 3, 0, false, munch_l11r_60hz_payloads[15] },
+	{ 0x39, 3, 12, true, munch_l11r_60hz_payloads[16] },
 };
 
 static const uint8_t munch_l11r_120hz_payloads[][3] = {
@@ -544,27 +544,27 @@ static const uint8_t munch_l11r_120hz_payloads[][3] = {
 };
 
 static const struct munch_mode_command munch_l11r_120hz[] = {
-	{ 0x39, 3, 0, munch_l11r_120hz_payloads[0] },
-	{ 0x39, 3, 0, munch_l11r_120hz_payloads[1] },
-	{ 0x39, 3, 0, munch_l11r_120hz_payloads[2] },
-	{ 0x39, 2, 0, munch_l11r_120hz_payloads[3] },
-	{ 0x39, 3, 0, munch_l11r_120hz_payloads[4] },
-	{ 0x39, 2, 0, munch_l11r_120hz_payloads[5] },
-	{ 0x39, 3, 0, munch_l11r_120hz_payloads[6] },
-	{ 0x39, 2, 0, munch_l11r_120hz_payloads[7] },
-	{ 0x39, 3, 0, munch_l11r_120hz_payloads[8] },
-	{ 0x39, 2, 0, munch_l11r_120hz_payloads[9] },
-	{ 0x39, 2, 0, munch_l11r_120hz_payloads[10] },
-	{ 0x39, 2, 0, munch_l11r_120hz_payloads[11] },
-	{ 0x39, 2, 0, munch_l11r_120hz_payloads[12] },
-	{ 0x39, 2, 0, munch_l11r_120hz_payloads[13] },
-	{ 0x39, 2, 0, munch_l11r_120hz_payloads[14] },
-	{ 0x39, 3, 0, munch_l11r_120hz_payloads[15] },
-	{ 0x39, 3, 0, munch_l11r_120hz_payloads[16] },
-	{ 0x39, 2, 0, munch_l11r_120hz_payloads[17] },
-	{ 0x39, 2, 0, munch_l11r_120hz_payloads[18] },
-	{ 0x39, 3, 0, munch_l11r_120hz_payloads[19] },
-	{ 0x39, 3, 0, munch_l11r_120hz_payloads[20] },
+	{ 0x39, 3, 0, true, munch_l11r_120hz_payloads[0] },
+	{ 0x39, 3, 0, true, munch_l11r_120hz_payloads[1] },
+	{ 0x39, 3, 0, true, munch_l11r_120hz_payloads[2] },
+	{ 0x39, 2, 0, false, munch_l11r_120hz_payloads[3] },
+	{ 0x39, 3, 0, true, munch_l11r_120hz_payloads[4] },
+	{ 0x39, 2, 0, false, munch_l11r_120hz_payloads[5] },
+	{ 0x39, 3, 0, true, munch_l11r_120hz_payloads[6] },
+	{ 0x39, 2, 0, false, munch_l11r_120hz_payloads[7] },
+	{ 0x39, 3, 0, true, munch_l11r_120hz_payloads[8] },
+	{ 0x39, 2, 0, false, munch_l11r_120hz_payloads[9] },
+	{ 0x39, 2, 0, false, munch_l11r_120hz_payloads[10] },
+	{ 0x39, 2, 0, false, munch_l11r_120hz_payloads[11] },
+	{ 0x39, 2, 0, false, munch_l11r_120hz_payloads[12] },
+	{ 0x39, 2, 0, false, munch_l11r_120hz_payloads[13] },
+	{ 0x39, 2, 0, false, munch_l11r_120hz_payloads[14] },
+	{ 0x39, 3, 0, false, munch_l11r_120hz_payloads[15] },
+	{ 0x39, 3, 0, false, munch_l11r_120hz_payloads[16] },
+	{ 0x39, 2, 0, false, munch_l11r_120hz_payloads[17] },
+	{ 0x39, 2, 0, false, munch_l11r_120hz_payloads[18] },
+	{ 0x39, 3, 0, true, munch_l11r_120hz_payloads[19] },
+	{ 0x39, 3, 0, true, munch_l11r_120hz_payloads[20] },
 };
 
 static const struct munch_mode_register munch_l11r_tear_120hz[] = {

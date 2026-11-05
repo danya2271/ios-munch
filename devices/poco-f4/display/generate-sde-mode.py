@@ -118,7 +118,7 @@ def generate(tree):
                 raise ValueError('Truncated L11r timing-switch command payload')
             if command_type != 0x39 or not payload or len(payload) > 3:
                 raise ValueError('Unsupported L11r timing-switch packet')
-            result.append((command_type, delay, payload))
+            result.append((command_type, delay, commands[offset + 1] != 0, payload))
             offset += 7 + length
         return result
 
@@ -203,17 +203,18 @@ def generate(tree):
     for offset in range(0, len(on_120), 16):
         result += '\t' + ', '.join(f'0x{value:02x}' for value in on_120[offset:offset + 16]) + ',\n'
     result += '};\n\n'
-    result += 'struct munch_mode_command { uint8_t type, length; uint16_t delay_ms; const uint8_t *payload; };\n\n'
+    result += ('struct munch_mode_command { uint8_t type, length; uint16_t delay_ms; '
+               'bool last; const uint8_t *payload; };\n\n')
     def emit_switch(name, commands):
         nonlocal result
         result += f'static const uint8_t {name}_payloads[][3] = {{\n'
-        for _, _, payload in commands:
+        for _, _, _, payload in commands:
             result += '\t{' + ', '.join(f'0x{value:02x}' for value in payload)
             result += ', 0' * (3 - len(payload)) + '},\n'
         result += '};\n\n'
         result += f'static const struct munch_mode_command {name}[] = {{\n'
-        for index, (command_type, delay, payload) in enumerate(commands):
-            result += f'\t{{ 0x{command_type:02x}, {len(payload)}, {delay}, {name}_payloads[{index}] }},\n'
+        for index, (command_type, delay, last, payload) in enumerate(commands):
+            result += f'\t{{ 0x{command_type:02x}, {len(payload)}, {delay}, {str(last).lower()}, {name}_payloads[{index}] }},\n'
         result += '};\n\n'
 
     emit_switch('munch_l11r_60hz', switch_commands)
