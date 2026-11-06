@@ -178,6 +178,17 @@ hakios_qca6390_rc0_report_stage(uint32_t stage)
 		lck_mtx_unlock(&qca_diag_lock);
 		return;
 	}
+	if (stage == 7) {
+		qca_diag_rc0_map_all();
+		printf("qca6390: RC0 stage 7 map-all-hold host=%u PARF=%u PHY=%u TLMM=%u GCC=%u; no reads/unmap\n",
+		    qca_diag_regions[QCA_DIAG_HOST].mapping != 0,
+		    qca_diag_regions[QCA_DIAG_PARF].mapping != 0,
+		    qca_diag_regions[QCA_DIAG_PHY].mapping != 0,
+		    qca_diag_regions[QCA_DIAG_TLMM].mapping != 0,
+		    qca_diag_regions[QCA_DIAG_GCC].mapping != 0);
+		lck_mtx_unlock(&qca_diag_lock);
+		return;
+	}
 	qca_diag_rc0_map_all();
 	printf("qca6390: RC0 MMIO mappings host=%u PARF=%u PHY=%u TLMM=%u GCC=%u; CFG0 deferred\n",
 	    qca_diag_regions[QCA_DIAG_HOST].mapping != 0,
