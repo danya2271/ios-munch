@@ -1083,10 +1083,17 @@ IOMobileFramebuffer::setDisplayPower(uint32_t state)
 	}
 	if (on) {
 		if (fSDERequested && fSDE->mode.configured) {
-			lck_mtx_lock(&hakios_smmu_lock);
-			if (!munch_mode_panel_on(&fSDE->mode) || !munch_mode_light(&fSDE->mode))
-				result = kIOReturnIOError;
-			lck_mtx_unlock(&hakios_smmu_lock);
+			result = sendDcsCommand(0x11, 0, false);
+			if (result == kIOReturnSuccess) {
+				IOSleep(120);
+				result = sendDcsCommand(0x53, 0x20, true);
+			}
+			if (result == kIOReturnSuccess) result = sendDcsCommand(0x29, 0, false);
+			if (result == kIOReturnSuccess) {
+				lck_mtx_lock(&hakios_smmu_lock);
+				if (!munch_mode_light(&fSDE->mode)) result = kIOReturnIOError;
+				lck_mtx_unlock(&hakios_smmu_lock);
+			}
 		} else {
 			result = sendDcsCommand(0x11, 0, false);
 			if (result == kIOReturnSuccess) {

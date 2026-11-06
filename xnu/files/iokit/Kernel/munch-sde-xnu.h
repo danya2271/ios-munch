@@ -1017,6 +1017,7 @@ munchSdeFinishPanel(MunchSDE *state, bool on, bool completed)
 	enum munch_sde_result result = completed ? munchSdeGuard(state) : MUNCH_SDE_FAULT;
 	if (result == MUNCH_SDE_OK) {
 		state->panelBlanked = !on;
+		if (!on) state->mode.lit = false;
 		if (state->mode.configured) munchSdeWrite(state, 0x6e808, 4);
 		if (on && !(state->nativeTakeover && state->mode.configured))
 			result = munchSdeRestoreRefresh(state);

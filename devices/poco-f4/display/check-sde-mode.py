@@ -13,6 +13,7 @@ parser.add_argument('--linux-tree', type=Path, required=True)
 args = parser.parse_args()
 root = here.parents[2]
 runtime = (root / 'xnu/files/iokit/Kernel/munch-sde-xnu.h').read_text()
+framebuffer = (root / 'xnu/files/iokit/Kernel/MiniIOMobileFramebuffer.cpp').read_text()
 initialize = runtime[runtime.index('munchSdeInitialize('):runtime.index('munchSdeReleaseUnused(')]
 assert 'munch_mode_configure(' not in initialize
 submit = runtime[runtime.index('munchSdeSubmitFrame('):runtime.index('munchSdeCompleteFrame(')]
@@ -22,6 +23,14 @@ assert 'munch_sde_check_buffers(' not in submit
 assert submit.index('munch_sde_pause_refresh(') < submit.index('munch_mode_adopt(') < submit.index('munch_sde_submit(')
 assert 'munch_mode_adopt(&state->mode, state->nativeRefreshHz)' in submit
 assert complete.index('munchSdePollFrame(') < complete.index('munch_mode_light(')
+power = framebuffer[framebuffer.index('IOMobileFramebuffer::setDisplayPower('):
+                    framebuffer.index('IOMobileFramebuffer::changeRefresh(')]
+native_resume = power[power.index('if (fSDERequested && fSDE->mode.configured) {'):
+                      power.index('\n\t\t} else {', power.index('if (on) {'))]
+assert native_resume.index('sendDcsCommand(0x11') < native_resume.index('IOSleep(120)') < \
+    native_resume.index('sendDcsCommand(0x53') < native_resume.index('sendDcsCommand(0x29') < \
+    native_resume.index('munch_mode_light(')
+assert 'munch_mode_panel_on(' not in native_resume
 assert 'munchSdeSubmitFrame(state)' in runtime[runtime.index('munchSdeEndFrame('):runtime.index('munchSdeSampleVBlank(')]
 assert 'ml_io_map(0x0af00000, 0x4000)' in initialize
 mode = (root / 'xnu/files/iokit/Kernel/munch-sde-mode.h').read_text()
