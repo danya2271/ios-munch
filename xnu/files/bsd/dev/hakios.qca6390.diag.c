@@ -185,6 +185,65 @@ hakios_qca6390_rc0_report_stage(uint32_t stage)
 		lck_mtx_unlock(&qca_diag_lock);
 		return;
 	}
+	if (stage >= 9 && stage <= 13) {
+		qca_diag_rc0_map_all();
+		switch (stage) {
+		case 9: {
+			uint32_t dbi = 0, elbi = 0, iatu[7] = {0};
+			bool dbi_ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_HOST], "DBI", 0x80, &dbi);
+			bool elbi_ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_HOST], "ELBI", 0xf28, &elbi);
+			bool iatu_ok = true;
+			for (uint32_t index = 0; index < 7; index++) {
+				if (!qca_diag_read(&qca_diag_regions[QCA_DIAG_HOST], "iATU0", index * 4, &iatu[index])) {
+					iatu_ok = false;
+					break;
+				}
+			}
+			printf("qca6390: RC0 stage 9 HOST dbi=%u elbi=%u iatu=%u values=%#x/%#x\n",
+			    dbi_ok, elbi_ok, iatu_ok, dbi, elbi);
+			break;
+		}
+		case 10: {
+			uint32_t ltssm = 0, phy_control = 0, device_type = 0, sid_entry = 0;
+			bool ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_PARF], "PARF", 0x1b0, &ltssm);
+			ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_PARF], "PARF", 0x40, &phy_control) && ok;
+			ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_PARF], "PARF", 0x1000, &device_type) && ok;
+			ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_PARF], "BDF-to-SID", 0x2000, &sid_entry) && ok;
+			printf("qca6390: RC0 stage 10 PARF ok=%u LTSSM=%#x PHY_CTRL=%#x DEVICE_TYPE=%#x SID0=%#x\n",
+			    ok, ltssm, phy_control, device_type, sid_entry);
+			break;
+		}
+		case 11: {
+			uint32_t phy_status = 0, phy_power = 0;
+			bool ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_PHY], "PHY", 0x814, &phy_status);
+			ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_PHY], "PHY", 0x840, &phy_power) && ok;
+			printf("qca6390: RC0 stage 11 PHY ok=%u STATUS=%#x POWER=%#x\n",
+			    ok, phy_status, phy_power);
+			break;
+		}
+		case 12: {
+			uint32_t cfg = 0, io = 0;
+			bool ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_TLMM], "GPIO79 CFG", 79u * 0x1000u, &cfg);
+			ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_TLMM], "GPIO79 IO", 79u * 0x1000u + 4, &io) && ok;
+			printf("qca6390: RC0 stage 12 TLMM GPIO79 ok=%u CFG=%#x IO=%#x\n", ok, cfg, io);
+			break;
+		}
+		case 13: {
+			uint32_t clock_control = 0, wifi_ref_clock = 0, phy_refgen = 0;
+			uint32_t core_reset = 0, phy_reset = 0;
+			bool ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_GCC], "PCIE clocks", 0x52008, &clock_control);
+			ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_GCC], "WIFI refclk", 0x8c004, &wifi_ref_clock) && ok;
+			ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_GCC], "PHY refgen", 0x6f02c, &phy_refgen) && ok;
+			ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_GCC], "CORE reset", 0x6b000, &core_reset) && ok;
+			ok = qca_diag_read(&qca_diag_regions[QCA_DIAG_GCC], "PHY reset", 0x6c01c, &phy_reset) && ok;
+			printf("qca6390: RC0 stage 13 GCC ok=%u CLOCK=%#x WIFI_REF=%#x PHY_REFGEN=%#x CORE=%#x PHY=%#x\n",
+			    ok, clock_control, wifi_ref_clock, phy_refgen, core_reset, phy_reset);
+			break;
+		}
+		}
+		lck_mtx_unlock(&qca_diag_lock);
+		return;
+	}
 	qca_diag_rc0_map_all();
 	printf("qca6390: RC0 MMIO mappings host=%u PARF=%u PHY=%u TLMM=%u GCC=%u; CFG0 deferred\n",
 	    qca_diag_regions[QCA_DIAG_HOST].mapping != 0,
