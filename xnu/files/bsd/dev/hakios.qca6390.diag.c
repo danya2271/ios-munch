@@ -152,6 +152,7 @@ hakios_qca6390_rc0_report_stage(uint32_t stage)
 	uint32_t clock_control = 0, wifi_ref_clock = 0, phy_refgen = 0;
 	uint32_t sid_entry = 0, gpio_cfg = 0, gpio_io = 0;
 	bool dbi_read, elbi_read, iatu_read = true, qca_cfg0 = false;
+	bool retain_mappings = stage == 8;
 
 	if (!hakios_qca6390_platform_matches()) {
 		printf("qca6390: RC0 diagnostic skipped: not Munch\n");
@@ -281,7 +282,11 @@ hakios_qca6390_rc0_report_stage(uint32_t stage)
 	} else {
 		printf("qca6390: RC0 CFG0 endpoint read skipped: no verified pre-existing QCA CFG0 iATU/link window\n");
 	}
-	qca_diag_rc0_unmap_all();
+	if (retain_mappings) {
+		printf("qca6390: RC0 stage 8 mappings retained after reads; no teardown\n");
+	} else {
+		qca_diag_rc0_unmap_all();
+	}
 	lck_mtx_unlock(&qca_diag_lock);
 }
 
