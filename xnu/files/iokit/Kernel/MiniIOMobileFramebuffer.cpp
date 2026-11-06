@@ -1083,17 +1083,9 @@ IOMobileFramebuffer::setDisplayPower(uint32_t state)
 	}
 	if (on) {
 		if (fSDERequested && fSDE->mode.configured) {
-			result = sendDcsCommand(0x11, 0, false);
-			if (result == kIOReturnSuccess) {
-				IOSleep(120);
-				result = sendDcsCommand(0x53, 0x20, true);
-			}
-			if (result == kIOReturnSuccess) result = sendDcsCommand(0x29, 0, false);
-			if (result == kIOReturnSuccess) {
-				lck_mtx_lock(&hakios_smmu_lock);
-				if (!munch_mode_light(&fSDE->mode)) result = kIOReturnIOError;
-				lck_mtx_unlock(&hakios_smmu_lock);
-			}
+			lck_mtx_lock(&hakios_smmu_lock);
+			if (!munch_mode_light(&fSDE->mode)) result = kIOReturnIOError;
+			lck_mtx_unlock(&hakios_smmu_lock);
 		} else {
 			result = sendDcsCommand(0x11, 0, false);
 			if (result == kIOReturnSuccess) {
@@ -1103,14 +1095,18 @@ IOMobileFramebuffer::setDisplayPower(uint32_t state)
 			if (result == kIOReturnSuccess) result = sendDcsCommand(0x29, 0, false);
 		}
 	} else {
-		result = sendDcsCommand(0x28, 0, false);
-		if (result == kIOReturnSuccess) {
-			IOSleep(20);
-			result = sendDcsCommand(0x53, 0x20, true);
-		}
-		if (result == kIOReturnSuccess) {
-			result = sendDcsCommand(0x10, 0, false);
-			if (result == kIOReturnSuccess) IOSleep(120);
+		if (fSDERequested && fSDE->mode.configured) {
+			result = sendDcsCommand(0x51, 0, true);
+		} else {
+			result = sendDcsCommand(0x28, 0, false);
+			if (result == kIOReturnSuccess) {
+				IOSleep(20);
+				result = sendDcsCommand(0x53, 0x20, true);
+			}
+			if (result == kIOReturnSuccess) {
+				result = sendDcsCommand(0x10, 0, false);
+				if (result == kIOReturnSuccess) IOSleep(120);
+			}
 		}
 	}
 	if (fSDERequested) {

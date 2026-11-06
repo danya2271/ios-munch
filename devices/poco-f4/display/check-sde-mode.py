@@ -25,12 +25,14 @@ assert 'munch_mode_adopt(&state->mode, state->nativeRefreshHz)' in submit
 assert complete.index('munchSdePollFrame(') < complete.index('munch_mode_light(')
 power = framebuffer[framebuffer.index('IOMobileFramebuffer::setDisplayPower('):
                     framebuffer.index('IOMobileFramebuffer::changeRefresh(')]
-native_resume = power[power.index('if (fSDERequested && fSDE->mode.configured) {'):
-                      power.index('\n\t\t} else {', power.index('if (on) {'))]
-assert native_resume.index('sendDcsCommand(0x11') < native_resume.index('IOSleep(120)') < \
-    native_resume.index('sendDcsCommand(0x53') < native_resume.index('sendDcsCommand(0x29') < \
-    native_resume.index('munch_mode_light(')
-assert 'munch_mode_panel_on(' not in native_resume
+native_on = power[power.index('if (fSDERequested && fSDE->mode.configured) {'):
+                   power.index('\n\t\t} else {', power.index('if (on) {'))]
+native_off = power[power.index('if (fSDERequested && fSDE->mode.configured) {',
+                                 power.index('} else {')):]
+assert 'munch_mode_light(' in native_on
+assert 'sendDcsCommand(0x11' not in native_on
+assert 'munch_mode_panel_on(' not in native_on
+assert 'sendDcsCommand(0x51, 0, true)' in native_off
 assert 'munchSdeSubmitFrame(state)' in runtime[runtime.index('munchSdeEndFrame('):runtime.index('munchSdeSampleVBlank(')]
 assert 'ml_io_map(0x0af00000, 0x4000)' in initialize
 mode = (root / 'xnu/files/iokit/Kernel/munch-sde-mode.h').read_text()
