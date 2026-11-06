@@ -24,6 +24,8 @@ def run():
     assert "hakios_qca6390_smmu_report" in qca_header
     assert "hakios_qca6390_rc0_report" in qca_header
     assert "hakios_qca6390_rc0_report_stage" in qca_header
+    assert "stage == 6" in diagnostic
+    assert "PHY map-hold" in diagnostic
     assert "hakios_mmio_read32" in diagnostic
     assert "hakios_mmio_write" not in diagnostic
     assert "ml_io_unmap(mapping, QCA_SMMU_SIZE)" in diagnostic
