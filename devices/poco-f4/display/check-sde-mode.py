@@ -20,6 +20,7 @@ complete = runtime[runtime.index('munchSdeCompleteFrame('):runtime.index('munchS
 assert submit.index('munchSdeGuard(') < submit.index('munch_sde_pause_refresh(')
 assert 'munch_sde_check_buffers(' not in submit
 assert submit.index('munch_sde_pause_refresh(') < submit.index('munch_mode_adopt(') < submit.index('munch_sde_submit(')
+assert 'munch_mode_adopt(&state->mode, state->nativeRefreshHz)' in submit
 assert complete.index('munchSdePollFrame(') < complete.index('munch_mode_light(')
 assert 'munchSdeSubmitFrame(state)' in runtime[runtime.index('munchSdeEndFrame('):runtime.index('munchSdeSampleVBlank(')]
 assert 'ml_io_map(0x0af00000, 0x4000)' in initialize

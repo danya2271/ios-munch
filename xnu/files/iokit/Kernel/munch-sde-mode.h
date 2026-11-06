@@ -315,7 +315,7 @@ munch_mode_branch(struct munch_mode *mode, uint32_t offset, bool enable)
 }
 
 static inline bool
-munch_mode_adopt(struct munch_mode *mode)
+munch_mode_adopt(struct munch_mode *mode, uint32_t requested_refresh)
 {
 	uint32_t vsync = munch_mode_read(mode, MUNCH_MODE_MDP, 0x6b800 + 0x288);
 	uint32_t intf_vtotal = munch_mode_read(mode, MUNCH_MODE_MDP,
@@ -339,6 +339,8 @@ munch_mode_adopt(struct munch_mode *mode)
 	    dsi_vtotal == munch_l11r_dsi_timing_120[1].value ||
 	    (vsync & 0xffff) == (munch_l11r_tear_120hz[0].value & 0xffff))
 		inherited_refresh = 120;
+	else if (requested_refresh == 60 || requested_refresh == 120)
+		inherited_refresh = requested_refresh;
 	else {
 		mode->phase = "native-handoff-unknown-timing";
 		return false;

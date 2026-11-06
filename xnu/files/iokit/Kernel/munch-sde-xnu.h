@@ -839,7 +839,7 @@ munchSdeSubmitFrame(MunchSDE *state)
 			state->mode.scratch = state->pixels[index] + offset;
 			state->mode.scratch_iova = state->buffers[index].iova + offset;
 			state->mode.scratch_size = state->buffers[index].length - offset;
-			if (!munch_mode_adopt(&state->mode) ||
+			if (!munch_mode_adopt(&state->mode, state->nativeRefreshHz) ||
 			    (state->nativeRefreshHz != state->mode.refresh_hz &&
 			    !munch_mode_switch_refresh(&state->mode, state->nativeRefreshHz))) {
 				volatile uint32_t *dma = (volatile uint32_t *)state->mode.scratch;
