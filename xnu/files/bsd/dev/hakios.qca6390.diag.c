@@ -186,7 +186,13 @@ hakios_qca6390_rc0_report_stage(uint32_t stage)
 		return;
 	}
 	if (stage >= 9 && stage <= 13) {
-		qca_diag_rc0_map_all();
+		uint32_t region = stage - 9;
+		bool mapped = qca_diag_rc0_map_one(region);
+		printf("qca6390: RC0 stage %u read region=%u mapped=%u\n", stage, region, mapped);
+		if (!mapped) {
+			lck_mtx_unlock(&qca_diag_lock);
+			return;
+		}
 		switch (stage) {
 		case 9: {
 			uint32_t dbi = 0, elbi = 0, iatu[7] = {0};
