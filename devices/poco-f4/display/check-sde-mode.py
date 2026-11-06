@@ -30,11 +30,14 @@ native_on = power[power.index('if (fSDERequested && fSDE->mode.configured) {'):
 native_off_branch = power[power.index(
     'if (fSDERequested && fSDE->nativeTakeover && fSDE->mode.configured) {'):]
 native_off_branch = native_off_branch[:native_off_branch.index('\n\t\t} else {')]
-assert 'munch_mode_light(' in native_on
 assert 'sendDcsCommand(0x11' not in native_on
 assert 'munch_mode_panel_on(' not in native_on
-assert 'munch_mode_set_brightness(&fSDE->mode, 0)' in native_off_branch
+assert 'sendDcsCommand(' not in native_on
+assert 'munch_mode_light(' not in native_on
+assert 'munch_mode_set_brightness(' not in native_off_branch
 assert 'sendDcsCommand(' not in native_off_branch
+finish_panel = runtime[runtime.index('munchSdeFinishPanel('):runtime.index('munch_sde_native_owned(')]
+assert 'state->mode.lit = false' not in finish_panel
 assert 'munchSdeSubmitFrame(state)' in runtime[runtime.index('munchSdeEndFrame('):runtime.index('munchSdeSampleVBlank(')]
 assert 'ml_io_map(0x0af00000, 0x4000)' in initialize
 mode = (root / 'xnu/files/iokit/Kernel/munch-sde-mode.h').read_text()

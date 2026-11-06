@@ -1083,9 +1083,7 @@ IOMobileFramebuffer::setDisplayPower(uint32_t state)
 	}
 	if (on) {
 		if (fSDERequested && fSDE->mode.configured) {
-			lck_mtx_lock(&hakios_smmu_lock);
-			if (!munch_mode_light(&fSDE->mode)) result = kIOReturnIOError;
-			lck_mtx_unlock(&hakios_smmu_lock);
+			result = kIOReturnSuccess;
 		} else {
 			result = sendDcsCommand(0x11, 0, false);
 			if (result == kIOReturnSuccess) {
@@ -1096,9 +1094,7 @@ IOMobileFramebuffer::setDisplayPower(uint32_t state)
 		}
 	} else {
 		if (fSDERequested && fSDE->nativeTakeover && fSDE->mode.configured) {
-			lck_mtx_lock(&hakios_smmu_lock);
-			if (!munch_mode_set_brightness(&fSDE->mode, 0)) result = kIOReturnIOError;
-			lck_mtx_unlock(&hakios_smmu_lock);
+			result = kIOReturnSuccess;
 		} else {
 			result = sendDcsCommand(0x28, 0, false);
 			if (result == kIOReturnSuccess) {
