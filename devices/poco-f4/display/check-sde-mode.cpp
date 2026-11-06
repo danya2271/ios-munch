@@ -11,7 +11,9 @@ struct Machine {
 	munch_mode mode = {};
 	unsigned writes = 0, failAfter = UINT32_MAX, packets = 0;
 	unsigned noLock = 0, noClock = 0, noCommand = 0, badRead = 0, dirty = 0;
+	unsigned switchPackets = 0, switchIntfWrites = 0, switchFlushes = 0;
 	bool fault = false, staleDone = false;
+	bool timingDB = false, inRefreshSwitch = false, switchSawShadowFlush = false;
 	uint64_t elapsed = 0;
 	std::vector<uint32_t> tpgFifo;
 	std::vector<std::vector<uint8_t>> payloads;
@@ -68,6 +70,9 @@ struct Machine {
 			assert(offset != 0x5014 && offset != 0x2018 && offset != 0x201c);
 			if (offset == 0x6e808) machine.mdp[0x6e804 / 4] &= ~value;
 			if (offset >= 0x810ec && offset <= 0x81124) value &= 63;
+			if (machine.inRefreshSwitch && offset >= MUNCH_SDE_INTF1_OFFSET &&
+			    offset < MUNCH_SDE_INTF1_OFFSET + 0x300)
+				machine.switchIntfWrites++;
 		}
 		if (space == MUNCH_MODE_PHY && offset == 0x03c && value == 1 && !machine.noLock)
 			machine.phy[0x6b0 / 4] = 1;
@@ -76,6 +81,17 @@ struct Machine {
 				if (!machine.noClock) value &= ~1u;
 			} else if (offset == 0x2004 || offset == 0x202c || offset == 0x2028 || offset == 0x2038 || offset == 0x2024)
 				value = value & 1 ? 1 : 0x80000000;
+		}
+		if (space == MUNCH_MODE_DSI && offset == 0x1e8) {
+			machine.timingDB = value != 0;
+		}
+		if (space == MUNCH_MODE_DSI && offset == 0x1e4 && value == 1) {
+			if (machine.inRefreshSwitch) {
+				assert(machine.timingDB);
+				assert(machine.switchPackets == 0);
+				machine.switchSawShadowFlush = true;
+			}
+			machine.switchFlushes++;
 		}
 		if (space == MUNCH_MODE_DSI && offset == 0x110) {
 			value = (value & 0xaaaaaaaau) | (reg & ~value & 0x55555555);
@@ -90,6 +106,10 @@ struct Machine {
 		reg = value;
 		if (space == MUNCH_MODE_DSI && offset == 0x090) {
 			assert(value == 1);
+			if (machine.inRefreshSwitch) {
+				assert(machine.timingDB && machine.switchSawShadowFlush);
+				assert((machine.dsi[0x084 / 4] & 0xf) == 4);
+			}
 			unsigned bytes = machine.dsi[0x04c / 4];
 			assert(bytes <= sizeof(machine.scratch) && machine.dirty == bytes);
 			bool fifoMode = machine.dsi[0x15c / 4] == 0x30006;
@@ -129,6 +149,7 @@ struct Machine {
 			assert(last && offset_in_buffer == bytes);
 			machine.dirty = 0;
 			machine.packets++;
+			if (machine.inRefreshSwitch) machine.switchPackets++;
 			if (!machine.noCommand) machine.dsi[0x110 / 4] |= 1;
 		}
 	}
@@ -253,8 +274,15 @@ int main()
 	{
 		Machine machine;
 		assert(munch_mode_configure(&machine.mode, 60));
+		machine.inRefreshSwitch = true;
+		unsigned intfWritesBefore = machine.switchIntfWrites;
+		unsigned flushesBefore = machine.switchFlushes;
 		assert(munch_mode_switch_refresh(&machine.mode, 120));
+		machine.inRefreshSwitch = false;
 		assert(machine.mode.refresh_hz == 120);
+		assert(machine.switchPackets > 0 && machine.switchSawShadowFlush);
+		assert(machine.switchIntfWrites > intfWritesBefore);
+		assert(!machine.timingDB && machine.switchFlushes == flushesBefore + 1);
 		assert(machine.mdp[0x6ba88 / 4] == 0x80042);
 	}
 	for (unsigned drift = 0; drift < 3; drift++) {

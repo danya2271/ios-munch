@@ -28,6 +28,10 @@ for phase in ('native-inherited', 'native-panel-sleep', 'native-phy', 'native-cl
               'native-host', 'native-dsc', 'native-route', 'native-panel-init', 'native-tearcheck'):
     assert phase in mode
 assert mode.index('munch_mode_adopt(') < mode.index('munch_mode_configure(')
+switch = mode[mode.index('munch_mode_switch_refresh('):mode.index('munch_mode_byte_sequence(')]
+assert switch.index('munch_mode_program_dsi_timing_shadow(') < switch.index('munch_mode_command_sequence(')
+assert switch.index('munch_mode_command_sequence(') < switch.index('munch_mode_program(mode, MUNCH_MODE_MDP, 0x6b800, intf_timing')
+assert switch.index('munch_mode_program(mode, MUNCH_MODE_MDP, 0x6b800, tear') < switch.index('0x1e8, 0')
 assert mode.index('native-panel-sleep') < mode.index('native-phy') < mode.index('native-clocks')
 assert mode.index('native-clocks') < mode.index('native-host') < mode.index('native-dsc')
 assert mode.index('native-dsc') < mode.index('native-route') < mode.index('native-panel-init')

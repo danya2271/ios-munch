@@ -202,6 +202,23 @@ munch_mode_command_sequence(struct munch_mode *mode, const struct munch_mode_com
 }
 
 static inline bool
+munch_mode_program_dsi_timing_shadow(struct munch_mode *mode,
+    const struct munch_mode_register *registers, unsigned count)
+{
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x1e8, 1);
+	for (unsigned index = 0; index < count; index++) {
+		if (registers[index].offset == 0x1e4) continue;
+		uint32_t offset = registers[index].offset;
+		munch_mode_write(mode, MUNCH_MODE_DSI, offset, registers[index].value);
+		if (munch_mode_register_readable(MUNCH_MODE_DSI, offset) &&
+		    !munch_mode_poll(mode, MUNCH_MODE_DSI, offset, UINT32_MAX, registers[index].value, 0))
+			return false;
+	}
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x1e4, 1);
+	return munch_mode_healthy(mode);
+}
+
+static inline bool
 munch_mode_switch_refresh(struct munch_mode *mode, uint32_t refresh_hz)
 {
 	const struct munch_mode_command *commands;
@@ -232,12 +249,14 @@ munch_mode_switch_refresh(struct munch_mode *mode, uint32_t refresh_hz)
 	    sizeof(munch_l11r_intf_timing_120) / sizeof(munch_l11r_intf_timing_120[0]) :
 	    sizeof(munch_l11r_intf_timing_60) / sizeof(munch_l11r_intf_timing_60[0]);
 	mode->phase = refresh_hz == 120 ? "native-switch-120hz" : "native-switch-60hz";
-	if (!munch_mode_program(mode, MUNCH_MODE_DSI, 0, dsi_timing, dsi_timing_count, true) ||
-	    !munch_mode_program(mode, MUNCH_MODE_MDP, 0x6b800, intf_timing, intf_timing_count, true) ||
+	if (!munch_mode_program_dsi_timing_shadow(mode, dsi_timing, dsi_timing_count) ||
 	    !munch_mode_command_sequence(mode, commands, command_count) ||
-	    !munch_mode_program(mode, MUNCH_MODE_MDP, 0x6b800, tear, tear_count, true)) {
+	    !munch_mode_program(mode, MUNCH_MODE_MDP, 0x6b800, intf_timing, intf_timing_count, true) ||
+	    !munch_mode_program(mode, MUNCH_MODE_MDP, 0x6b800, tear, tear_count, true) ||
+	    !munch_mode_healthy(mode)) {
 		return false;
 	}
+	munch_mode_write(mode, MUNCH_MODE_DSI, 0x1e8, 0);
 	mode->refresh_hz = refresh_hz;
 	mode->timingProgrammed = mode->inherited;
 	mode->vblankFrameValid = false;
