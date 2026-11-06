@@ -624,19 +624,29 @@ munch_mode_vblank(struct munch_mode *mode)
 }
 
 static inline bool
-munch_mode_light(struct munch_mode *mode)
+munch_mode_set_brightness(struct munch_mode *mode, uint16_t brightness)
 {
-	static const uint8_t brightness[] = { 0x51, 0x02, 0x00 };
 	if (!mode->configured || mode->failed) return false;
-	if (mode->lit) return true;
-	mode->phase = "native-first-backlight";
-	mode->lit = munch_mode_command(mode, 0x39, brightness, sizeof(brightness), true);
-	if (mode->lit) {
+	uint8_t payload[] = { 0x51, (uint8_t)(brightness >> 8), (uint8_t)brightness };
+	mode->phase = brightness ? "native-backlight-on" : "native-backlight-off";
+	bool sent = munch_mode_command(mode, 0x39, payload, sizeof(payload), true);
+	if (sent) {
+		mode->lit = brightness != 0;
+	}
+	if (sent && mode->lit) {
 		mode->vblankFrame = munch_mode_read(mode, MUNCH_MODE_MDP,
 		    MUNCH_SDE_INTF1_OFFSET + MUNCH_SDE_INTF_FRAME_COUNT);
 		mode->vblankFrameValid = true;
 	}
-	return mode->lit;
+	return sent;
+}
+
+static inline bool
+munch_mode_light(struct munch_mode *mode)
+{
+	if (!mode->configured || mode->failed) return false;
+	if (mode->lit) return true;
+	return munch_mode_set_brightness(mode, 0x0200);
 }
 
 static inline bool

@@ -261,6 +261,17 @@ int main()
 	}
 	{
 		Machine machine;
+		machine.mode.configured = true;
+		machine.mode.inherited = true;
+		machine.mode.refresh_hz = 120;
+		machine.mode.lit = true;
+		assert(munch_mode_set_brightness(&machine.mode, 0));
+		assert(!machine.mode.lit && machine.payloads.back() == std::vector<uint8_t>({0x51, 0, 0}));
+		assert(munch_mode_light(&machine.mode));
+		assert(machine.mode.lit && machine.payloads.back() == std::vector<uint8_t>({0x51, 2, 0}));
+	}
+	{
+		Machine machine;
 		assert(munch_mode_configure(&machine.mode, 120));
 		assert(machine.mode.refresh_hz == 120);
 		assert(machine.mdp[0x6ba88 / 4] == 0x80042);

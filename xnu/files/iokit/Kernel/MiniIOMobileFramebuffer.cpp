@@ -1095,8 +1095,10 @@ IOMobileFramebuffer::setDisplayPower(uint32_t state)
 			if (result == kIOReturnSuccess) result = sendDcsCommand(0x29, 0, false);
 		}
 	} else {
-		if (fSDERequested && fSDE->mode.configured) {
-			result = sendDcsCommand(0x51, 0, true);
+		if (fSDERequested && fSDE->nativeTakeover && fSDE->mode.configured) {
+			lck_mtx_lock(&hakios_smmu_lock);
+			if (!munch_mode_set_brightness(&fSDE->mode, 0)) result = kIOReturnIOError;
+			lck_mtx_unlock(&hakios_smmu_lock);
 		} else {
 			result = sendDcsCommand(0x28, 0, false);
 			if (result == kIOReturnSuccess) {
