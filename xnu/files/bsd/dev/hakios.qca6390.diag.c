@@ -115,6 +115,19 @@ qca_diag_rc0_map_all(void)
 	}
 }
 
+static bool
+qca_diag_rc0_map_one(uint32_t index)
+{
+	struct qca_diag_region *region;
+
+	if (index >= QCA_DIAG_REGION_COUNT || index == QCA_DIAG_CONFIG) {
+		return false;
+	}
+	region = &qca_diag_regions[index];
+	region->mapping = ml_io_map_unmappable((vm_offset_t)region->physical, region->size, VM_WIMG_IO);
+	return region->mapping != 0;
+}
+
 static void
 qca_diag_rc0_unmap_all(void)
 {
@@ -128,7 +141,7 @@ qca_diag_rc0_unmap_all(void)
 }
 
 void
-hakios_qca6390_rc0_report(void)
+hakios_qca6390_rc0_report_stage(uint32_t stage)
 {
 	uint32_t dbi_link = 0, elbi_status = 0, ltssm = 0, phy_control = 0;
 	uint32_t phy_status = 0, phy_power = 0, device_type = 0, iatu[7] = {0};
@@ -143,6 +156,16 @@ hakios_qca6390_rc0_report(void)
 	printf("qca6390: RC0 diagnostic begin; read-only\n");
 	lck_mtx_lock(&qca_diag_lock);
 	printf("qca6390: RC0 diagnostic lock acquired\n");
+	if (stage >= 1 && stage <= 5) {
+		uint32_t index = stage - 1;
+		bool mapped = qca_diag_rc0_map_one(index);
+		printf("qca6390: RC0 stage %u map-only region=%u physical=%#llx size=%#x mapped=%u\n",
+		    stage, index, (unsigned long long)qca_diag_regions[index].physical,
+		    qca_diag_regions[index].size, mapped);
+		qca_diag_rc0_unmap_all();
+		lck_mtx_unlock(&qca_diag_lock);
+		return;
+	}
 	qca_diag_rc0_map_all();
 	printf("qca6390: RC0 MMIO mappings host=%u PARF=%u PHY=%u TLMM=%u GCC=%u; CFG0 deferred\n",
 	    qca_diag_regions[QCA_DIAG_HOST].mapping != 0,
@@ -237,6 +260,12 @@ hakios_qca6390_rc0_report(void)
 	}
 	qca_diag_rc0_unmap_all();
 	lck_mtx_unlock(&qca_diag_lock);
+}
+
+void
+hakios_qca6390_rc0_report(void)
+{
+	hakios_qca6390_rc0_report_stage(0);
 }
 static int
 qca_smmu_read32(volatile uint8_t *base, uint32_t offset, uint32_t *value)

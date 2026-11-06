@@ -4297,6 +4297,7 @@ hakios_wifi_init(void)
 	uint32_t qca_probe = 0;
 	uint32_t qca_status = 0;
 	uint32_t qca_smmu_status = 0, qca_rc0_status = 0;
+	uint32_t qca_rc0_stage = 0;
 	uint64_t size = 0;
 	thread_t thread;
 	bool requested;
@@ -4308,6 +4309,7 @@ hakios_wifi_init(void)
 	PE_parse_boot_argn("wifi_qca_status", &qca_status, sizeof(qca_status));
 	PE_parse_boot_argn("wifi_qca_smmu_status", &qca_smmu_status, sizeof(qca_smmu_status));
 	PE_parse_boot_argn("wifi_qca_rc0_status", &qca_rc0_status, sizeof(qca_rc0_status));
+	PE_parse_boot_argn("wifi_qca_rc0_stage", &qca_rc0_stage, sizeof(qca_rc0_stage));
 	if (qca_status != 0) {
 		const uint32_t required = HAKIOS_QCA6390_RC0_HANDOFF | HAKIOS_QCA6390_DMA_DOMAIN |
 		    HAKIOS_QCA6390_MSI_ROUTES;
@@ -4371,7 +4373,7 @@ hakios_wifi_init(void)
 	if (qca_rc0_status != 0) {
 		if (wifi_munch_platform()) {
 			printf("wifi: QCA6390 read-only RC0 snapshot requested\n");
-			hakios_qca6390_rc0_report();
+			hakios_qca6390_rc0_report_stage(qca_rc0_stage);
 		} else {
 			printf("wifi: QCA6390 RC0 snapshot skipped: not Munch\n");
 		}
