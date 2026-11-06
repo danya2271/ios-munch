@@ -134,6 +134,10 @@ qca_diag_rc0_unmap_all(void)
 	for (uint32_t index = 0; index < QCA_DIAG_REGION_COUNT; index++) {
 		struct qca_diag_region *region = &qca_diag_regions[index];
 		if (region->mapping != 0) {
+			if (index == QCA_DIAG_PHY) {
+				printf("qca6390: RC0 PHY mapping retained; teardown is not safe on this Kona path\n");
+				continue;
+			}
 			ml_io_unmap(region->mapping, region->size);
 			region->mapping = 0;
 		}
