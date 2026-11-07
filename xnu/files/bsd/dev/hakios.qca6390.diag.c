@@ -250,6 +250,34 @@ hakios_qca6390_rc0_report_stage(uint32_t stage)
 		lck_mtx_unlock(&qca_diag_lock);
 		return;
 	}
+	if (stage >= 14 && stage <= 20) {
+		uint32_t value = 0;
+		bool mapped;
+		const char *name;
+		uint32_t region;
+		uint32_t offset;
+
+		qca_diag_rc0_map_all();
+		mapped = qca_diag_regions[QCA_DIAG_HOST].mapping != 0 &&
+		    qca_diag_regions[QCA_DIAG_PARF].mapping != 0 &&
+		    qca_diag_regions[QCA_DIAG_PHY].mapping != 0 &&
+		    qca_diag_regions[QCA_DIAG_TLMM].mapping != 0 &&
+		    qca_diag_regions[QCA_DIAG_GCC].mapping != 0;
+		switch (stage) {
+		case 14: region = QCA_DIAG_HOST; offset = 0x80; name = "DBI"; break;
+		case 15: region = QCA_DIAG_HOST; offset = 0xf28; name = "ELBI"; break;
+		case 16: region = QCA_DIAG_HOST; offset = 0x000; name = "iATU0"; break;
+		case 17: region = QCA_DIAG_PARF; offset = 0x1b0; name = "PARF LTSSM"; break;
+		case 18: region = QCA_DIAG_PHY; offset = 0x814; name = "PHY STATUS"; break;
+		case 19: region = QCA_DIAG_TLMM; offset = 79u * 0x1000u; name = "GPIO79 CFG"; break;
+		default: region = QCA_DIAG_GCC; offset = 0x52008; name = "GCC PCIE clocks"; break;
+		}
+		bool read = mapped && qca_diag_read(&qca_diag_regions[region], name, offset, &value);
+		printf("qca6390: RC0 stage %u map-all=%u read=%u region=%u offset=%#x value=%#x; no teardown\n",
+		    stage, mapped, read, region, offset, value);
+		lck_mtx_unlock(&qca_diag_lock);
+		return;
+	}
 	qca_diag_rc0_map_all();
 	printf("qca6390: RC0 MMIO mappings host=%u PARF=%u PHY=%u TLMM=%u GCC=%u; CFG0 deferred\n",
 	    qca_diag_regions[QCA_DIAG_HOST].mapping != 0,
